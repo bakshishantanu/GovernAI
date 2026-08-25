@@ -1,28 +1,28 @@
 # Person 1 — Auth & API Gateway
-/frontend/                               @person1-github
-/backend/app/api/v1/                     @person1-github
-/backend/app/domain/auth/                @person1-github
-/backend/app/domain/governance/middleware.py @person1-github
-/.github/                                @person1-github
+/frontend/                               @Pranavladha612
+/backend/app/api/v1/                     @Pranavladha612
+/backend/app/domain/auth/                @Pranavladha612
+/backend/app/domain/governance/middleware.py @Pranavladha612
+/.github/                                @Pranavladha612
 
 # Person 2 — AI/ML & Orchestration
-/backend/app/runtime/                    @person2-github
-/backend/app/skills/                     @person2-github
-/backend/app/domain/rag/                 @person2-github
+/backend/app/runtime/                    @priyaaaa70
+/backend/app/skills/                     @priyaaaa70
+/backend/app/domain/rag/                 @priyaaaa70
 
 # Person 3 — Database & Backend
-/backend/app/domain/agents/              @person3-github
-/backend/app/domain/execution/           @person3-github
-/backend/app/domain/governance/policy_engine.py @person3-github
-/backend/app/domain/governance/compliance.py @person3-github
-/backend/app/domain/audit/               @person3-github
-/backend/app/domain/costs/               @person3-github
-/backend/app/domain/skills/              @person3-github
-/backend/app/infrastructure/             @person3-github
-/backend/alembic/                        @person3-github
+/backend/app/domain/agents/              @bakshishantanu
+/backend/app/domain/execution/           @bakshishantanu
+/backend/app/domain/governance/policy_engine.py @bakshishantanu
+/backend/app/domain/governance/compliance.py @bakshishantanu
+/backend/app/domain/audit/               @bakshishantanu
+/backend/app/domain/costs/               @bakshishantanu
+/backend/app/domain/skills/              @bakshishantanu
+/backend/app/infrastructure/             @bakshishantanu
+/backend/alembic/                        @bakshishantanu
 
 # Shared — require all reviewers
-/backend/app/api/schemas/                @person1-github @person2-github @person3-github
-/backend/app/main.py                     @person1-github @person2-github @person3-github
-/backend/app/dependencies.py             @person1-github @person2-github @person3-github
-/AGENTS.md                               @person1-github @person2-github @person3-github
+/backend/app/api/schemas/                @Pranavladha612 @priyaaaa70 @bakshishantanu
+/backend/app/main.py                     @Pranavladha612 @priyaaaa70 @bakshishantanu
+/backend/app/dependencies.py             @Pranavladha612 @priyaaaa70 @bakshishantanu
+/AGENTS.md                               @Pranavladha612 @priyaaaa70 @bakshishantanu
