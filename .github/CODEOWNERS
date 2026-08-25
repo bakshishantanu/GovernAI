@@ -1,0 +1,28 @@
+# Person 1 — Auth & API Gateway
+/frontend/                               @person1-github
+/backend/app/api/v1/                     @person1-github
+/backend/app/domain/auth/                @person1-github
+/backend/app/domain/governance/middleware.py @person1-github
+/.github/                                @person1-github
+
+# Person 2 — AI/ML & Orchestration
+/backend/app/runtime/                    @person2-github
+/backend/app/skills/                     @person2-github
+/backend/app/domain/rag/                 @person2-github
+
+# Person 3 — Database & Backend
+/backend/app/domain/agents/              @person3-github
+/backend/app/domain/execution/           @person3-github
+/backend/app/domain/governance/policy_engine.py @person3-github
+/backend/app/domain/governance/compliance.py @person3-github
+/backend/app/domain/audit/               @person3-github
+/backend/app/domain/costs/               @person3-github
+/backend/app/domain/skills/              @person3-github
+/backend/app/infrastructure/             @person3-github
+/backend/alembic/                        @person3-github
+
+# Shared — require all reviewers
+/backend/app/api/schemas/                @person1-github @person2-github @person3-github
+/backend/app/main.py                     @person1-github @person2-github @person3-github
+/backend/app/dependencies.py             @person1-github @person2-github @person3-github
+/AGENTS.md                               @person1-github @person2-github @person3-github
