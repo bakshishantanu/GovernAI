@@ -71,6 +71,7 @@ def _seed_tickets() -> dict[str, Ticket]:
 class ReadTicketTool(BaseTool):
     name = "read_ticket"
     description = "Read a single ticket by its ID."
+    required_permission = "ticket:read"
     parameters = {
         "type": "object",
         "properties": {"ticket_id": {"type": "string", "description": "e.g. TCK-1001"}},
@@ -90,6 +91,7 @@ class ReadTicketTool(BaseTool):
 class SearchTicketsTool(BaseTool):
     name = "search_tickets"
     description = "Search tickets by keyword appearing in the subject or body."
+    required_permission = "ticket:read"
     parameters = {
         "type": "object",
         "properties": {"query": {"type": "string"}},
@@ -107,6 +109,7 @@ class SearchTicketsTool(BaseTool):
 class CreateTicketReplyTool(BaseTool):
     name = "create_ticket_reply"
     description = "Add a reply to an existing ticket."
+    required_permission = "ticket:create"
     parameters = {
         "type": "object",
         "properties": {

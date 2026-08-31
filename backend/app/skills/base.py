@@ -15,6 +15,7 @@ class BaseTool(ABC):
     name: str
     description: str
     parameters: dict
+    required_permission: str = ""
     """JSON Schema for this tool's arguments, e.g. {"type": "object", "properties": {...}, "required": [...]}"""
 
     @abstractmethod
