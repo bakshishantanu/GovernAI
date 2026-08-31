@@ -42,6 +42,10 @@ class RunSqlQueryTool(BaseTool):
     def __init__(self, adapter: SqlDataAdapter, permitted_tables: frozenset[str]) -> None:
         self._adapter = adapter
         self._permitted_tables = permitted_tables
+        # Coarse-grained gate for the registry/governance middleware. Fine-grained,
+        # per-query table enforcement happens inside validate() regardless - this
+        # is metadata, not the actual security boundary.
+        self.required_permission = ",".join(f"sql:read:{t}" for t in sorted(permitted_tables))
 
     async def execute(self, **kwargs) -> dict:
         request = ScopedQueryRequest(
