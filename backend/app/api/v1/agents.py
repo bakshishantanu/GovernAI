@@ -15,11 +15,15 @@ MOCK_AGENTS = {}
 
 def get_mock_passport(agent_id: UUID) -> PassportResponse:
     return PassportResponse(
+        id=uuid4(),
         agent_id=agent_id,
         compliance_status="PENDING",
         lifecycle_state="DRAFT",
         compliance_checked_at=None,
-        metadata={}
+        permissions=[],
+        metadata={},
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
 
 def create_mock_agent(data: AgentCreate, user: CurrentUser) -> AgentResponse:
