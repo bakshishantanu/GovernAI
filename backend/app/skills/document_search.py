@@ -15,6 +15,10 @@ class SearchDocumentsTool(BaseTool):
     def __init__(self, adapter: DocumentSearchAdapter, permitted_scopes: frozenset[str]) -> None:
         self._adapter = adapter
         self._permitted_scopes = permitted_scopes
+        # Coarse-grained gate for the registry/governance middleware. Fine-grained,
+        # per-document scope enforcement happens inside the adapter regardless -
+        # this is metadata, not the actual security boundary.
+        self.required_permission = ",".join(f"docs:search:{s}" for s in sorted(permitted_scopes))
 
     async def execute(self, **kwargs) -> dict:
         results = self._adapter.search(kwargs["query"], self._permitted_scopes)
@@ -51,6 +55,10 @@ class GetDocumentTool(BaseTool):
     def __init__(self, adapter: DocumentSearchAdapter, permitted_scopes: frozenset[str]) -> None:
         self._adapter = adapter
         self._permitted_scopes = permitted_scopes
+        # Coarse-grained gate for the registry/governance middleware. Fine-grained,
+        # per-document scope enforcement happens inside the adapter regardless -
+        # this is metadata, not the actual security boundary.
+        self.required_permission = ",".join(f"docs:search:{s}" for s in sorted(permitted_scopes))
 
     async def execute(self, **kwargs) -> dict:
         document_id = kwargs["document_id"]
