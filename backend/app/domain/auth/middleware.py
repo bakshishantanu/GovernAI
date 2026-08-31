@@ -61,6 +61,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             role=role
         )
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (like the missing sub one we raised manually)
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
