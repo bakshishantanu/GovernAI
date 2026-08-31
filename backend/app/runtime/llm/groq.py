@@ -14,7 +14,7 @@ class GroqProvider(LLMProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "openai/gpt-oss-20b",
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._api_key = api_key
