@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { login, signup } from "../auth/actions";
-import { ShieldCheck, Lock, Mail, User, Sparkles, ArrowRight } from "lucide-react";
+import { Shield } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -29,160 +30,98 @@ export default function LoginPage() {
           setErrorMessage(res.error);
         } else if (res?.success) {
           setSuccessMessage(res.success);
+          e.currentTarget.reset();
         }
       }
     });
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-slate-950 text-slate-100 p-4 relative overflow-hidden">
-      {/* Background glow accents */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-8 z-10">
-        {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4 shadow-inner">
-            <ShieldCheck className="w-8 h-8" />
+    <div className="min-h-screen flex flex-col justify-center items-center bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-slate-200 p-4 font-sans transition-colors duration-300 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      
+      <div className="w-full max-w-[380px] flex flex-col gap-6">
+        <div className="flex flex-col items-center mb-2">
+          <div className="h-10 w-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-sm flex items-center justify-center mb-4">
+            <Shield className="w-5 h-5 text-slate-900 dark:text-slate-100" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            GovernAI
-            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">
-              Enterprise
-            </span>
+          <h1 className="text-xl font-medium text-slate-900 dark:text-white">
+            {isLogin ? "Sign in to GovernAI" : "Create an account"}
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            "Build Agents Fast. Govern Them Faster."
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 text-center">
+            {isLogin ? "Enter your details to proceed." : "Sign up to start managing agents."}
           </p>
         </div>
 
-        {/* Tab Toggle */}
-        <div className="grid grid-cols-2 p-1 bg-slate-950/60 rounded-xl border border-slate-800 mb-6 text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(true);
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            className={`py-2 rounded-lg transition-all ${
-              isLogin
-                ? "bg-slate-800 text-white shadow-sm"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(false);
-              setErrorMessage(null);
-              setSuccessMessage(null);
-            }}
-            className={`py-2 rounded-lg transition-all ${
-              !isLogin
-                ? "bg-slate-800 text-white shadow-sm"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            Create Account
-          </button>
-        </div>
-
-        {/* Status Alerts */}
         {errorMessage && (
-          <div className="p-3 mb-5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{errorMessage}</span>
+          <div className="p-3 rounded-md bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-sm">
+            {errorMessage}
           </div>
         )}
 
         {successMessage && (
-          <div className="p-3 mb-5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
-            <span>✓</span>
-            <span>{successMessage}</span>
+          <div className="p-3 rounded-md bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm">
+            {successMessage}
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 bg-white dark:bg-transparent p-6 dark:p-0 rounded-xl border border-slate-200 dark:border-none shadow-sm dark:shadow-none">
           {!isLogin && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  name="full_name"
-                  placeholder="e.g. Pranav Ladha"
-                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
-                  required={!isLogin}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
+              <input
+                type="text"
+                name="full_name"
+                className="w-full bg-white dark:bg-[#111] border border-slate-300 dark:border-slate-800 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-colors"
+                required={!isLogin}
+              />
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Work Email
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                name="email"
-                placeholder="name@enterprise.com"
-                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
-                required
-              />
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+            <input
+              type="email"
+              name="email"
+              placeholder="name@company.com"
+              className="w-full bg-white dark:bg-[#111] border border-slate-300 dark:border-slate-800 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-colors"
+              required
+            />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition"
-                required
-              />
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+            <input
+              type="password"
+              name="password"
+              className="w-full bg-white dark:bg-[#111] border border-slate-300 dark:border-slate-800 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-colors"
+              required
+            />
           </div>
 
           <button
             type="submit"
             disabled={isPending}
-            className="w-full mt-2 py-3 px-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-800 disabled:cursor-not-allowed text-slate-950 font-semibold rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.99]"
+            className="w-full mt-4 py-2 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-black font-medium rounded-md text-sm transition-colors shadow-sm"
           >
-            {isPending ? (
-              <span>Authenticating...</span>
-            ) : isLogin ? (
-              <>
-                Sign In to Console
-                <ArrowRight className="w-4 h-4" />
-              </>
-            ) : (
-              <>
-                Create Enterprise Profile
-                <Sparkles className="w-4 h-4" />
-              </>
-            )}
+            {isPending ? "Please wait..." : isLogin ? "Sign in" : "Sign up"}
           </button>
         </form>
 
-        <div className="mt-6 pt-6 border-t border-slate-800/80 text-center">
-          <p className="text-xs text-slate-500">
-            Deloitte Capstone 2026 • Team Fennec
-          </p>
+        <div className="text-center text-sm mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setErrorMessage(null);
+              setSuccessMessage(null);
+            }}
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+          </button>
         </div>
       </div>
     </div>
