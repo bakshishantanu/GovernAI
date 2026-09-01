@@ -25,7 +25,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     let errorMsg = 'An error occurred while communicating with the server.'
     try {
       const err = await res.json()
-      errorMsg = err.detail || errorMsg
+      if (err.detail) {
+        errorMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
+      }
     } catch (e) {
       // Ignore JSON parse errors for non-JSON error responses
     }
