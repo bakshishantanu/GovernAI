@@ -48,7 +48,16 @@ class AgentService:
             lifecycle_state="DRAFT"
         )
         await self.agent_repo.create_passport(passport)
-        return agent
+        await self.agent_repo.flush()
+
+        # Re-fetch rather than return the in-memory objects: created_at/
+        # updated_at are DB server_defaults, and flushing a fresh object
+        # doesn't reliably leave its relationship collections (e.g.
+        # passport.permissions) in a loaded state under async SQLAlchemy --
+        # accessing them later can trigger a lazy-load outside of a
+        # greenlet context (MissingGreenlet). A clean reload via the same
+        # eager-loaded query every other read path uses avoids all of that.
+        return await self.agent_repo.get_agent(agent.id)
 
     async def submit_for_review(self, agent_id: UUID) -> AgentPassport:
         agent = await self.agent_repo.get_agent(agent_id)

@@ -56,10 +56,15 @@ async def test_create_agent_rejects_unknown_skill():
 
 
 async def test_create_agent_links_validated_skills():
+    """create_agent re-fetches (rather than returns the in-memory objects)
+    since freshly-flushed relationship collections aren't reliably loaded
+    under async SQLAlchemy -- see service.py's comment. So the meaningful
+    assertions are on what was actually persisted, not on the mocked
+    get_agent()'s return value."""
     service, agent_repo, skill_repo = _service()
     skill_repo.get_skill.return_value = object()
 
-    agent = await service.create_agent(
+    await service.create_agent(
         org_id=uuid4(),
         owner_id=uuid4(),
         name="Support Bot",
@@ -67,9 +72,12 @@ async def test_create_agent_links_validated_skills():
         skill_ids=["ticketing"],
     )
 
-    assert agent.id is not None
-    agent_repo.add_skill.assert_awaited_once_with(agent.id, "ticketing")
+    created_agent = agent_repo.create_agent.call_args.args[0]
+    assert created_agent.id is not None
+    agent_repo.add_skill.assert_awaited_once_with(created_agent.id, "ticketing")
     agent_repo.create_passport.assert_awaited_once()
+    agent_repo.flush.assert_awaited_once()
+    agent_repo.get_agent.assert_awaited_once_with(created_agent.id)
 
 
 async def test_submit_for_review_rejects_non_draft():

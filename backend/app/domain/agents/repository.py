@@ -46,3 +46,6 @@ class AgentRepository:
 
     async def add_skill(self, agent_id: UUID, skill_id: str) -> None:
         self.session.add(AgentSkill(agent_id=agent_id, skill_id=skill_id))
+
+    async def flush(self) -> None:
+        await self.session.flush()
