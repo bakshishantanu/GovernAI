@@ -72,11 +72,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
 
     except HTTPException:
         raise
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
-        if secret == "dummy-secret-for-local-dev-only":
-            return CurrentUser(
-                id=UUID("11111111-1111-1111-1111-111111111111"),
-                org_id=UUID("00000000-0000-0000-0000-000000000000"),
-                role="admin"
-            )
         raise HTTPException(status_code=401, detail=f"Could not validate credentials: {str(e)}")

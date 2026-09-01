@@ -7,23 +7,32 @@ from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
 from app.domain.auth.middleware import get_current_user
 from app.api.deps import get_agent_service
-from app.domain.agents.service import AgentService
+from app.domain.agents.service import (
+    AgentService,
+    ComplianceError,
+    InvalidStateTransitionError,
+    SkillNotFoundError,
+)
 
 router = APIRouter()
 
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
-    payload: AgentCreate, 
+    payload: AgentCreate,
     user: CurrentUser = Depends(get_current_user),
     service: AgentService = Depends(get_agent_service)
 ):
     """Create a new agent draft."""
-    agent = await service.create_agent(
-        org_id=user.org_id,
-        owner_id=user.id,
-        name=payload.name,
-        description=payload.description
-    )
+    try:
+        agent = await service.create_agent(
+            org_id=user.org_id,
+            owner_id=user.id,
+            name=payload.name,
+            description=payload.description,
+            skill_ids=payload.skills,
+        )
+    except SkillNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return Envelope(data=AgentResponse.model_validate(agent))
 
 
@@ -69,9 +78,14 @@ async def submit_agent_for_review(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    await service.submit_for_review(agent_id)
-    
+
+    try:
+        await service.submit_for_review(agent_id)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ComplianceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
     return Envelope(data=AgentResponse.model_validate(updated_agent))
@@ -87,9 +101,12 @@ async def activate_agent(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    await service.activate_agent(agent_id)
-    
+
+    try:
+        await service.activate_agent(agent_id)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
     return Envelope(data=AgentResponse.model_validate(updated_agent))
