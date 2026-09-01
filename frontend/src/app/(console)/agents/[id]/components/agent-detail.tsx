@@ -158,26 +158,34 @@ export function AgentDetail({ id }: { id: string }) {
         {/* Compliance Passport Card */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-background border border-border rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-6">
-              <ShieldCheck className="w-5 h-5 text-blue-500" />
-              <h2 className="text-lg font-semibold">Compliance Passport</h2>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-blue-500" />
+                <h2 className="text-lg font-semibold">Compliance Passport</h2>
+              </div>
+              {agent.passport?.compliance_status && (
+                <Badge className={
+                  agent.passport.compliance_status === 'PASSED' 
+                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                    : agent.passport.compliance_status === 'FAILED'
+                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                    : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                }>
+                  Compliance: {agent.passport.compliance_status}
+                </Badge>
+              )}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
                 <span className="text-sm font-medium text-muted-foreground">Lifecycle State</span>
-                <p className="text-base font-medium text-foreground">{agent.passport?.lifecycle_state || 'UNKNOWN'}</p>
+                <p className="text-base font-medium text-foreground">{agent.passport?.lifecycle_state || 'DRAFT'}</p>
               </div>
               <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground">Risk Score</span>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-24 bg-emerald-500/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 w-[15%]" />
-                  </div>
-                  <span className="text-base font-medium text-emerald-500">
-                    {agent.passport?.risk_score || 0} / 100
-                  </span>
-                </div>
+                <span className="text-sm font-medium text-muted-foreground">Compliance Checked</span>
+                <p className="text-sm text-foreground">
+                  {agent.passport?.compliance_checked_at ? formatDate(agent.passport.compliance_checked_at) : "Pending initial review"}
+                </p>
               </div>
               <div className="space-y-1">
                 <span className="text-sm font-medium text-muted-foreground">Agent ID</span>
@@ -189,6 +197,24 @@ export function AgentDetail({ id }: { id: string }) {
                 <span className="text-sm font-medium text-muted-foreground">Created At</span>
                 <p className="text-base text-foreground">{formatDate(agent.created_at)}</p>
               </div>
+            </div>
+
+            {/* Passport Permissions */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <span className="text-sm font-medium text-muted-foreground block mb-2">Granted Permissions</span>
+              {agent.passport?.permissions && agent.passport.permissions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {agent.passport.permissions.map((perm: string) => (
+                    <Badge key={perm} variant="secondary" className="font-mono text-xs">
+                      {perm}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-border/50">
+                  Standard read-only sandbox permissions (no elevated tool privileges).
+                </p>
+              )}
             </div>
           </div>
 
