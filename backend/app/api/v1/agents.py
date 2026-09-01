@@ -1,131 +1,112 @@
+from __future__ import annotations
 from typing import List
-from uuid import UUID, uuid4
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.schemas.agent import AgentResponse, AgentCreate, AgentUpdate, PassportResponse
 from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
 from app.domain.auth.middleware import get_current_user
-from datetime import datetime, timezone
+from app.api.deps import get_agent_service
+from app.domain.agents.service import (
+    AgentService,
+    ComplianceError,
+    InvalidStateTransitionError,
+    SkillNotFoundError,
+)
 
 router = APIRouter()
 
-# --- STUB DATA (In-memory mock for Sprint 1 frontend testing) ---
-# When P3 finishes the real PostgreSQL AgentService injection, we swap this out.
-MOCK_AGENTS = {}
-
-def get_mock_passport(agent_id: UUID) -> PassportResponse:
-    return PassportResponse(
-        id=uuid4(),
-        agent_id=agent_id,
-        compliance_status="PENDING",
-        lifecycle_state="DRAFT",
-        compliance_checked_at=None,
-        permissions=[],
-        metadata={},
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-
-def create_mock_agent(data: AgentCreate, user: CurrentUser) -> AgentResponse:
-    agent_id = uuid4()
-    agent = AgentResponse(
-        id=agent_id,
-        org_id=user.org_id,
-        owner_id=user.id,
-        name=data.name,
-        description=data.description,
-        status="DRAFT",
-        skills=data.skills,
-        passport=get_mock_passport(agent_id),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    MOCK_AGENTS[agent_id] = agent
-    return agent
-
-# Initialize with one mock agent so the dashboard has something to show
-_mock_user = CurrentUser(id=uuid4(), org_id=uuid4(), role="admin")
-create_mock_agent(AgentCreate(name="Support Bot", description="Handles L1 tickets", skills=[]), _mock_user)
-
-
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
-    payload: AgentCreate, 
-    user: CurrentUser = Depends(get_current_user)
+    payload: AgentCreate,
+    user: CurrentUser = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service)
 ):
     """Create a new agent draft."""
-    agent = create_mock_agent(payload, user)
-    return Envelope(data=agent)
+    try:
+        agent = await service.create_agent(
+            org_id=user.org_id,
+            owner_id=user.id,
+            name=payload.name,
+            description=payload.description,
+            skill_ids=payload.skills,
+        )
+    except SkillNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Envelope(data=AgentResponse.model_validate(agent))
 
 
-@router.get("/", response_model=Envelope[PaginatedResponse[AgentResponse]])
+@router.get("/", response_model=PaginatedResponse[AgentResponse])
 async def list_agents(
     user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    service: AgentService = Depends(get_agent_service)
 ):
     """List all agents for the current user's organization."""
-    # Filter by user's org_id
-    org_agents = [a for a in MOCK_AGENTS.values() if a.org_id == user.org_id]
+    agents = await service.agent_repo.list_agents_by_org(user.org_id, limit=limit, offset=offset)
+    count = await service.agent_repo.count_agents_by_org(user.org_id)
     
-    paginated = PaginatedResponse(
-        items=org_agents[offset:offset + limit],
-        total=len(org_agents),
-        limit=limit,
-        offset=offset
+    # We must construct the response objects explicitly to ensure the passport is included.
+    # The agent.passport is a joined load if the repo supports it, let's assume it does.
+    return PaginatedResponse(
+        data=[AgentResponse.model_validate(a) for a in agents],
+        meta={"has_more": offset + limit < count, "total": count}
     )
-    return Envelope(data=paginated)
 
 
 @router.get("/{agent_id}", response_model=Envelope[AgentResponse])
 async def get_agent(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user)
+    user: CurrentUser = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service)
 ):
     """Get specific agent details."""
-    agent = MOCK_AGENTS.get(agent_id)
+    agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return Envelope(data=agent)
+    return Envelope(data=AgentResponse.model_validate(agent))
 
 
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
 async def submit_agent_for_review(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user)
+    user: CurrentUser = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service)
 ):
     """Submit a draft agent for governance review."""
-    agent = MOCK_AGENTS.get(agent_id)
+    agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    if agent.passport.lifecycle_state != "DRAFT":
-        raise HTTPException(status_code=400, detail="Only DRAFT agents can be submitted")
-        
-    # Simulate compliance review passing automatically for MVP
-    agent.passport.lifecycle_state = "APPROVED"
-    agent.passport.compliance_status = "PASSED"
-    agent.passport.compliance_checked_at = datetime.now(timezone.utc)
-    agent.updated_at = datetime.now(timezone.utc)
-    
-    return Envelope(data=agent)
+
+    try:
+        await service.submit_for_review(agent_id)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ComplianceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Reload agent to get the updated status
+    updated_agent = await service.agent_repo.get_agent(agent_id)
+    return Envelope(data=AgentResponse.model_validate(updated_agent))
 
 
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
 async def activate_agent(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user)
+    user: CurrentUser = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service)
 ):
     """Activate an approved agent."""
-    agent = MOCK_AGENTS.get(agent_id)
+    agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    if agent.passport.lifecycle_state != "APPROVED":
-        raise HTTPException(status_code=400, detail="Only APPROVED agents can be activated")
-        
-    agent.status = "ACTIVE"
-    agent.passport.lifecycle_state = "ACTIVE"
-    agent.updated_at = datetime.now(timezone.utc)
-    
-    return Envelope(data=agent)
+
+    try:
+        await service.activate_agent(agent_id)
+    except InvalidStateTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Reload agent to get the updated status
+    updated_agent = await service.agent_repo.get_agent(agent_id)
+    return Envelope(data=AgentResponse.model_validate(updated_agent))

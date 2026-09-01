@@ -1,3 +1,4 @@
+from __future__ import annotations
 from uuid import UUID
 from app.domain.executions.models import Execution, ExecutionStep
 from app.domain.executions.repository import ExecutionRepository

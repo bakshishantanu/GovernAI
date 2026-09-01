@@ -37,11 +37,11 @@ def upgrade() -> None:
         sa.Column('document_id', sa.UUID(), sa.ForeignKey('documents.id'), nullable=False),
         sa.Column('content', sa.String(), nullable=False),
         # Assuming 768 or 1536 depending on the model, we can leave dimension unspecified or use 768
-        sa.Column('embedding', sa.text(), nullable=False), 
+        sa.Column('embedding', sa.Text(), nullable=False), 
         sa.Column('chunk_index', sa.Integer(), nullable=False)
     )
-    # Cast embedding string to vector type properly
-    op.execute('ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector USING embedding::vector')
+    # Cast embedding string to vector type properly with dimension 768
+    op.execute('ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(768) USING embedding::vector(768)')
     op.execute('CREATE INDEX ON document_chunks USING hnsw (embedding vector_cosine_ops)')
     
     op.execute('ALTER TABLE documents ENABLE ROW LEVEL SECURITY')

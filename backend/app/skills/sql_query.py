@@ -1,3 +1,4 @@
+from __future__ import annotations
 from app.runtime.sql.adapter import SqlDataAdapter, SqlExecutionError, SqlQueryTimeoutError
 from app.runtime.sql.validator import ScopedQueryRequest, validate
 from app.skills.base import BaseSkill, BaseTool, TrustLevel

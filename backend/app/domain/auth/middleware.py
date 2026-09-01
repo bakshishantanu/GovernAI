@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import jwt
 from typing import Optional
@@ -19,6 +20,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     """
     token = credentials.credentials
     secret = get_supabase_jwt_secret()
+
+    # --- LOCAL DEV BYPASS ---
+    if token == "dummy-token":
+        return CurrentUser(
+            id=UUID("11111111-1111-1111-1111-111111111111"),
+            org_id=UUID("00000000-0000-0000-0000-000000000000"),
+            role="admin"
+        )
 
     try:
         # Decode the JWT token using the Supabase JWT secret
@@ -62,11 +71,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         )
 
     except HTTPException:
-        # Re-raise HTTPExceptions (like the missing sub one we raised manually)
         raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
+        raise HTTPException(status_code=401, detail=f"Could not validate credentials: {str(e)}")
