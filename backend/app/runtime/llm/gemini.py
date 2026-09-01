@@ -1,3 +1,4 @@
+from __future__ import annotations
 import httpx
 
 from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage, ToolCall

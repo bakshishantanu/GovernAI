@@ -1,3 +1,4 @@
+from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.skills.models import SkillModel, ToolModel
 from app.domain.skills.repository import SkillRepository

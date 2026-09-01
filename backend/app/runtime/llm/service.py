@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 
 from app.runtime.llm.base import LLMProvider, LLMResponse

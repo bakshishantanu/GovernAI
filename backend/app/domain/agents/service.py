@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 from app.domain.agents.models import Agent, AgentPassport

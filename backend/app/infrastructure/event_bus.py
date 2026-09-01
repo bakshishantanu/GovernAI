@@ -1,3 +1,4 @@
+from __future__ import annotations
 """In-process async event bus for SSE streaming (FRD-12).
 
 Uses asyncio.Queue per subscriber. Services publish events; the SSE endpoint
