@@ -8,6 +8,8 @@ from langgraph.graph import END, StateGraph
 from app.runtime.llm.base import ToolCall
 from app.runtime.llm.service import LLMService
 from app.skills.base import BaseTool
+from uuid import UUID
+from app.domain.policies.engine import PolicyEngine
 
 
 class AgentState(TypedDict):
@@ -17,14 +19,18 @@ class AgentState(TypedDict):
     stopped_reason: str | None
 
 
-def build_agent_graph(llm_service: LLMService, tools: list[BaseTool]):
+def build_agent_graph(
+    llm_service: LLMService, 
+    tools: list[BaseTool],
+    agent_id: UUID,
+    policy_engine: PolicyEngine
+):
     """Builds the basic agent reasoning loop (FRD-06): LLM reasons -> selects
     a tool (or finishes) -> tool executes -> result fed back -> repeat.
 
-    Deliberately "basic" scope: tools are called directly, with no
-    governance middleware wrapping them yet (that's a later, separate
-    integration step per the project plan) - do not use this against
-    anything beyond mock/seeded data until governance is wired in.
+    This graph integrates the PolicyEngine to intercept and evaluate every
+    tool call against the agent's permissions. Denied tool calls return 
+    the denial reason to the LLM.
     """
     tools_by_name = {tool.name: tool for tool in tools}
     tool_specs = [tool.to_openai_tool() for tool in tools]
@@ -53,7 +59,16 @@ def build_agent_graph(llm_service: LLMService, tools: list[BaseTool]):
                 result = {"error": "unknown_tool", "reason": f"no tool named '{name}' is available"}
             else:
                 try:
-                    result = await tool.execute(**arguments)
+                    decision = await policy_engine.evaluate(
+                        agent_id=agent_id,
+                        tool_name=tool.name,
+                        tool_args=arguments,
+                        required_permission=getattr(tool, "required_permission", "")
+                    )
+                    if not decision.allowed:
+                        result = {"error": "denied", "reason": decision.reason}
+                    else:
+                        result = await tool.execute(**arguments)
                 except Exception as exc:  # a tool must never crash the whole run
                     result = {"error": "tool_failed", "reason": str(exc)}
 
@@ -86,6 +101,8 @@ def build_agent_graph(llm_service: LLMService, tools: list[BaseTool]):
 async def run_agent(
     llm_service: LLMService,
     tools: list[BaseTool],
+    agent_id: UUID,
+    policy_engine: PolicyEngine,
     goal: str,
     system_prompt: str | None = None,
     max_steps: int = 10,
@@ -94,7 +111,7 @@ async def run_agent(
     (or until max_steps is hit) and return the final answer plus full
     transcript.
     """
-    graph = build_agent_graph(llm_service, tools)
+    graph = build_agent_graph(llm_service, tools, agent_id, policy_engine)
 
     messages = []
     if system_prompt:
