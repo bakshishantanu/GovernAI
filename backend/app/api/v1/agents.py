@@ -44,7 +44,11 @@ def create_mock_agent(data: AgentCreate, user: CurrentUser) -> AgentResponse:
     return agent
 
 # Initialize with one mock agent so the dashboard has something to show
-_mock_user = CurrentUser(id=uuid4(), org_id=uuid4(), role="admin")
+_mock_user = CurrentUser(
+    id=UUID("11111111-1111-1111-1111-111111111111"), 
+    org_id=UUID("00000000-0000-0000-0000-000000000000"), 
+    role="admin"
+)
 create_mock_agent(AgentCreate(name="Support Bot", description="Handles L1 tickets", skills=[]), _mock_user)
 
 
@@ -58,7 +62,7 @@ async def create_agent(
     return Envelope(data=agent)
 
 
-@router.get("/", response_model=Envelope[PaginatedResponse[AgentResponse]])
+@router.get("/", response_model=PaginatedResponse[AgentResponse])
 async def list_agents(
     user: CurrentUser = Depends(get_current_user),
     limit: int = 50,
@@ -69,12 +73,10 @@ async def list_agents(
     org_agents = [a for a in MOCK_AGENTS.values() if a.org_id == user.org_id]
     
     paginated = PaginatedResponse(
-        items=org_agents[offset:offset + limit],
-        total=len(org_agents),
-        limit=limit,
-        offset=offset
+        data=org_agents[offset:offset + limit],
+        meta={"has_more": offset + limit < len(org_agents)}
     )
-    return Envelope(data=paginated)
+    return paginated
 
 
 @router.get("/{agent_id}", response_model=Envelope[AgentResponse])
