@@ -1,13 +1,14 @@
 from typing import Literal, Optional
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 AgentStatus = Literal["DRAFT", "ACTIVE", "SUSPENDED", "REVOKED"]
 LifecycleState = Literal["DRAFT", "APPROVED", "ACTIVE", "SUSPENDED", "REVOKED"]
 ComplianceStatus = Literal["PENDING", "PASSED", "FAILED"]
 
 class PassportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: UUID
     agent_id: UUID
     compliance_status: ComplianceStatus
@@ -28,6 +29,7 @@ class AgentUpdate(BaseModel):
     skills: Optional[list[str]] = None
 
 class AgentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: UUID
     org_id: UUID
     owner_id: UUID
