@@ -2,14 +2,19 @@ from __future__ import annotations
 from typing import Literal, Optional, Any
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-ExecutionStatus = Literal["RUNNING", "COMPLETED", "FAILED", "TERMINATED"]
+ExecutionStatus = Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "TERMINATED", "CANCELLED"]
 
 class ExecutionCreate(BaseModel):
+    agent_id: UUID
     goal: str
+    system_prompt: Optional[str] = None
+    max_steps: int = 10
 
 class ExecutionStepResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     execution_id: UUID
     step_number: int
@@ -21,12 +26,15 @@ class ExecutionStepResponse(BaseModel):
     updated_at: datetime
 
 class ExecutionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     agent_id: UUID
+    org_id: UUID
     goal: str
     status: ExecutionStatus
     result: Optional[str] = None
     error: Optional[str] = None
     started_at: datetime
     completed_at: Optional[datetime] = None
-    steps: Optional[list[ExecutionStepResponse]] = None
+    steps: list[ExecutionStepResponse] = []
