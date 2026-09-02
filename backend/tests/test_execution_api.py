@@ -47,7 +47,7 @@ def active_agent(current_user):
 @pytest.mark.asyncio
 async def test_execution_fails_if_agent_not_found(current_user):
     agent_service = AsyncMock()
-    agent_service.get_agent.return_value = None
+    agent_service.agent_repo.get_agent.return_value = None
 
     payload = ExecutionCreate(agent_id=uuid.uuid4(), goal="Run security scan")
 
@@ -87,7 +87,7 @@ async def test_execution_fails_if_agent_in_draft_state(current_user):
     )
 
     agent_service = AsyncMock()
-    agent_service.get_agent.return_value = draft_agent
+    agent_service.agent_repo.get_agent.return_value = draft_agent
 
     payload = ExecutionCreate(agent_id=draft_agent.id, goal="Run task")
 
@@ -122,8 +122,7 @@ async def test_successful_execution_flow(current_user, active_agent):
     )
 
     agent_service = AsyncMock()
-    agent_service.get_agent.return_value = active_agent
-    agent_service.agent_repo = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = active_agent
 
     exec_service = AsyncMock()
     exec_service.create_execution.return_value = mock_execution

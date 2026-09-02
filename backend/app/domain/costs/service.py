@@ -1,8 +1,9 @@
+import uuid
 from uuid import UUID
 from datetime import datetime, timezone
 from app.domain.costs.models import CostEvent
 from app.domain.costs.repository import CostRepository
-from app.infrastructure.event_bus import EventBus
+from app.infrastructure.event_bus import Event, EventBus
 
 # A mock pricing dictionary. In production, this would be fetched from a config or database.
 PRICING_TIERS = {
@@ -30,6 +31,7 @@ class CostService:
         total_tokens = prompt_tokens + completion_tokens
         
         event = CostEvent(
+            id=uuid.uuid4(),
             org_id=org_id,
             agent_id=agent_id,
             execution_id=execution_id,
@@ -42,8 +44,8 @@ class CostService:
             timestamp=datetime.now(timezone.utc)
         )
         await self.cost_repo.record_cost(event)
-        await self.event_bus.publish("cost.llm.incurred", {
+        await self.event_bus.publish(Event.create("cost.llm.incurred", {
             "execution_id": str(execution_id),
             "cost_usd": cost_usd,
             "tokens": total_tokens
-        })
+        }))

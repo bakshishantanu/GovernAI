@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
@@ -54,10 +55,11 @@ class SkillRegistry:
             self.session.add(db_skill)
 
             for permission in skill_class.required_permissions:
-                self.session.add(SkillPermission(skill=db_skill, permission=permission))
+                self.session.add(SkillPermission(id=uuid.uuid4(), skill=db_skill, permission=permission))
 
             for tool in skill_class.get_tools():
                 db_tool = ToolModel(
+                    id=uuid.uuid4(),
                     skill=db_skill,
                     name=tool.name,
                     description=tool.description,
