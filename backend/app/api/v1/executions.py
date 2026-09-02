@@ -55,7 +55,7 @@ async def create_and_run_execution(
     4. Records execution status, audit events, and token costs in PostgreSQL.
     """
     # 1. Fetch & validate agent
-    agent = await agent_service.get_agent(payload.agent_id)
+    agent = await agent_service.agent_repo.get_agent(payload.agent_id)
     if not agent or agent.org_id != current_user.org_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

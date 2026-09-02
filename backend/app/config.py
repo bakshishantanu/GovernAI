@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # --- LLM Providers ---
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    LLM_PRIMARY_MODEL: str = "llama3-70b-8192"
-    LLM_FALLBACK_MODEL: str = "gemini-1.5-pro-latest"
+    LLM_PRIMARY_MODEL: str = "openai/gpt-oss-20b"
+    LLM_FALLBACK_MODEL: str = "gemini-2.5-flash"
 
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
