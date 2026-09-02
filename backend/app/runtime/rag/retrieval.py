@@ -3,6 +3,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
+from typing import Protocol
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
@@ -56,6 +57,17 @@ class SearchResult:
     chunk_index: int
     text: str
     relevance_score: float
+
+
+class DocumentRetriever(Protocol):
+    """Shape shared by DocumentSearchAdapter (TF-IDF) and
+    PgVectorDocumentSearchAdapter (real embeddings) - DocumentSearchSkill
+    depends on this, not on either implementation, so the retrieval backend
+    is swappable (see registry.py)."""
+
+    async def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]: ...
+    async def get_document(self, document_id: str) -> Document | None: ...
+    async def get_document_text(self, document_id: str) -> str | None: ...
 
 
 class _TfidfIndex:
@@ -123,13 +135,13 @@ class DocumentSearchAdapter:
 
         self._index = _TfidfIndex({cid: _tokenize(c.text) for cid, c in self._chunks.items()})
 
-    def get_document(self, document_id: str) -> Document | None:
+    async def get_document(self, document_id: str) -> Document | None:
         return self._documents.get(document_id)
 
-    def get_document_text(self, document_id: str) -> str | None:
+    async def get_document_text(self, document_id: str) -> str | None:
         return self._document_texts.get(document_id)
 
-    def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]:
+    async def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]:
         query_tokens = _tokenize(query)
         if not query_tokens:
             return []
