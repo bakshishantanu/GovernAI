@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock
+import asyncio
 import uuid
 import json
 from uuid import uuid4
@@ -80,6 +81,16 @@ class _AlwaysFailTool(BaseTool):
 
     async def execute(self, **kwargs):
         raise RuntimeError("boom")
+
+
+class _NeverFinishesTool(BaseTool):
+    name = "never_finishes"
+    description = "Hangs forever"
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        await asyncio.sleep(3600)
+        return {"should": "never get here"}
 
 
 def _resp(content: str = "", tool_calls: list[ToolCall] | None = None) -> LLMResponse:
@@ -170,6 +181,29 @@ async def test_tool_exception_is_caught_and_reported_not_raised():
     payload = json.loads(tool_messages[0]["content"])
     assert payload["error"] == "tool_failed"
     assert "boom" in payload["reason"]
+
+
+async def test_hung_tool_is_timed_out_and_reported_not_left_hanging(monkeypatch):
+    import app.runtime.agent_graph as agent_graph_module
+
+    monkeypatch.setattr(agent_graph_module, "TOOL_EXECUTION_TIMEOUT_SECONDS", 0.01)
+
+    tool_call = ToolCall(id="call_1", name="never_finishes", arguments={})
+    provider = _ScriptedProvider([_resp(tool_calls=[tool_call]), _resp("that took too long")])
+    service = LLMService([provider])
+
+    result = await run_agent(
+        service,
+        tools=[_NeverFinishesTool()],
+        agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(),
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="run the hung tool",
+    )
+
+    tool_messages = [m for m in result["messages"] if m["role"] == "tool"]
+    payload = json.loads(tool_messages[0]["content"])
+    assert payload["error"] == "timeout"
+    assert result["final_answer"] == "that took too long"
 
 
 async def test_policy_engine_denial_is_reported_to_the_llm_not_executed():

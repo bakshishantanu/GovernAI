@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 import operator
 from typing import Annotated, TypedDict
@@ -12,6 +13,9 @@ from uuid import UUID
 from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
+
+
+TOOL_EXECUTION_TIMEOUT_SECONDS = 30.0
 
 
 class AgentState(TypedDict):
@@ -98,11 +102,19 @@ def build_agent_graph(
                         )
                     else:
                         # ALLOWED - Execute the tool
-                        result = await tool.execute(**arguments)
+                        result = await asyncio.wait_for(
+                            tool.execute(**arguments), timeout=TOOL_EXECUTION_TIMEOUT_SECONDS
+                        )
                         await audit_service.log_tool_call(
                             org_id, agent_id, execution_id, tool.name, True, "All policies passed"
                         )
-                except Exception as exc:  
+                except asyncio.TimeoutError:
+                    # A hung tool must never block the run indefinitely
+                    result = {
+                        "error": "timeout",
+                        "reason": f"tool execution exceeded {TOOL_EXECUTION_TIMEOUT_SECONDS:.0f}s",
+                    }
+                except Exception as exc:
                     # A tool crash must never take down the whole agent process
                     result = {"error": "tool_failed", "reason": str(exc)}
 
