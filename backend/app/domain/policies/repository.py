@@ -21,10 +21,15 @@ class PolicyRepository:
         return list(result.scalars().all())
 
     async def get_policies_for_org(self, org_id: UUID) -> list[Policy]:
-        # Keep the old method for backward compatibility if needed elsewhere
-        result = await self.session.execute(select(Policy).where(Policy.org_id == org_id))
+        stmt = (
+            select(Policy)
+            .options(selectinload(Policy.rules))
+            .where(Policy.org_id == org_id)
+        )
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def create_policy(self, policy: Policy) -> Policy:
         self.session.add(policy)
+        await self.session.flush()
         return policy

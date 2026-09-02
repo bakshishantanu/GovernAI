@@ -82,7 +82,7 @@ def build_agent_graph(
                 await audit_service.log_tool_call(org_id, agent_id, execution_id, name, False, "Unknown tool")
             else:
                 try:
-                    # 🛡️ POLICY & PERMISSION CHECK
+                    # POLICY & PERMISSION CHECK
                     decision = await policy_engine.evaluate(
                         agent_id=agent_id,
                         tool_name=tool.name,
@@ -91,13 +91,13 @@ def build_agent_graph(
                     )
                     
                     if not decision.allowed:
-                        # ❌ DENIED by Governance!
+                        # DENIED by Governance!
                         result = {"error": "denied", "reason": decision.reason}
                         await audit_service.log_tool_call(
                             org_id, agent_id, execution_id, tool.name, False, decision.reason
                         )
                     else:
-                        # ✅ ALLOWED - Execute the tool
+                        # ALLOWED - Execute the tool
                         result = await tool.execute(**arguments)
                         await audit_service.log_tool_call(
                             org_id, agent_id, execution_id, tool.name, True, "All policies passed"

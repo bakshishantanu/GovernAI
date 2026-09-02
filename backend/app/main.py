@@ -7,6 +7,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1.agents import router as agents_router
+from app.api.v1.skills import router as skills_router
+from app.api.v1.policies import router as policies_router
+from app.api.v1.audits import router as audits_router
+
+# Import every domain's ORM models so SQLAlchemy's mapper registry knows
+# about all tables at startup, regardless of which routers are wired up.
+# Without this, a cross-domain foreign key (e.g. agents.owner_id ->
+# profiles.id) fails with NoReferencedTableError the first time it's
+# actually flushed, because the referenced table's model was never
+# imported by anything on the request path.
+import app.domain.agents.models  # noqa: F401
+import app.domain.audit.models  # noqa: F401
+import app.domain.auth.models  # noqa: F401
+import app.domain.costs.models  # noqa: F401
+import app.domain.documents.models  # noqa: F401
+import app.domain.executions.models  # noqa: F401
+import app.domain.permissions.models  # noqa: F401
+import app.domain.policies.models  # noqa: F401
+import app.domain.skills.models  # noqa: F401
 
 logger = structlog.get_logger()
 
@@ -35,6 +54,9 @@ app.add_middleware(
 )
 
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["Agents"])
+app.include_router(skills_router, prefix="/api/v1/skills", tags=["Skills"])
+app.include_router(policies_router, prefix="/api/v1/policies", tags=["Policies"])
+app.include_router(audits_router, prefix="/api/v1/audits", tags=["Audits"])
 
 @app.get("/health")
 async def health():
