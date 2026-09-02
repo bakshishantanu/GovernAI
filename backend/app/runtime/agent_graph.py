@@ -10,6 +10,8 @@ from app.runtime.llm.service import LLMService
 from app.skills.base import BaseTool
 from uuid import UUID
 from app.domain.policies.engine import PolicyEngine
+from app.domain.audit.service import AuditService
+from app.domain.costs.service import CostService
 
 
 class AgentState(TypedDict):
@@ -19,24 +21,44 @@ class AgentState(TypedDict):
     stopped_reason: str | None
 
 
+def _to_openai_tool_call(tc: ToolCall) -> dict:
+    return {
+        "id": tc.id,
+        "type": "function",
+        "function": {
+            "name": tc.name,
+            "arguments": json.dumps(tc.arguments)
+        }
+    }
+
+
 def build_agent_graph(
     llm_service: LLMService, 
     tools: list[BaseTool],
     agent_id: UUID,
-    policy_engine: PolicyEngine
+    org_id: UUID,
+    execution_id: UUID,
+    policy_engine: PolicyEngine,
+    audit_service: AuditService,
+    cost_service: CostService
 ):
-    """Builds the basic agent reasoning loop (FRD-06): LLM reasons -> selects
-    a tool (or finishes) -> tool executes -> result fed back -> repeat.
-
-    This graph integrates the PolicyEngine to intercept and evaluate every
-    tool call against the agent's permissions. Denied tool calls return 
-    the denial reason to the LLM.
-    """
+    """Builds the security-hardened agent reasoning loop."""
     tools_by_name = {tool.name: tool for tool in tools}
     tool_specs = [tool.to_openai_tool() for tool in tools]
 
     async def agent_node(state: AgentState) -> dict:
         response = await llm_service.chat(state["messages"], tools=tool_specs)
+
+        # 💰 COST TRACKING: Record token usage per LLM call
+        if response.usage:
+            await cost_service.record_llm_cost(
+                org_id=org_id,
+                agent_id=agent_id,
+                execution_id=execution_id,
+                model=response.model,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens
+            )
 
         assistant_message: dict = {"role": "assistant", "content": response.content}
         if response.tool_calls:
@@ -57,19 +79,31 @@ def build_agent_graph(
             tool = tools_by_name.get(name)
             if tool is None:
                 result = {"error": "unknown_tool", "reason": f"no tool named '{name}' is available"}
+                await audit_service.log_tool_call(org_id, agent_id, execution_id, name, False, "Unknown tool")
             else:
                 try:
+                    # 🛡️ POLICY & PERMISSION CHECK
                     decision = await policy_engine.evaluate(
                         agent_id=agent_id,
                         tool_name=tool.name,
                         tool_args=arguments,
                         required_permission=getattr(tool, "required_permission", "")
                     )
+                    
                     if not decision.allowed:
+                        # ❌ DENIED by Governance!
                         result = {"error": "denied", "reason": decision.reason}
+                        await audit_service.log_tool_call(
+                            org_id, agent_id, execution_id, tool.name, False, decision.reason
+                        )
                     else:
+                        # ✅ ALLOWED - Execute the tool
                         result = await tool.execute(**arguments)
-                except Exception as exc:  # a tool must never crash the whole run
+                        await audit_service.log_tool_call(
+                            org_id, agent_id, execution_id, tool.name, True, "All policies passed"
+                        )
+                except Exception as exc:  
+                    # A tool crash must never take down the whole agent process
                     result = {"error": "tool_failed", "reason": str(exc)}
 
             results.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)})
@@ -102,16 +136,20 @@ async def run_agent(
     llm_service: LLMService,
     tools: list[BaseTool],
     agent_id: UUID,
+    org_id: UUID,
+    execution_id: UUID,
     policy_engine: PolicyEngine,
+    audit_service: AuditService,
+    cost_service: CostService,
     goal: str,
     system_prompt: str | None = None,
     max_steps: int = 10,
 ) -> dict:
-    """Convenience wrapper: run a goal through the agent graph to completion
-    (or until max_steps is hit) and return the final answer plus full
-    transcript.
-    """
-    graph = build_agent_graph(llm_service, tools, agent_id, policy_engine)
+    """Run a goal through the security-hardened agent graph."""
+    graph = build_agent_graph(
+        llm_service, tools, agent_id, org_id, execution_id, 
+        policy_engine, audit_service, cost_service
+    )
 
     messages = []
     if system_prompt:
@@ -128,12 +166,4 @@ async def run_agent(
         "messages": final_state["messages"],
         "steps": final_state["steps"],
         "stopped_reason": "max_steps_reached" if hit_max_steps else "completed",
-    }
-
-
-def _to_openai_tool_call(tool_call: ToolCall) -> dict:
-    return {
-        "id": tool_call.id,
-        "type": "function",
-        "function": {"name": tool_call.name, "arguments": json.dumps(tool_call.arguments)},
     }
