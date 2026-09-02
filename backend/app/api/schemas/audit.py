@@ -2,12 +2,14 @@ from __future__ import annotations
 from typing import Literal, Optional, Any
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-ActorType = Literal["USER", "AGENT", "SYSTEM"]
-PolicyDecision = Literal["ALLOWED", "DENIED", "N/A"]
+ActorType = Literal["USER", "AGENT", "SYSTEM", "user", "agent", "system"]
+PolicyDecision = Literal["ALLOWED", "DENIED", "N/A", "ALLOW", "DENY"]
 
 class AuditEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID
     timestamp: datetime
     actor_type: ActorType
