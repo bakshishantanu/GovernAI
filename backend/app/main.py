@@ -7,6 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.v1.agents import router as agents_router
+from app.api.v1.skills import router as skills_router
+from app.api.v1.policies import router as policies_router
+from app.api.v1.audits import router as audits_router
 
 logger = structlog.get_logger()
 
@@ -35,6 +38,9 @@ app.add_middleware(
 )
 
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["Agents"])
+app.include_router(skills_router, prefix="/api/v1/skills", tags=["Skills"])
+app.include_router(policies_router, prefix="/api/v1/policies", tags=["Policies"])
+app.include_router(audits_router, prefix="/api/v1/audits", tags=["Audits"])
 
 @app.get("/health")
 async def health():
