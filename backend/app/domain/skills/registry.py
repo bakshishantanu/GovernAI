@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
 from app.domain.skills.repository import SkillRepository
+from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.sql_query import SqlQuerySkill
 from app.skills.ticketing import TicketingSkill
@@ -12,17 +13,32 @@ class SkillRegistry:
     def __init__(self, skill_repo: SkillRepository, session: AsyncSession):
         self.skill_repo = skill_repo
         self.session = session
-
-    async def bootstrap(self):
         # In a real app, this scans all classes inheriting from BaseSkill.
         # For now, we manually register the MVP skills (FRD-05).
-        skills_to_register = [
-            TicketingSkill(),
-            SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
-            DocumentSearchSkill(permitted_scopes={"public"}),
-        ]
+        self._instances = {
+            skill.name: skill
+            for skill in (
+                TicketingSkill(),
+                SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
+                DocumentSearchSkill(permitted_scopes={"public"}),
+            )
+        }
 
-        for skill_class in skills_to_register:
+    def get_tools(self, skill_ids: list[str]) -> list[BaseTool]:
+        """Resolves an agent's bound skill ids into the tool list its LangGraph
+        run should expose (FRD-06). A skill_id with no matching registered
+        instance is skipped rather than raising -- binding already validates
+        the id exists in the DB at agent-creation time (see AgentService),
+        so this only happens if a skill was deregistered afterward."""
+        tools: list[BaseTool] = []
+        for skill_id in skill_ids:
+            skill = self._instances.get(skill_id)
+            if skill is not None:
+                tools.extend(skill.get_tools())
+        return tools
+
+    async def bootstrap(self):
+        for skill_class in self._instances.values():
             existing = await self.skill_repo.get_skill(skill_class.name)
             if existing:
                 continue

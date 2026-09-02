@@ -49,3 +49,9 @@ class AgentRepository:
 
     async def flush(self) -> None:
         await self.session.flush()
+
+    async def list_skill_ids(self, agent_id: UUID) -> list[str]:
+        result = await self.session.execute(
+            select(AgentSkill.skill_id).where(AgentSkill.agent_id == agent_id)
+        )
+        return list(result.scalars().all())

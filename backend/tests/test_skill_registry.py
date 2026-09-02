@@ -83,3 +83,40 @@ async def test_bootstrap_persists_a_specific_required_permission_per_tool():
     assert tools_by_name["run_sql_query"].required_permission == "sql:read:internal_payroll,sql:read:tickets"
     assert tools_by_name["search_documents"].required_permission == "docs:search:public"
     assert tools_by_name["get_document"].required_permission == "docs:search:public"
+
+
+def test_get_tools_resolves_bound_skill_ids_to_their_tools():
+    registry = SkillRegistry(AsyncMock(), _mock_session())
+
+    tools = registry.get_tools(["ticketing"])
+
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+
+
+def test_get_tools_combines_multiple_bound_skills():
+    registry = SkillRegistry(AsyncMock(), _mock_session())
+
+    tools = registry.get_tools(["ticketing", "sql_query"])
+
+    assert {t.name for t in tools} == {
+        "read_ticket",
+        "search_tickets",
+        "create_ticket_reply",
+        "run_sql_query",
+    }
+
+
+def test_get_tools_skips_an_unregistered_skill_id():
+    """A skill can be unbound/deregistered after an agent was created with it --
+    the agent should just lose that tool, not crash the whole run."""
+    registry = SkillRegistry(AsyncMock(), _mock_session())
+
+    tools = registry.get_tools(["ticketing", "not_a_real_skill"])
+
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+
+
+def test_get_tools_returns_empty_list_for_no_bound_skills():
+    registry = SkillRegistry(AsyncMock(), _mock_session())
+
+    assert registry.get_tools([]) == []
