@@ -20,6 +20,7 @@ from app.runtime.llm.service import LLMService
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
 from app.infrastructure.event_bus import event_bus
 
 
@@ -75,6 +76,15 @@ async def get_cost_service(db: AsyncSession = Depends(get_db)) -> CostService:
     return CostService(cost_repo=repo, event_bus=event_bus)
 
 
-async def get_skill_registry(db: AsyncSession = Depends(get_db)) -> SkillRegistry:
+def get_embedding_provider() -> EmbeddingProvider | None:
+    if not settings.GEMINI_API_KEY:
+        return None
+    return GeminiEmbeddingProvider(api_key=settings.GEMINI_API_KEY)
+
+
+async def get_skill_registry(
+    db: AsyncSession = Depends(get_db),
+    embedding_provider: EmbeddingProvider | None = Depends(get_embedding_provider),
+) -> SkillRegistry:
     repo = SkillRepository(db)
-    return SkillRegistry(skill_repo=repo, session=db)
+    return SkillRegistry(skill_repo=repo, session=db, embedding_provider=embedding_provider)

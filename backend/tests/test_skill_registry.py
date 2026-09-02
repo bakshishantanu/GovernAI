@@ -120,3 +120,21 @@ def test_get_tools_returns_empty_list_for_no_bound_skills():
     registry = SkillRegistry(AsyncMock(), _mock_session())
 
     assert registry.get_tools([]) == []
+
+
+def test_document_search_uses_tfidf_adapter_when_no_embedding_provider_given():
+    from app.runtime.rag.retrieval import DocumentSearchAdapter
+
+    registry = SkillRegistry(AsyncMock(), _mock_session())
+
+    skill = registry._instances["document_search"]
+    assert isinstance(skill._adapter, DocumentSearchAdapter)
+
+
+def test_document_search_uses_pgvector_adapter_when_embedding_provider_given():
+    from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
+
+    registry = SkillRegistry(AsyncMock(), _mock_session(), embedding_provider=AsyncMock())
+
+    skill = registry._instances["document_search"]
+    assert isinstance(skill._adapter, PgVectorDocumentSearchAdapter)

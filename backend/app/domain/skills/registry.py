@@ -2,8 +2,11 @@ from __future__ import annotations
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.documents.repository import DocumentRepository
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
 from app.domain.skills.repository import SkillRepository
+from app.runtime.rag.embeddings import EmbeddingProvider
+from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.sql_query import SqlQuerySkill
@@ -11,9 +14,23 @@ from app.skills.ticketing import TicketingSkill
 
 
 class SkillRegistry:
-    def __init__(self, skill_repo: SkillRepository, session: AsyncSession):
+    def __init__(
+        self,
+        skill_repo: SkillRepository,
+        session: AsyncSession,
+        embedding_provider: EmbeddingProvider | None = None,
+    ):
         self.skill_repo = skill_repo
         self.session = session
+        # Real embeddings when a provider is wired in (see api/deps.py); falls
+        # back to the TF-IDF adapter otherwise, e.g. in tests, where a real
+        # embedding call has no place (see manual_llm_smoke_test.py's rationale).
+        document_search_adapter = None
+        if embedding_provider is not None:
+            document_search_adapter = PgVectorDocumentSearchAdapter(
+                repo=DocumentRepository(session), embedding_provider=embedding_provider
+            )
+
         # In a real app, this scans all classes inheriting from BaseSkill.
         # For now, we manually register the MVP skills (FRD-05).
         self._instances = {
@@ -21,7 +38,7 @@ class SkillRegistry:
             for skill in (
                 TicketingSkill(),
                 SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
-                DocumentSearchSkill(permitted_scopes={"public"}),
+                DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
             )
         }
 

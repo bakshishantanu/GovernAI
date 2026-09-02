@@ -1,6 +1,6 @@
 from __future__ import annotations
 from app.runtime.rag.citations import CITATION_INSTRUCTIONS
-from app.runtime.rag.retrieval import DocumentSearchAdapter
+from app.runtime.rag.retrieval import DocumentRetriever, DocumentSearchAdapter
 from app.skills.base import BaseSkill, BaseTool, TrustLevel
 
 
@@ -13,7 +13,7 @@ class SearchDocumentsTool(BaseTool):
         "required": ["query"],
     }
 
-    def __init__(self, adapter: DocumentSearchAdapter, permitted_scopes: frozenset[str]) -> None:
+    def __init__(self, adapter: DocumentRetriever, permitted_scopes: frozenset[str]) -> None:
         self._adapter = adapter
         self._permitted_scopes = permitted_scopes
         # Coarse-grained gate for the registry/governance middleware. Fine-grained,
@@ -22,7 +22,7 @@ class SearchDocumentsTool(BaseTool):
         self.required_permission = ",".join(f"docs:search:{s}" for s in sorted(permitted_scopes))
 
     async def execute(self, **kwargs) -> dict:
-        results = self._adapter.search(kwargs["query"], self._permitted_scopes)
+        results = await self._adapter.search(kwargs["query"], self._permitted_scopes)
         if not results:
             return {
                 "found": False,
@@ -53,7 +53,7 @@ class GetDocumentTool(BaseTool):
         "required": ["document_id"],
     }
 
-    def __init__(self, adapter: DocumentSearchAdapter, permitted_scopes: frozenset[str]) -> None:
+    def __init__(self, adapter: DocumentRetriever, permitted_scopes: frozenset[str]) -> None:
         self._adapter = adapter
         self._permitted_scopes = permitted_scopes
         # Coarse-grained gate for the registry/governance middleware. Fine-grained,
@@ -63,7 +63,7 @@ class GetDocumentTool(BaseTool):
 
     async def execute(self, **kwargs) -> dict:
         document_id = kwargs["document_id"]
-        document = self._adapter.get_document(document_id)
+        document = await self._adapter.get_document(document_id)
         if document is None:
             return {"found": False, "document_id": document_id}
         if not (document.access_scope & self._permitted_scopes):
@@ -72,7 +72,7 @@ class GetDocumentTool(BaseTool):
             "found": True,
             "id": document.id,
             "title": document.title,
-            "full_text": self._adapter.get_document_text(document.id),
+            "full_text": await self._adapter.get_document_text(document.id),
         }
 
 
@@ -88,7 +88,7 @@ class DocumentSearchSkill(BaseSkill):
     def __init__(
         self,
         permitted_scopes: set[str] | frozenset[str],
-        adapter: DocumentSearchAdapter | None = None,
+        adapter: DocumentRetriever | None = None,
     ) -> None:
         self._permitted_scopes = frozenset(permitted_scopes)
         self._adapter = adapter or DocumentSearchAdapter()
