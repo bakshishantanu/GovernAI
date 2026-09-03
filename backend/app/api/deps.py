@@ -20,6 +20,7 @@ from app.runtime.llm.service import LLMService
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.infrastructure.event_bus import event_bus
 
 
 class MockFallbackProvider(LLMProvider):
@@ -58,17 +59,20 @@ async def get_execution_service(db: AsyncSession = Depends(get_db)) -> Execution
 
 
 async def get_policy_engine(db: AsyncSession = Depends(get_db)) -> PolicyEngine:
-    return PolicyEngine(session=db)
+    agent_repo = AgentRepository(db)
+    perm_repo = PermissionRepository(db)
+    policy_repo = PolicyRepository(db)
+    return PolicyEngine(agent_repo=agent_repo, perm_repo=perm_repo, policy_repo=policy_repo)
 
 
 async def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
     repo = AuditRepository(db)
-    return AuditService(repo=repo)
+    return AuditService(audit_repo=repo, event_bus=event_bus)
 
 
 async def get_cost_service(db: AsyncSession = Depends(get_db)) -> CostService:
     repo = CostRepository(db)
-    return CostService(repo=repo)
+    return CostService(cost_repo=repo, event_bus=event_bus)
 
 
 async def get_skill_registry(db: AsyncSession = Depends(get_db)) -> SkillRegistry:
