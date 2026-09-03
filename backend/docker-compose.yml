@@ -1,0 +1,28 @@
+services:
+  db:
+    image: ankane/pgvector:latest
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=governai
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/governai
+      - SUPABASE_JWT_SECRET=dummy-secret-for-local-dev-only
+    depends_on:
+      - db
+    # In development, you might want to uncomment this to enable auto-reload
+    # command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # volumes:
+    #   - .:/app
+
+volumes:
+  db-data:
