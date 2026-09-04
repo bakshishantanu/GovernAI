@@ -1,5 +1,4 @@
 from __future__ import annotations
-import asyncio
 import json
 import operator
 from typing import Annotated, TypedDict
@@ -13,6 +12,7 @@ from uuid import UUID
 from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
+from app.domain.governance.middleware import govern_tool
 
 
 TOOL_EXECUTION_TIMEOUT_SECONDS = 30.0
@@ -85,38 +85,18 @@ def build_agent_graph(
                 result = {"error": "unknown_tool", "reason": f"no tool named '{name}' is available"}
                 await audit_service.log_tool_call(org_id, agent_id, execution_id, name, False, "Unknown tool")
             else:
-                try:
-                    # POLICY & PERMISSION CHECK
-                    decision = await policy_engine.evaluate(
-                        agent_id=agent_id,
-                        tool_name=tool.name,
-                        tool_args=arguments,
-                        required_permission=getattr(tool, "required_permission", "")
-                    )
-                    
-                    if not decision.allowed:
-                        # DENIED by Governance!
-                        result = {"error": "denied", "reason": decision.reason}
-                        await audit_service.log_tool_call(
-                            org_id, agent_id, execution_id, tool.name, False, decision.reason
-                        )
-                    else:
-                        # ALLOWED - Execute the tool
-                        result = await asyncio.wait_for(
-                            tool.execute(**arguments), timeout=TOOL_EXECUTION_TIMEOUT_SECONDS
-                        )
-                        await audit_service.log_tool_call(
-                            org_id, agent_id, execution_id, tool.name, True, "All policies passed"
-                        )
-                except asyncio.TimeoutError:
-                    # A hung tool must never block the run indefinitely
-                    result = {
-                        "error": "timeout",
-                        "reason": f"tool execution exceeded {TOOL_EXECUTION_TIMEOUT_SECONDS:.0f}s",
-                    }
-                except Exception as exc:
-                    # A tool crash must never take down the whole agent process
-                    result = {"error": "tool_failed", "reason": str(exc)}
+                # GOVERNANCE GATE: policy check + timed execution + audit log,
+                # for every tool call, allowed or denied.
+                result = await govern_tool(
+                    policy_engine=policy_engine,
+                    audit_service=audit_service,
+                    org_id=org_id,
+                    agent_id=agent_id,
+                    execution_id=execution_id,
+                    tool=tool,
+                    arguments=arguments,
+                    timeout_seconds=TOOL_EXECUTION_TIMEOUT_SECONDS,
+                )
 
             results.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)})
 
