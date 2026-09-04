@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.schemas.agent import AgentResponse, AgentCreate, AgentUpdate, PassportResponse
 from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
 from app.domain.auth.middleware import get_current_user
+from app.domain.auth.rbac import require_admin
 from app.api.deps import get_agent_service
 from app.domain.agents.service import (
     AgentService,
@@ -39,8 +40,8 @@ async def create_agent(
 @router.get("/", response_model=PaginatedResponse[AgentResponse])
 async def list_agents(
     user: CurrentUser = Depends(get_current_user),
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     service: AgentService = Depends(get_agent_service)
 ):
     """List all agents for the current user's organization."""
@@ -94,7 +95,7 @@ async def submit_agent_for_review(
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
 async def activate_agent(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service)
 ):
     """Activate an approved agent."""
