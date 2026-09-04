@@ -10,6 +10,7 @@ from app.api.v1.agents import router as agents_router
 from app.api.v1.skills import router as skills_router
 from app.api.v1.policies import router as policies_router
 from app.api.v1.audits import router as audits_router
+from app.api.v1.costs import router as costs_router
 from app.api.v1.executions import router as executions_router
 
 # Import every domain's ORM models so SQLAlchemy's mapper registry knows
@@ -54,11 +55,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(agents_router, prefix="/api/v1/agents", tags=["Agents"])
-app.include_router(skills_router, prefix="/api/v1/skills", tags=["Skills"])
-app.include_router(policies_router, prefix="/api/v1/policies", tags=["Policies"])
-app.include_router(audits_router, prefix="/api/v1/audits", tags=["Audits"])
-app.include_router(executions_router, prefix="/api/v1/executions", tags=["Executions"])
+app.include_router(agents_router, prefix="/api/v1", tags=["Agents"])
+app.include_router(skills_router, prefix="/api/v1", tags=["Skills"])
+app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
+app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
+app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
+app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
 
 @app.get("/health")
 async def health():

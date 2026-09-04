@@ -21,6 +21,7 @@ from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.base import LLMProvider, LLMResponse
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from app.domain.agents.kill_switch import KillSwitchService
 from app.infrastructure.event_bus import event_bus
 
 
@@ -88,3 +89,13 @@ async def get_skill_registry(
 ) -> SkillRegistry:
     repo = SkillRepository(db)
     return SkillRegistry(skill_repo=repo, session=db, embedding_provider=embedding_provider)
+
+
+async def get_kill_switch_service(db: AsyncSession = Depends(get_db)) -> KillSwitchService:
+    """Suspend / reactivate an agent, with the audit entry written alongside."""
+    return KillSwitchService(
+        session=db,
+        agent_repo=AgentRepository(db),
+        audit_service=AuditService(audit_repo=AuditRepository(db), event_bus=event_bus),
+        event_bus=event_bus,
+    )
