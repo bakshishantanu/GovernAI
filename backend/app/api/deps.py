@@ -1,4 +1,5 @@
 from __future__ import annotations
+from uuid import UUID
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
@@ -21,6 +22,8 @@ from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.base import LLMProvider, LLMResponse
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from app.domain.agents.kill_switch import KillSwitchService
+from app.domain.governance.budget import BudgetGuard
 from app.infrastructure.event_bus import event_bus
 
 
@@ -88,3 +91,29 @@ async def get_skill_registry(
 ) -> SkillRegistry:
     repo = SkillRepository(db)
     return SkillRegistry(skill_repo=repo, session=db, embedding_provider=embedding_provider)
+
+
+async def get_budget_guard(db: AsyncSession = Depends(get_db)) -> BudgetGuard:
+    """The live spend check the governance gate runs before every tool call.
+
+    On a breach the agent is suspended, not merely blocked — FRD-11 requires
+    the platform to stop an over-budget agent by itself. The suspension is
+    injected as a callback so the guard stays independent of the kill switch.
+    """
+    cost_repo = CostRepository(db)
+    audit_service = AuditService(audit_repo=AuditRepository(db), event_bus=event_bus)
+    kill_switch = KillSwitchService(
+        session=db,
+        agent_repo=AgentRepository(db),
+        audit_service=audit_service,
+        event_bus=event_bus,
+    )
+
+    async def suspend_on_breach(agent_id: UUID, org_id: UUID, reason: str) -> None:
+        # The agent itself is the actor here: nobody pressed a button.
+        await kill_switch.suspend_agent(
+            agent_id=agent_id, actor_id=agent_id, org_id=org_id, reason=reason
+        )
+        await db.commit()
+
+    return BudgetGuard(spend_reader=cost_repo, on_breach=suspend_on_breach)

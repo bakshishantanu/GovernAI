@@ -143,3 +143,135 @@ async def test_required_permission_is_forwarded_to_the_policy_engine():
         tool_args={"text": "hi"},
         required_permission="echo:use",
     )
+
+
+# --- budget enforcement (FRD-11) and audit ordering -------------------------
+
+
+class _BudgetGuardStub:
+    """Stands in for BudgetGuard without touching the database."""
+
+    def __init__(self, allowed: bool, reason: str = ""):
+        self._allowed = allowed
+        self._reason = reason
+        self.calls = 0
+
+    async def check(self, agent_id, org_id):
+        self.calls += 1
+        from app.domain.governance.budget import BudgetDecision
+
+        return BudgetDecision(
+            allowed=self._allowed, spend_usd=9.99, cap_usd=5.0, reason=self._reason
+        )
+
+
+class _CountingTool(BaseTool):
+    name = "counting"
+    description = "Records that it ran"
+    parameters = {"type": "object", "properties": {}}
+
+    def __init__(self):
+        self.runs = 0
+
+    async def execute(self, **kwargs):
+        self.runs += 1
+        return {"ok": True}
+
+
+async def test_over_budget_denies_before_the_tool_can_run():
+    tool = _CountingTool()
+    audit = AsyncMock()
+    guard = _BudgetGuardStub(allowed=False, reason="Budget exceeded: $9.99 of $5.00")
+
+    result = await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=audit,
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=tool,
+        arguments={},
+        budget_guard=guard,
+    )
+
+    assert result["error"] == "budget_exceeded"
+    assert tool.runs == 0, "an over-budget agent must not reach the tool"
+    audit.log_tool_call.assert_awaited_once()
+    assert audit.log_tool_call.await_args.args[4] is False  # logged as denied
+
+
+async def test_budget_is_checked_before_permissions():
+    """Being over budget denies the call whatever the permissions say."""
+    tool = _CountingTool()
+    guard = _BudgetGuardStub(allowed=False, reason="Budget exceeded")
+
+    result = await govern_tool(
+        policy_engine=_DenyAllPolicyEngine(),
+        audit_service=AsyncMock(),
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=tool,
+        arguments={},
+        budget_guard=guard,
+    )
+
+    assert result["error"] == "budget_exceeded"
+    assert guard.calls == 1
+
+
+async def test_under_budget_runs_the_tool_as_normal():
+    tool = _CountingTool()
+    guard = _BudgetGuardStub(allowed=True)
+
+    result = await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=AsyncMock(),
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=tool,
+        arguments={},
+        budget_guard=guard,
+    )
+
+    assert result == {"ok": True}
+    assert tool.runs == 1
+
+
+async def test_no_guard_means_no_budget_check():
+    """Omitting the guard leaves existing behaviour untouched."""
+    tool = _CountingTool()
+
+    result = await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=AsyncMock(),
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=tool,
+        arguments={},
+    )
+
+    assert result == {"ok": True}
+
+
+async def test_a_failed_audit_write_does_not_fake_a_tool_failure():
+    """The tool already ran and may have changed the world. Telling the model
+    it failed would make it retry and duplicate a real action."""
+    tool = _CountingTool()
+    audit = AsyncMock()
+    audit.log_tool_call.side_effect = RuntimeError("audit table unreachable")
+
+    result = await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=audit,
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=tool,
+        arguments={},
+    )
+
+    assert result == {"ok": True}, "the real result must survive a logging failure"
+    assert tool.runs == 1, "and the tool must not be run twice"

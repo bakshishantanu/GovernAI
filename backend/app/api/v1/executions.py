@@ -16,6 +16,7 @@ from app.api.deps import (
     get_audit_service,
     get_cost_service,
     get_skill_registry,
+    get_budget_guard,
 )
 from app.domain.auth.middleware import get_current_user
 from app.api.schemas.auth import CurrentUser
@@ -26,6 +27,7 @@ from app.domain.executions.service import ExecutionService
 from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
+from app.domain.governance.budget import BudgetGuard
 from app.domain.skills.registry import SkillRegistry
 from app.runtime.llm.service import LLMService
 from app.runtime.agent_loader import load_agent_tools
@@ -46,6 +48,7 @@ async def create_and_run_execution(
     audit_service: AuditService = Depends(get_audit_service),
     cost_service: CostService = Depends(get_cost_service),
     skill_registry: SkillRegistry = Depends(get_skill_registry),
+    budget_guard: BudgetGuard = Depends(get_budget_guard),
 ):
     """
     Trigger an AI Agent execution.
@@ -102,6 +105,7 @@ async def create_and_run_execution(
             goal=payload.goal,
             system_prompt=payload.system_prompt,
             max_steps=payload.max_steps,
+            budget_guard=budget_guard,
         )
 
         final_answer = result.get("final_answer")
