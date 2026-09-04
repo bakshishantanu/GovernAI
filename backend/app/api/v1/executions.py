@@ -1,8 +1,5 @@
 from __future__ import annotations
-import json
-import asyncio
 from uuid import UUID
-from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +14,7 @@ from app.api.deps import (
     get_cost_service,
     get_skill_registry,
 )
+from app.api.sse import SSE_HEADERS, format_sse, stream as sse_stream
 from app.domain.auth.middleware import get_current_user
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
@@ -30,6 +28,7 @@ from app.domain.skills.registry import SkillRegistry
 from app.runtime.llm.service import LLMService
 from app.runtime.agent_loader import load_agent_tools
 from app.runtime.agent_graph import run_agent
+from app.infrastructure.event_bus import Event
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
@@ -173,14 +172,33 @@ async def cancel_execution(
         )
 
 
+#: An execution in any of these states will never produce another event.
+TERMINAL_STATUSES = ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED")
+
+#: Events carrying an `execution_id`, which is what this stream filters on.
+EXECUTION_SCOPED_EVENTS = (
+    "audit.tool.allowed",
+    "audit.tool.denied",
+    "cost.llm.incurred",
+)
+
+
 @router.get("/{execution_id}/stream")
 async def stream_execution_events(
     execution_id: UUID,
     current_user: CurrentUser = Depends(get_current_user),
     exec_service: ExecutionService = Depends(get_execution_service),
 ):
-    """
-    Server-Sent Events (SSE) live stream of execution status.
+    """Live SSE stream of one execution: every tool call, decision and cost.
+
+    Driven by the event bus, so a frame is emitted the moment a service
+    publishes — not on a timer. Authorisation happens once, here, before any
+    subscription exists; afterwards the stream only forwards events whose
+    `execution_id` matches this already-authorised run.
+
+    Run status is *not* published by any service, so it is re-read on the
+    heartbeat rather than polled continuously. That is what closes the stream
+    when the run ends.
     """
     execution = await exec_service.get_execution(execution_id)
     if not execution or execution.org_id != current_user.org_id:
@@ -189,27 +207,56 @@ async def stream_execution_events(
             detail="Execution not found",
         )
 
-    async def event_generator() -> AsyncGenerator[str, None]:
-        # Stream initial status
-        yield f"event: status\ndata: {json.dumps({'status': execution.status, 'goal': execution.goal})}\n\n"
+    wanted_execution_id = str(execution_id)
 
-        # Poll state until completion or cancel
-        for _ in range(30):
-            await asyncio.sleep(1)
-            current = await exec_service.get_execution(execution_id)
-            if not current:
-                break
+    def matches(event: Event) -> bool:
+        if event.type not in EXECUTION_SCOPED_EVENTS:
+            return False
+        # Positive match only. An event without the id is never assumed to
+        # belong to this run.
+        return event.payload.get("execution_id") == wanted_execution_id
 
-            data = {
+    def render(event: Event) -> str:
+        return format_sse(
+            event.type,
+            {"id": str(event.id), "at": event.timestamp, **event.payload},
+        )
+
+    async def on_heartbeat() -> tuple[str | None, bool]:
+        current = await exec_service.get_execution(execution_id)
+        if current is None:
+            return None, False  # the run vanished; nothing left to stream
+        if current.status not in TERMINAL_STATUSES:
+            return None, True  # still going; a keep-alive is sent instead
+        done = format_sse(
+            "done",
+            {
                 "status": current.status,
                 "result": current.result,
                 "error": current.error,
-                "completed_at": current.completed_at.isoformat() if current.completed_at else None,
-            }
-            yield f"event: update\ndata: {json.dumps(data)}\n\n"
+                "completed_at": current.completed_at,
+            },
+        )
+        return done, False  # final frame, then close
 
-            if current.status in ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED"):
-                yield f"event: done\ndata: {json.dumps({'status': current.status})}\n\n"
-                break
+    initial = [
+        format_sse(
+            "status",
+            {
+                "execution_id": wanted_execution_id,
+                "status": execution.status,
+                "goal": execution.goal,
+            },
+        )
+    ]
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        sse_stream(
+            initial=initial,
+            matches=matches,
+            render=render,
+            on_heartbeat=on_heartbeat,
+        ),
+        media_type="text/event-stream",
+        headers=SSE_HEADERS,
+    )
