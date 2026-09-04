@@ -2,7 +2,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.agents.repository import AgentRepository
 from app.domain.audit.service import AuditService
-from app.infrastructure.event_bus import EventBus
+from app.infrastructure.event_bus import EventBus, Event
 
 class KillSwitchService:
     def __init__(self, session: AsyncSession, agent_repo: AgentRepository, audit_service: AuditService, event_bus: EventBus):
@@ -28,7 +28,7 @@ class KillSwitchService:
         )
         
         await self.session.commit()
-        await self.event_bus.publish("agent.suspended", {"agent_id": str(agent_id), "reason": reason})
+        await self.event_bus.publish(Event.create("agent.suspended", {"agent_id": str(agent_id), "reason": reason}))
 
     async def reactivate_agent(self, agent_id: UUID, actor_id: UUID, org_id: UUID, reason: str):
         agent = await self.agent_repo.get_agent(agent_id)
@@ -49,4 +49,4 @@ class KillSwitchService:
         )
         
         await self.session.commit()
-        await self.event_bus.publish("agent.reactivated", {"agent_id": str(agent_id), "reason": reason})
+        await self.event_bus.publish(Event.create("agent.reactivated", {"agent_id": str(agent_id), "reason": reason}))
