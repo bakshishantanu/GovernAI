@@ -3,7 +3,7 @@ import json
 import asyncio
 from uuid import UUID
 from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,33 +31,36 @@ from app.domain.governance.budget import BudgetGuard
 from app.domain.skills.registry import SkillRegistry
 from app.runtime.llm.service import LLMService
 from app.runtime.agent_loader import load_agent_tools
-from app.runtime.agent_graph import run_agent
+from app.api.execution_runner import run_execution
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
 
-@router.post("/", response_model=Envelope[ExecutionResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=Envelope[ExecutionResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_and_run_execution(
     payload: ExecutionCreate,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     agent_service: AgentService = Depends(get_agent_service),
     exec_service: ExecutionService = Depends(get_execution_service),
     llm_service: LLMService = Depends(get_llm_service),
-    policy_engine: PolicyEngine = Depends(get_policy_engine),
-    audit_service: AuditService = Depends(get_audit_service),
-    cost_service: CostService = Depends(get_cost_service),
-    skill_registry: SkillRegistry = Depends(get_skill_registry),
-    budget_guard: BudgetGuard = Depends(get_budget_guard),
 ):
+    """Start an agent run and return straight away.
+
+    Returns **202 Accepted** with the execution id. The run itself happens after
+    the response is sent, so the caller can immediately open
+    `GET /executions/{id}/stream` and watch each tool call, allow and denial as
+    it happens.
+
+    This used to `await` the whole run before responding, which meant the run
+    was already over by the time the caller had an id — the live view had
+    nothing left to show.
     """
-    Trigger an AI Agent execution.
-    1. Validates agent ownership and ACTIVE lifecycle state.
-    2. Loads bound skills and tools for the agent.
-    3. Runs the agent reasoning loop guarded by Governance Middleware.
-    4. Records execution status, audit events, and token costs in PostgreSQL.
-    """
-    # 1. Fetch & validate agent
     agent = await agent_service.agent_repo.get_agent(payload.agent_id)
     if not agent or agent.org_id != current_user.org_id:
         raise HTTPException(
@@ -69,61 +72,34 @@ async def create_and_run_execution(
         state = agent.passport.lifecycle_state if agent.passport else "UNKNOWN"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Agent cannot be executed: lifecycle state is '{state}'. Agent must be in 'ACTIVE' state.",
+            detail=(
+                f"Agent cannot be executed: lifecycle state is '{state}'. "
+                "Agent must be in 'ACTIVE' state."
+            ),
         )
 
-    # 2. Create execution record in DB
     execution = await exec_service.create_execution(
         agent_id=agent.id,
         org_id=current_user.org_id,
         goal=payload.goal,
     )
+    # Committed before the task is queued: the run opens its own session and
+    # must be able to see this row.
     await db.commit()
     await db.refresh(execution)
 
-    # 3. Load agent-specific tools
-    tools = await load_agent_tools(
+    background_tasks.add_task(
+        run_execution,
+        execution_id=execution.id,
         agent_id=agent.id,
-        agent_repo=agent_service.agent_repo,
-        skill_registry=skill_registry,
+        org_id=current_user.org_id,
+        goal=payload.goal,
+        system_prompt=payload.system_prompt,
+        max_steps=payload.max_steps,
+        llm_service=llm_service,
     )
 
-    # 4. Mark execution as RUNNING and execute the agent graph
-    await exec_service.mark_running(execution.id)
-    await db.commit()
-
-    try:
-        result = await run_agent(
-            llm_service=llm_service,
-            tools=tools,
-            agent_id=agent.id,
-            org_id=current_user.org_id,
-            execution_id=execution.id,
-            policy_engine=policy_engine,
-            audit_service=audit_service,
-            cost_service=cost_service,
-            goal=payload.goal,
-            system_prompt=payload.system_prompt,
-            max_steps=payload.max_steps,
-            budget_guard=budget_guard,
-        )
-
-        final_answer = result.get("final_answer")
-        stopped_reason = result.get("stopped_reason")
-
-        if stopped_reason == "max_steps_reached":
-            await exec_service.fail(
-                execution.id, error="Execution stopped: Maximum reasoning steps reached."
-            )
-        else:
-            await exec_service.complete(execution.id, result=final_answer or "Execution completed.")
-
-    except Exception as exc:
-        await exec_service.fail(execution.id, error=str(exc))
-
-    await db.commit()
-    updated_execution = await exec_service.get_execution(execution.id)
-    return Envelope(data=updated_execution)
+    return Envelope(data=execution)
 
 
 @router.get("/", response_model=Envelope[list[ExecutionResponse]])
