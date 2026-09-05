@@ -18,6 +18,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Plus } from "lucide-react"
 
+/** shared with the login form: 2px ink border, paper field, pink focus ring */
+const FIELD =
+  "h-11 w-full rounded-xl border-2 border-border bg-gv-row px-3.5 text-[14px] font-bold text-foreground placeholder:font-bold placeholder:text-gv-muted focus-visible:ring-2 focus-visible:ring-gv-pink"
+
+const LABEL =
+  "text-[11px] font-extrabold uppercase tracking-[0.08em] text-gv-label"
+
 export function CreateAgentButton() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -55,55 +62,62 @@ export function CreateAgentButton() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-blue-600 text-white hover:bg-blue-700 h-9 px-4 py-2 border-0">
-        <Plus className="h-4 w-4" />
+      <DialogTrigger className="gv-card inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl border-2 border-border bg-gv-teal px-[17px] text-[13.5px] font-extrabold text-gv-ink transition-transform active:translate-x-px active:translate-y-px disabled:pointer-events-none disabled:opacity-60">
+        <Plus className="h-4 w-4" strokeWidth={2.6} />
         Create Agent
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] bg-background border-border text-foreground shadow-xl shadow-black/10 dark:shadow-black/50">
+      <DialogContent className="gv-panel sm:max-w-[425px] rounded-lg border-2 border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle>Create New Agent</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Register a new AI agent in GovernAI to begin the compliance process.
+          <DialogTitle className="font-display text-[22px] leading-none">Create agent</DialogTitle>
+          <DialogDescription className="text-[13px] font-bold text-gv-muted">
+            It starts as a draft. Nothing runs until its passport is approved.
           </DialogDescription>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-foreground">Name</Label>
-            <Input 
-              id="name" 
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className={LABEL}>Name</Label>
+            <Input
+              id="name"
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               placeholder="e.g. Customer Support Bot"
-              className="bg-background border-input focus-visible:ring-ring text-foreground"
-              required 
+              className={FIELD}
+              required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description" className="text-foreground">Description</Label>
-            <Textarea 
-              id="description" 
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className={LABEL}>Description</Label>
+            <Textarea
+              id="description"
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               placeholder="Describe what this agent does..."
-              className="bg-background border-input focus-visible:ring-ring min-h-[100px] text-foreground"
-              required 
+              className={`${FIELD} min-h-[100px] py-2.5`}
+              required
             />
           </div>
-          
-          {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
-          
-          <DialogFooter className="pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
+
+          {error && (
+            <p className="gv-chip rounded-xl border-2 border-border bg-gv-held px-3.5 py-2.5 text-[12.5px] font-extrabold text-gv-held-fg">
+              {error}
+            </p>
+          )}
+
+          <DialogFooter className="gap-2 pt-4">
+            <Button
+              type="button"
               onClick={() => setOpen(false)}
-              className="bg-transparent border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="gv-chip h-10 rounded-xl border-2 border-border bg-card px-[15px] text-[13px] font-extrabold text-gv-ink transition-transform hover:bg-gv-row-sel active:translate-x-px active:translate-y-px"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {loading ? "Creating..." : "Create Draft"}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="gv-card h-10 rounded-xl border-2 border-border bg-gv-teal px-[17px] text-[13.5px] font-extrabold text-gv-ink transition-transform hover:bg-gv-teal active:translate-x-px active:translate-y-px disabled:opacity-60"
+            >
+              {loading ? "Creating…" : "Create draft"}
             </Button>
           </DialogFooter>
         </form>

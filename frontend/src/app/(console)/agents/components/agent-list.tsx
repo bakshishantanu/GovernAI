@@ -3,23 +3,58 @@
 import { useState, useEffect, useMemo } from "react"
 import { fetchApi } from "@/lib/api-client"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Shield, ShieldAlert, ShieldCheck, PlayCircle, Clock, Search, ChevronRight } from "lucide-react"
+  ViewTabs,
+  BoardPanel,
+  ToolbarChip,
+  LiveMarker,
+  type BoardView,
+} from "@/components/board/board-panel"
+import { Search, ShieldAlert, ChevronRight } from "lucide-react"
 import Link from "next/link"
+
+/**
+ * The agents board, per design/governai-pro and D-010.
+ *
+ * A row is 48px with a coloured spine on its left edge, so lifecycle is
+ * readable down the column before you read a word of it. The passport column
+ * is a filled badge rather than an outline — a passport is a governance fact,
+ * not a decoration, and the canvas fills the five states solid.
+ *
+ * The fetching, the agent-created listener and the search filter are unchanged
+ * from the version this replaces; only the presentation is new.
+ */
+
+const VIEWS: BoardView[] = [
+  { name: "Table", icon: "table" },
+  { name: "Compliance", icon: "compliance" },
+]
+
+/** lifecycle -> the fill it takes, and the spine colour for its row */
+function passportOf(status: string, lifecycle?: string) {
+  if (status === "ACTIVE") {
+    return { label: "Active", fill: "bg-gv-cleared text-gv-cleared-fg", spine: "bg-gv-cleared" }
+  }
+  if (status === "SUSPENDED") {
+    return { label: "Suspended", fill: "bg-gv-held text-gv-held-fg", spine: "bg-gv-held" }
+  }
+  if (lifecycle === "APPROVED") {
+    return { label: "Approved", fill: "bg-gv-review text-gv-review-fg", spine: "bg-gv-review" }
+  }
+  if (lifecycle === "DRAFT") {
+    return { label: "Draft", fill: "bg-gv-draft text-gv-draft-fg", spine: "bg-gv-rule" }
+  }
+  return { label: status || "Unknown", fill: "bg-gv-draft text-gv-draft-fg", spine: "bg-gv-rule" }
+}
+
+const HEAD_CELL =
+  "px-3 py-0 text-left text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label"
 
 export function AgentList() {
   const [agents, setAgents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [view, setView] = useState("Table")
 
   const fetchAgents = async () => {
     try {
@@ -44,161 +79,194 @@ export function AgentList() {
     return () => window.removeEventListener("agent-created", handleCreated)
   }, [])
 
-  const getStatusBadge = (status: string, lifecycle: string) => {
-    if (status === "ACTIVE") {
-      return (
-        <Badge className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20 relative pl-4 transition-colors">
-          <span className="absolute left-1.5 top-1/2 -translate-y-1/2 flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-          </span>
-          Active
-        </Badge>
-      )
-    }
-    
-    if (lifecycle === "DRAFT") {
-      return <Badge variant="outline" className="text-muted-foreground border-border bg-muted/50"><Clock className="w-3 h-3 mr-1" /> Draft</Badge>
-    }
-    
-    if (lifecycle === "APPROVED") {
-      return <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20"><ShieldCheck className="w-3 h-3 mr-1" /> Approved</Badge>
-    }
-
-    return <Badge variant="outline">{status}</Badge>
-  }
-
   const formatDate = (dateString: string) => {
     const d = new Date(dateString)
-    return new Intl.DateTimeFormat('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     }).format(d)
   }
 
   const filteredAgents = useMemo(() => {
     if (!searchQuery) return agents
     const lowerQuery = searchQuery.toLowerCase()
-    return agents.filter(a => 
-      a.name?.toLowerCase().includes(lowerQuery) || 
-      a.description?.toLowerCase().includes(lowerQuery)
+    return agents.filter(
+      (a) =>
+        a.name?.toLowerCase().includes(lowerQuery) ||
+        a.description?.toLowerCase().includes(lowerQuery),
     )
   }, [agents, searchQuery])
 
+  const toolbar = (
+    <>
+      <span className="flex h-8 shrink-0 items-center gap-2 rounded-xl border-2 border-border bg-gv-row px-3">
+        <Search className="h-3.5 w-3.5 text-gv-muted" strokeWidth={2.4} />
+        <input
+          type="text"
+          aria-label="Search agents"
+          placeholder="Search agents…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-[190px] bg-transparent text-[12.5px] font-bold text-foreground placeholder:font-bold placeholder:text-gv-muted focus:outline-none"
+        />
+      </span>
+
+      {searchQuery && (
+        <ToolbarChip active icon="filter" onRemove={() => setSearchQuery("")}>
+          “{searchQuery}”
+        </ToolbarChip>
+      )}
+
+      <span className="shrink-0 text-[12px] font-extrabold text-gv-muted">
+        {filteredAgents.length} of {agents.length}
+      </span>
+
+      <LiveMarker />
+    </>
+  )
+
+  let body: React.ReactNode
+
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input disabled value="" readOnly placeholder="Loading agents..." className="pl-9 bg-muted/20 border-border" />
-        </div>
-        <div className="border border-border rounded-lg overflow-hidden bg-background">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="border-border">
-                <TableHead>Agent Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Description</TableHead>
-                <TableHead className="text-right">Created</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3].map((i) => (
-                <TableRow key={i} className="border-border">
-                  <TableCell><div className="h-4 w-32 bg-muted animate-pulse rounded"></div></TableCell>
-                  <TableCell><div className="h-5 w-16 bg-muted animate-pulse rounded-full"></div></TableCell>
-                  <TableCell className="hidden md:table-cell"><div className="h-4 w-64 bg-muted animate-pulse rounded"></div></TableCell>
-                  <TableCell className="text-right"><div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto"></div></TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+    body = (
+      <div className="flex flex-col">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="flex h-12 items-center gap-3 border-b-2 border-border px-3"
+          >
+            <span className="h-3.5 w-40 animate-pulse rounded bg-gv-track" />
+            <span className="h-5 w-20 animate-pulse rounded-full bg-gv-track" />
+            <span className="ml-auto h-3.5 w-24 animate-pulse rounded bg-gv-track" />
+          </div>
+        ))}
       </div>
     )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6 text-center">
-        <ShieldAlert className="w-8 h-8 text-red-500 mx-auto mb-2" />
-        <p className="text-red-500 font-medium">Failed to load agents</p>
-        <p className="text-muted-foreground text-sm mt-1">{error}</p>
-        <button onClick={fetchAgents} className="mt-4 text-sm text-blue-500 hover:text-blue-400 underline">Try again</button>
+  } else if (error) {
+    body = (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+        <span className="gv-chip mb-1 flex h-10 w-10 items-center justify-center rounded-xl border-2 border-border bg-gv-held">
+          <ShieldAlert className="h-5 w-5 text-gv-held-fg" strokeWidth={2.4} />
+        </span>
+        <span className="text-[13px] font-extrabold tracking-[0.05em] text-gv-ink">
+          COULD NOT LOAD AGENTS
+        </span>
+        <p className="max-w-md text-[13px] font-semibold text-gv-body">{error}</p>
+        <button
+          type="button"
+          onClick={fetchAgents}
+          className="gv-chip mt-2 h-9 rounded-xl border-2 border-border bg-card px-4 text-[13px] font-extrabold text-gv-ink transition-transform active:translate-x-px active:translate-y-px"
+        >
+          Try again
+        </button>
       </div>
+    )
+  } else if (filteredAgents.length === 0) {
+    body = (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+        <span className="text-[13px] font-extrabold tracking-[0.05em] text-gv-muted">
+          {agents.length === 0 ? "NO AGENTS YET" : "NOTHING MATCHES"}
+        </span>
+        <p className="max-w-md text-[13.5px] font-semibold text-gv-body">
+          {agents.length === 0
+            ? "Create your first agent to give it a passport, a scoped permission set and a live cost budget."
+            : `No agent matches “${searchQuery}”.`}
+        </p>
+      </div>
+    )
+  } else {
+    body = (
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 z-10 bg-gv-head">
+          <tr className="h-10 border-b-2 border-border">
+            {/* the spine column has no label — it is colour, not data */}
+            <th className="w-1 p-0" aria-hidden="true" />
+            <th scope="col" className={HEAD_CELL}>
+              Agent
+            </th>
+            <th scope="col" className={HEAD_CELL}>
+              Passport
+            </th>
+            <th scope="col" className={`${HEAD_CELL} hidden md:table-cell`}>
+              Description
+            </th>
+            <th scope="col" className={`${HEAD_CELL} text-right`}>
+              Created
+            </th>
+            <th className="w-9 p-0" aria-hidden="true" />
+          </tr>
+        </thead>
+
+        <tbody>
+          {filteredAgents.map((agent) => {
+            const passport = passportOf(agent.status, agent.passport?.lifecycle_state)
+
+            return (
+              <tr
+                key={agent.id}
+                className="group relative h-12 border-b-2 border-border last:border-b-0 hover:bg-gv-row-sel"
+              >
+                <td className={`w-1 p-0 ${passport.spine}`} aria-hidden="true" />
+
+                <td className="max-w-[220px] truncate px-3 text-[13.5px] font-extrabold text-gv-ink">
+                  <Link
+                    href={`/agents/${agent.id}`}
+                    className="after:absolute after:inset-0 after:content-['']"
+                  >
+                    {agent.name}
+                  </Link>
+                </td>
+
+                <td className="px-3">
+                  <span
+                    className={`inline-flex h-[22px] items-center whitespace-nowrap rounded-full border-2 border-border px-2.5 text-[11px] font-extrabold ${passport.fill}`}
+                  >
+                    {passport.label}
+                  </span>
+                </td>
+
+                <td className="hidden max-w-[320px] truncate px-3 text-[13px] font-semibold text-gv-body md:table-cell">
+                  {agent.description}
+                </td>
+
+                <td className="whitespace-nowrap px-3 text-right font-mono text-[12px] font-bold text-gv-muted">
+                  {formatDate(agent.created_at)}
+                </td>
+
+                <td className="w-9 pr-3 text-right">
+                  <ChevronRight
+                    className="ml-auto h-4 w-4 text-gv-muted opacity-0 transition-opacity group-hover:opacity-100"
+                    strokeWidth={2.6}
+                  />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="relative w-full max-w-sm group">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-foreground" />
-        <Input 
-          type="text"
-          placeholder="Search agents by name... (⌘K)" 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 bg-background border-input focus-visible:ring-ring transition-all duration-200 shadow-sm" 
-        />
-      </div>
+    <>
+      <ViewTabs views={VIEWS} active={view} onSelect={setView} />
 
-      {filteredAgents.length === 0 ? (
-        <div className="border border-dashed border-border rounded-xl p-12 text-center flex flex-col items-center justify-center bg-muted/10">
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Search className="h-6 w-6 text-muted-foreground" />
+      <BoardPanel toolbar={toolbar}>
+        {view === "Table" ? (
+          body
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+            <span className="text-[13px] font-extrabold tracking-[0.05em] text-gv-muted">
+              NOT BUILT YET
+            </span>
+            <p className="max-w-md text-[13.5px] font-semibold text-gv-body">
+              The compliance view will group agents by passport state and show
+              what each one is still missing before it can be activated.
+            </p>
           </div>
-          <h3 className="text-lg font-medium text-foreground mb-1">No agents found</h3>
-          <p className="text-muted-foreground max-w-sm mb-6">
-            {agents.length === 0 
-              ? "You haven't registered any AI agents in GovernAI yet. Create your first agent to begin governance tracking."
-              : `No agents match your search for "${searchQuery}".`
-            }
-          </p>
-        </div>
-      ) : (
-        <div className="border border-border rounded-lg overflow-hidden bg-background shadow-sm">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow className="border-border hover:bg-muted/50">
-                <TableHead className="text-muted-foreground">Agent Name</TableHead>
-                <TableHead className="text-muted-foreground">Status</TableHead>
-                <TableHead className="text-muted-foreground hidden md:table-cell">Description</TableHead>
-                <TableHead className="text-muted-foreground text-right">Created</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAgents.map((agent) => (
-                <TableRow key={agent.id} className="border-border hover:bg-muted/30 group transition-all duration-200 cursor-pointer relative">
-                  <TableCell className="font-medium text-foreground">
-                    <Link href={`/agents/${agent.id}`} className="absolute inset-0 z-10">
-                      <span className="sr-only">View Agent</span>
-                    </Link>
-                    <span className="group-hover:text-blue-500 transition-colors">
-                      {agent.name}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(agent.status, agent.passport?.lifecycle_state)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden md:table-cell max-w-[300px] truncate">
-                    {agent.description}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-right text-sm">
-                    {formatDate(agent.created_at)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </div>
+        )}
+      </BoardPanel>
+    </>
   )
 }
