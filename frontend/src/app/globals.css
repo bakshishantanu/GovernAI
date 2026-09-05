@@ -207,86 +207,64 @@
    chrome is simply no longer shouting.
    ------------------------------------------------------------------------- */
 
-/* ── Dark mode: MONOCHROME (experiment, 2026-09-06) ────────────────────────
-   P1 asked to try dark as black-and-white only. Every chrome token below is a
-   pure neutral — no hue anywhere in the frame, the field, the panels or the
-   type.
+/* ── Dark mode ─────────────────────────────────────────────────────────────
+   The quiet theme (D-021, retuned in D-023).
 
-   The one deliberate exception is the five status fills. They are neutrals
-   too, but separated by *luminance* rather than hue, because in this product
-   the difference between "allowed" and "denied" is the whole point and it
-   must survive a greyscale theme. Every status badge already carries an icon
-   and a word ("DENIED", "ALLOWED"), so meaning never rests on colour alone —
-   which is what makes a monochrome theme defensible here rather than a
-   regression.
+   A monochrome version was tried on 2026-09-06 and rejected: greyscale chrome
+   made the console look flat and, in its pure form, collapsed the board's
+   colour column. This is the warm palette that was accepted before it.
 
-   Denial keeps the single brightest fill so it still pulls the eye across a
-   dark board, which is the behaviour the run viewer's flash depends on.
-
-   To revert: this whole block is the theme. The light palette is untouched. */
+   Two rules if these values are ever revised again:
+   - Change chroma, not the field/line relationship. Accents at full chroma on
+     a near-black field read as neon, which is what made the very first pass
+     loud; every accent here is deliberately desaturated.
+   - The status fills stay a step brighter than the accents, because the board
+     is scanned by that column before anything else is read. */
 .dark {
-  --gv-canvas: #121212;
-  --gv-canvas-dot: #1e1e1e;
-  --gv-paper: #191919;
-  --gv-ink: #e6e6e6;
+  --gv-canvas: #191610;
+  --gv-canvas-dot: #272115;
+  --gv-paper: #221e15;
+  --gv-ink: #cdc2a4;
 
-  /* the accents, as neutrals. Kept as separate tokens so components do not
-     need to change and the theme stays one block. */
-  --gv-yellow: #d6d6d6;
-  --gv-teal: #b4b4b4;
-  --gv-pink: #f0f0f0;
-  --gv-lilac: #9a9a9a;
-  --gv-red: #ffffff;
+  --gv-yellow: #d9ab3c;
+  --gv-teal: #4f9c93;
+  --gv-pink: #c97a94;
+  --gv-lilac: #a99bc4;
+  --gv-red: #c85f48;
 
-  --gv-body: #c2c2c2;
-  --gv-muted: #949494;
-  --gv-rule: #4a4a4a;
-  --gv-onyellow: #2a2a2a;
+  --gv-body: #b7ad93;
+  --gv-muted: #8f8770;
+  --gv-rule: #4f4a3c;
+  --gv-onyellow: #b8a670;
 
-  --gv-row: #1c1c1c;
-  --gv-row-sel: #242424;
-  --gv-head: #232323;
-  --gv-tab-idle: #2b2b2b;
-  --gv-label: #a3a3a3;
-  --gv-subtle: #8f8f8f;
-  --gv-track: #0e0e0e;
+  --gv-row: #1c1911;
+  --gv-row-sel: #241f16;
+  --gv-head: #262115;
+  --gv-tab-idle: #262115;
+  --gv-label: #8f8770;
+  --gv-subtle: #8f8770;
+  --gv-track: #100e09;
 
-  /* the bar stays darker than the field so it still reads as a bar */
-  --gv-bar: #0a0a0a;
-  --gv-bar-text: #cfcfcf;
-  --gv-bar-field: #1a1a1a;
-  --gv-bar-border: #3d3d3d;
+  /* the bar must stay darker than the field so it still reads as a bar */
+  --gv-bar: #0d0c08;
+  --gv-bar-text: #a89e84;
+  --gv-bar-field: #191510;
+  --gv-bar-border: #46402f;
 
-  /* ── The one place colour survives ──────────────────────────────────────
-     Pure greyscale was tried first and it broke the boards: "Draft" and
-     "Active" became near-identical chips and the coloured row spine — the
-     thing that makes lifecycle readable down a column before you read a
-     word — disappeared entirely. On a governance product that is not a
-     style choice, it is a loss of the signal the board exists to carry.
+  --gv-cleared: #3a9a5e;
+  --gv-cleared-fg: #191610;
+  --gv-watch: #d9ab3c;
+  --gv-watch-fg: #191610;
+  --gv-held: #c85f48;
+  --gv-held-fg: #191610;
+  --gv-review: #6a8fc9;
+  --gv-review-fg: #191610;
+  --gv-draft: #332e22;
+  --gv-draft-fg: #8f8770;
 
-     So the chrome stays monochrome and these five fills are the ONLY hues in
-     the theme. That inverts the canvas's rule in a way that works even
-     better after dark: quiet chrome, and colour reserved exclusively for
-     governance state, so status is the only coloured thing on screen and
-     therefore the first thing seen.
-
-     Chroma stays low, per [D-023] — the lesson that full-chroma accents on a
-     near-black field read as neon still applies. Draft stays neutral,
-     because "draft" is the absence of a state rather than a state. */
-  --gv-cleared: #3f8f66;
-  --gv-cleared-fg: #f2f2f2;
-  --gv-watch: #b8912f;
-  --gv-watch-fg: #0e0e0e;
-  --gv-held: #c9543c;
-  --gv-held-fg: #f7f7f7;
-  --gv-review: #5578ad;
-  --gv-review-fg: #f2f2f2;
-  --gv-draft: #2e2e2e;
-  --gv-draft-fg: #9a9a9a;
-
-  /* a hair off pure black, so the hard-offset shadow still reads as depth
-     against the field instead of cutting a hole in it */
-  --gv-shadow: #050505;
+  /* a hair off pure black: still reads as depth against a near-black field,
+     without the stark cut-out edge that #000 gave the hard-offset shadow */
+  --gv-shadow: #0b0a07;
 
   --background: var(--gv-canvas);
   --foreground: var(--gv-ink);
@@ -295,13 +273,13 @@
   --popover: var(--gv-paper);
   --popover-foreground: var(--gv-ink);
   --primary: var(--gv-yellow);
-  --primary-foreground: #121212;
-  --secondary: #232323;
+  --primary-foreground: #191610;
+  --secondary: #262115;
   --secondary-foreground: var(--gv-ink);
-  --muted: #232323;
+  --muted: #262115;
   --muted-foreground: var(--gv-muted);
   --accent: var(--gv-teal);
-  --accent-foreground: #121212;
+  --accent-foreground: #191610;
   --destructive: var(--gv-red);
   --border: var(--gv-ink);
   --input: var(--gv-ink);
@@ -309,12 +287,13 @@
   --sidebar: var(--gv-paper);
   --sidebar-foreground: var(--gv-ink);
   --sidebar-primary: var(--gv-pink);
-  --sidebar-primary-foreground: #121212;
+  --sidebar-primary-foreground: #191610;
   --sidebar-accent: var(--gv-yellow);
-  --sidebar-accent-foreground: #121212;
+  --sidebar-accent-foreground: #191610;
   --sidebar-border: var(--gv-ink);
   --sidebar-ring: var(--gv-pink);
 }
+
 
 
 @layer base {
