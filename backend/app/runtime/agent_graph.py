@@ -12,6 +12,7 @@ from uuid import UUID
 from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
+from app.domain.governance.budget import BudgetGuard
 from app.domain.governance.middleware import govern_tool
 
 
@@ -44,7 +45,8 @@ def build_agent_graph(
     execution_id: UUID,
     policy_engine: PolicyEngine,
     audit_service: AuditService,
-    cost_service: CostService
+    cost_service: CostService,
+    budget_guard: BudgetGuard | None = None,
 ):
     """Builds the security-hardened agent reasoning loop."""
     tools_by_name = {tool.name: tool for tool in tools}
@@ -96,6 +98,7 @@ def build_agent_graph(
                     tool=tool,
                     arguments=arguments,
                     timeout_seconds=TOOL_EXECUTION_TIMEOUT_SECONDS,
+                    budget_guard=budget_guard,
                 )
 
             results.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)})
@@ -136,11 +139,12 @@ async def run_agent(
     goal: str,
     system_prompt: str | None = None,
     max_steps: int = 10,
+    budget_guard: BudgetGuard | None = None,
 ) -> dict:
     """Run a goal through the security-hardened agent graph."""
     graph = build_agent_graph(
         llm_service, tools, agent_id, org_id, execution_id, 
-        policy_engine, audit_service, cost_service
+        policy_engine, audit_service, cost_service, budget_guard
     )
 
     messages = []

@@ -1,12 +1,15 @@
 from __future__ import annotations
 from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from app.api.schemas.agent import AgentResponse, AgentCreate, AgentUpdate, PassportResponse
 from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
 from app.domain.auth.middleware import get_current_user
-from app.api.deps import get_agent_service
+from app.domain.auth.rbac import require_admin
+from app.domain.agents.kill_switch import KillSwitchService
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps import get_agent_service, get_db, get_kill_switch_service
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
@@ -14,7 +17,7 @@ from app.domain.agents.service import (
     SkillNotFoundError,
 )
 
-router = APIRouter()
+router = APIRouter(prefix="/agents", tags=["agents"])
 
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
@@ -39,8 +42,8 @@ async def create_agent(
 @router.get("/", response_model=PaginatedResponse[AgentResponse])
 async def list_agents(
     user: CurrentUser = Depends(get_current_user),
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     service: AgentService = Depends(get_agent_service)
 ):
     """List all agents for the current user's organization."""
@@ -94,7 +97,7 @@ async def submit_agent_for_review(
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
 async def activate_agent(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service)
 ):
     """Activate an approved agent."""
@@ -110,3 +113,90 @@ async def activate_agent(
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
     return Envelope(data=AgentResponse.model_validate(updated_agent))
+
+
+@router.patch("/{agent_id}", response_model=Envelope[AgentResponse])
+async def update_agent(
+    agent_id: UUID,
+    payload: AgentUpdate,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """Edit an agent's name and description.
+
+    Skills are deliberately **not** editable here. An agent's permissions are
+    the union of its skills (FRD-02), so changing them after activation would
+    silently widen what it may do without re-running the compliance check.
+    There is no re-review flow yet, so the request is refused rather than
+    quietly letting permissions drift.
+    """
+    agent = await service.agent_repo.get_agent(agent_id)
+    if not agent or agent.org_id != user.org_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if payload.skills is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Skills cannot be changed after creation: an agent's permissions "
+                "are derived from its skills and would bypass the compliance check. "
+                "Create a new agent with the skills you need."
+            ),
+        )
+
+    if payload.name is not None:
+        agent.name = payload.name
+    if payload.description is not None:
+        agent.description = payload.description
+
+    await db.commit()
+    refreshed = await service.agent_repo.get_agent(agent_id)
+    return Envelope(data=AgentResponse.model_validate(refreshed))
+
+
+@router.post("/{agent_id}/kill", response_model=Envelope[AgentResponse])
+async def kill_agent(
+    agent_id: UUID,
+    reason: str = Body("Kill switch activated by an administrator", embed=True),
+    user: CurrentUser = Depends(require_admin),
+    service: AgentService = Depends(get_agent_service),
+    kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+):
+    """Stop an agent immediately (FRD-12).
+
+    Suspends the agent and its passport together, and writes the audit entry.
+    Any run in flight stops at its next tool call, because the governance gate
+    reads the passport before every call and will now find it suspended.
+    """
+    try:
+        await kill_switch.suspend_agent(
+            agent_id=agent_id, actor_id=user.id, org_id=user.org_id, reason=reason
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    agent = await service.agent_repo.get_agent(agent_id)
+    return Envelope(data=AgentResponse.model_validate(agent))
+
+
+@router.post("/{agent_id}/reactivate", response_model=Envelope[AgentResponse])
+async def reactivate_agent(
+    agent_id: UUID,
+    reason: str = Body("Reactivated by an administrator", embed=True),
+    user: CurrentUser = Depends(require_admin),
+    service: AgentService = Depends(get_agent_service),
+    kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+):
+    """Bring a suspended agent back. Never automatic — FRD-12 requires a person."""
+    try:
+        await kill_switch.reactivate_agent(
+            agent_id=agent_id, actor_id=user.id, org_id=user.org_id, reason=reason
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = 404 if "not found" in detail.lower() else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=detail)
+
+    agent = await service.agent_repo.get_agent(agent_id)
+    return Envelope(data=AgentResponse.model_validate(agent))

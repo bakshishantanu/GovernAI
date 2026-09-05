@@ -13,7 +13,8 @@ from app.api.v1.executions import (
 )
 from app.api.schemas.execution import ExecutionCreate
 from app.api.schemas.auth import CurrentUser
-from fastapi import HTTPException
+from app.api.execution_runner import run_execution
+from fastapi import BackgroundTasks, HTTPException
 
 
 @pytest.fixture
@@ -59,10 +60,7 @@ async def test_execution_fails_if_agent_not_found(current_user):
             agent_service=agent_service,
             exec_service=AsyncMock(),
             llm_service=AsyncMock(),
-            policy_engine=AsyncMock(),
-            audit_service=AsyncMock(),
-            cost_service=AsyncMock(),
-            skill_registry=AsyncMock(),
+            background_tasks=BackgroundTasks(),
         )
 
     assert exc.value.status_code == 404
@@ -99,10 +97,7 @@ async def test_execution_fails_if_agent_in_draft_state(current_user):
             agent_service=agent_service,
             exec_service=AsyncMock(),
             llm_service=AsyncMock(),
-            policy_engine=AsyncMock(),
-            audit_service=AsyncMock(),
-            cost_service=AsyncMock(),
-            skill_registry=AsyncMock(),
+            background_tasks=BackgroundTasks(),
         )
 
     assert exc.value.status_code == 400
@@ -110,53 +105,79 @@ async def test_execution_fails_if_agent_in_draft_state(current_user):
 
 
 @pytest.mark.asyncio
-async def test_successful_execution_flow(current_user, active_agent):
+async def test_the_endpoint_returns_before_the_run_happens(current_user, active_agent):
+    """The whole point of the change: the caller gets an id immediately, so it
+    can open the stream and watch the run rather than waiting for the result."""
     exec_id = uuid.uuid4()
-    mock_execution = Execution(
+    queued = Execution(
         id=exec_id,
         agent_id=active_agent.id,
         org_id=current_user.org_id,
         goal="Count open tickets",
-        status="COMPLETED",
-        result="Found 5 open tickets.",
+        status="PENDING",
     )
 
     agent_service = AsyncMock()
     agent_service.agent_repo.get_agent.return_value = active_agent
 
     exec_service = AsyncMock()
-    exec_service.create_execution.return_value = mock_execution
-    exec_service.get_execution.return_value = mock_execution
+    exec_service.create_execution.return_value = queued
 
+    background_tasks = BackgroundTasks()
     payload = ExecutionCreate(agent_id=active_agent.id, goal="Count open tickets")
 
-    with patch("app.api.v1.executions.load_agent_tools", new_callable=AsyncMock) as mock_load_tools, \
-         patch("app.api.v1.executions.run_agent", new_callable=AsyncMock) as mock_run_agent:
-        mock_load_tools.return_value = []
-        mock_run_agent.return_value = {
-            "final_answer": "Found 5 open tickets.",
-            "steps": 1,
-            "stopped_reason": "completed",
-        }
+    response = await create_and_run_execution(
+        payload=payload,
+        current_user=current_user,
+        db=AsyncMock(),
+        agent_service=agent_service,
+        exec_service=exec_service,
+        llm_service=AsyncMock(),
+        background_tasks=background_tasks,
+    )
 
-        response = await create_and_run_execution(
-            payload=payload,
-            current_user=current_user,
-            db=AsyncMock(),
-            agent_service=agent_service,
-            exec_service=exec_service,
-            llm_service=AsyncMock(),
-            policy_engine=AsyncMock(),
-            audit_service=AsyncMock(),
-            cost_service=AsyncMock(),
-            skill_registry=AsyncMock(),
-        )
+    assert response.data.id == exec_id
 
-        assert response.data.id == exec_id
-        assert response.data.status == "COMPLETED"
-        assert response.data.result == "Found 5 open tickets."
-        exec_service.mark_running.assert_awaited_once_with(exec_id)
-        exec_service.complete.assert_awaited_once_with(exec_id, result="Found 5 open tickets.")
+    # The run was queued, not executed.
+    assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0].func is run_execution
+    assert background_tasks.tasks[0].kwargs["execution_id"] == exec_id
+
+    # And the endpoint itself did none of the running.
+    exec_service.mark_running.assert_not_awaited()
+    exec_service.complete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_row_is_committed_before_the_task_is_queued(current_user, active_agent):
+    """The background run opens its own session, so the row must already be
+    visible to it. Committing after queueing would race."""
+    db = AsyncMock()
+    exec_id = uuid.uuid4()
+
+    agent_service = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = active_agent
+
+    exec_service = AsyncMock()
+    exec_service.create_execution.return_value = Execution(
+        id=exec_id,
+        agent_id=active_agent.id,
+        org_id=current_user.org_id,
+        goal="g",
+        status="PENDING",
+    )
+
+    await create_and_run_execution(
+        payload=ExecutionCreate(agent_id=active_agent.id, goal="g"),
+        current_user=current_user,
+        db=db,
+        agent_service=agent_service,
+        exec_service=exec_service,
+        llm_service=AsyncMock(),
+        background_tasks=BackgroundTasks(),
+    )
+
+    db.commit.assert_awaited()
 
 
 @pytest.mark.asyncio

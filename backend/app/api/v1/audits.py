@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.domain.auth.middleware import get_current_user
@@ -16,7 +16,7 @@ def get_audit_repo(db: AsyncSession = Depends(get_db)) -> AuditRepository:
 
 @router.get("/", response_model=Envelope[list[AuditEventResponse]])
 async def list_audit_events(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     current_user: CurrentUser = Depends(get_current_user),
     repo: AuditRepository = Depends(get_audit_repo)
 ):

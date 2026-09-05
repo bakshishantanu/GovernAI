@@ -1,9 +1,6 @@
 from __future__ import annotations
-import json
-import asyncio
 from uuid import UUID
-from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,49 +9,46 @@ from app.api.deps import (
     get_agent_service,
     get_execution_service,
     get_llm_service,
-    get_policy_engine,
-    get_audit_service,
-    get_cost_service,
-    get_skill_registry,
 )
+from app.api.sse import SSE_HEADERS, format_sse, stream as sse_stream
 from app.domain.auth.middleware import get_current_user
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.execution import ExecutionCreate, ExecutionResponse
 from app.domain.agents.service import AgentService
 from app.domain.executions.service import ExecutionService
-from app.domain.policies.engine import PolicyEngine
-from app.domain.audit.service import AuditService
-from app.domain.costs.service import CostService
-from app.domain.skills.registry import SkillRegistry
 from app.runtime.llm.service import LLMService
-from app.runtime.agent_loader import load_agent_tools
-from app.runtime.agent_graph import run_agent
+from app.api.execution_runner import run_execution
+from app.infrastructure.event_bus import Event
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
 
-@router.post("/", response_model=Envelope[ExecutionResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=Envelope[ExecutionResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def create_and_run_execution(
     payload: ExecutionCreate,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     agent_service: AgentService = Depends(get_agent_service),
     exec_service: ExecutionService = Depends(get_execution_service),
     llm_service: LLMService = Depends(get_llm_service),
-    policy_engine: PolicyEngine = Depends(get_policy_engine),
-    audit_service: AuditService = Depends(get_audit_service),
-    cost_service: CostService = Depends(get_cost_service),
-    skill_registry: SkillRegistry = Depends(get_skill_registry),
 ):
+    """Start an agent run and return straight away.
+
+    Returns **202 Accepted** with the execution id. The run itself happens after
+    the response is sent, so the caller can immediately open
+    `GET /executions/{id}/stream` and watch each tool call, allow and denial as
+    it happens.
+
+    This used to `await` the whole run before responding, which meant the run
+    was already over by the time the caller had an id — the live view had
+    nothing left to show.
     """
-    Trigger an AI Agent execution.
-    1. Validates agent ownership and ACTIVE lifecycle state.
-    2. Loads bound skills and tools for the agent.
-    3. Runs the agent reasoning loop guarded by Governance Middleware.
-    4. Records execution status, audit events, and token costs in PostgreSQL.
-    """
-    # 1. Fetch & validate agent
     agent = await agent_service.agent_repo.get_agent(payload.agent_id)
     if not agent or agent.org_id != current_user.org_id:
         raise HTTPException(
@@ -66,60 +60,34 @@ async def create_and_run_execution(
         state = agent.passport.lifecycle_state if agent.passport else "UNKNOWN"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Agent cannot be executed: lifecycle state is '{state}'. Agent must be in 'ACTIVE' state.",
+            detail=(
+                f"Agent cannot be executed: lifecycle state is '{state}'. "
+                "Agent must be in 'ACTIVE' state."
+            ),
         )
 
-    # 2. Create execution record in DB
     execution = await exec_service.create_execution(
         agent_id=agent.id,
         org_id=current_user.org_id,
         goal=payload.goal,
     )
+    # Committed before the task is queued: the run opens its own session and
+    # must be able to see this row.
     await db.commit()
     await db.refresh(execution)
 
-    # 3. Load agent-specific tools
-    tools = await load_agent_tools(
+    background_tasks.add_task(
+        run_execution,
+        execution_id=execution.id,
         agent_id=agent.id,
-        agent_repo=agent_service.agent_repo,
-        skill_registry=skill_registry,
+        org_id=current_user.org_id,
+        goal=payload.goal,
+        system_prompt=payload.system_prompt,
+        max_steps=payload.max_steps,
+        llm_service=llm_service,
     )
 
-    # 4. Mark execution as RUNNING and execute the agent graph
-    await exec_service.mark_running(execution.id)
-    await db.commit()
-
-    try:
-        result = await run_agent(
-            llm_service=llm_service,
-            tools=tools,
-            agent_id=agent.id,
-            org_id=current_user.org_id,
-            execution_id=execution.id,
-            policy_engine=policy_engine,
-            audit_service=audit_service,
-            cost_service=cost_service,
-            goal=payload.goal,
-            system_prompt=payload.system_prompt,
-            max_steps=payload.max_steps,
-        )
-
-        final_answer = result.get("final_answer")
-        stopped_reason = result.get("stopped_reason")
-
-        if stopped_reason == "max_steps_reached":
-            await exec_service.fail(
-                execution.id, error="Execution stopped: Maximum reasoning steps reached."
-            )
-        else:
-            await exec_service.complete(execution.id, result=final_answer or "Execution completed.")
-
-    except Exception as exc:
-        await exec_service.fail(execution.id, error=str(exc))
-
-    await db.commit()
-    updated_execution = await exec_service.get_execution(execution.id)
-    return Envelope(data=updated_execution)
+    return Envelope(data=execution)
 
 
 @router.get("/", response_model=Envelope[list[ExecutionResponse]])
@@ -173,14 +141,33 @@ async def cancel_execution(
         )
 
 
+#: An execution in any of these states will never produce another event.
+TERMINAL_STATUSES = ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED")
+
+#: Events carrying an `execution_id`, which is what this stream filters on.
+EXECUTION_SCOPED_EVENTS = (
+    "audit.tool.allowed",
+    "audit.tool.denied",
+    "cost.llm.incurred",
+)
+
+
 @router.get("/{execution_id}/stream")
 async def stream_execution_events(
     execution_id: UUID,
     current_user: CurrentUser = Depends(get_current_user),
     exec_service: ExecutionService = Depends(get_execution_service),
 ):
-    """
-    Server-Sent Events (SSE) live stream of execution status.
+    """Live SSE stream of one execution: every tool call, decision and cost.
+
+    Driven by the event bus, so a frame is emitted the moment a service
+    publishes — not on a timer. Authorisation happens once, here, before any
+    subscription exists; afterwards the stream only forwards events whose
+    `execution_id` matches this already-authorised run.
+
+    Run status is *not* published by any service, so it is re-read on the
+    heartbeat rather than polled continuously. That is what closes the stream
+    when the run ends.
     """
     execution = await exec_service.get_execution(execution_id)
     if not execution or execution.org_id != current_user.org_id:
@@ -189,27 +176,56 @@ async def stream_execution_events(
             detail="Execution not found",
         )
 
-    async def event_generator() -> AsyncGenerator[str, None]:
-        # Stream initial status
-        yield f"event: status\ndata: {json.dumps({'status': execution.status, 'goal': execution.goal})}\n\n"
+    wanted_execution_id = str(execution_id)
 
-        # Poll state until completion or cancel
-        for _ in range(30):
-            await asyncio.sleep(1)
-            current = await exec_service.get_execution(execution_id)
-            if not current:
-                break
+    def matches(event: Event) -> bool:
+        if event.type not in EXECUTION_SCOPED_EVENTS:
+            return False
+        # Positive match only. An event without the id is never assumed to
+        # belong to this run.
+        return event.payload.get("execution_id") == wanted_execution_id
 
-            data = {
+    def render(event: Event) -> str:
+        return format_sse(
+            event.type,
+            {"id": str(event.id), "at": event.timestamp, **event.payload},
+        )
+
+    async def on_heartbeat() -> tuple[str | None, bool]:
+        current = await exec_service.get_execution(execution_id)
+        if current is None:
+            return None, False  # the run vanished; nothing left to stream
+        if current.status not in TERMINAL_STATUSES:
+            return None, True  # still going; a keep-alive is sent instead
+        done = format_sse(
+            "done",
+            {
                 "status": current.status,
                 "result": current.result,
                 "error": current.error,
-                "completed_at": current.completed_at.isoformat() if current.completed_at else None,
-            }
-            yield f"event: update\ndata: {json.dumps(data)}\n\n"
+                "completed_at": current.completed_at,
+            },
+        )
+        return done, False  # final frame, then close
 
-            if current.status in ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED"):
-                yield f"event: done\ndata: {json.dumps({'status': current.status})}\n\n"
-                break
+    initial = [
+        format_sse(
+            "status",
+            {
+                "execution_id": wanted_execution_id,
+                "status": execution.status,
+                "goal": execution.goal,
+            },
+        )
+    ]
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        sse_stream(
+            initial=initial,
+            matches=matches,
+            render=render,
+            on_heartbeat=on_heartbeat,
+        ),
+        media_type="text/event-stream",
+        headers=SSE_HEADERS,
+    )

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,3 +41,39 @@ class CostRepository:
             }
             for row in rows
         ]
+
+    async def list_costs(
+        self,
+        org_id: UUID,
+        agent_id: UUID | None = None,
+        execution_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[CostEvent]:
+        """Cost events for one org, newest first, optionally narrowed.
+
+        Always scoped by org_id so a caller cannot read another tenant's spend
+        by guessing an agent id.
+        """
+        query = select(CostEvent).where(CostEvent.org_id == org_id)
+        if agent_id is not None:
+            query = query.where(CostEvent.agent_id == agent_id)
+        if execution_id is not None:
+            query = query.where(CostEvent.execution_id == execution_id)
+
+        query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    async def get_total_cost_for_agent(self, agent_id: UUID, since: datetime) -> float:
+        """Total USD spent by one agent since `since`.
+
+        Summed in the database rather than in Python: the budget guard calls
+        this before every tool call, so it must not load one row per LLM call
+        an agent has ever made.
+        """
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(CostEvent.cost_usd), 0.0))
+            .where(CostEvent.agent_id == agent_id)
+            .where(CostEvent.timestamp >= since)
+        )
+        return float(result.scalar_one() or 0.0)
