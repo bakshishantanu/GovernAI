@@ -109,8 +109,15 @@ class BudgetGuard:
         if spend < cap:
             return BudgetDecision(allowed=True, spend_usd=spend, cap_usd=cap)
 
+        # Two decimals printed a real breach of $0.0015 against a $0.001 cap
+        # as "$0.00 of $0.00" — a suspension whose recorded reason states no
+        # numbers at all. Sub-cent figures get the precision they need, because
+        # this string is the audit trail's explanation for stopping an agent.
+        def _usd(value: float) -> str:
+            return f"${value:.2f}" if value >= 0.01 else f"${value:.6f}"
+
         reason = (
-            f"Budget exceeded: ${spend:.2f} of ${cap:.2f} spent in the last 24h. "
+            f"Budget exceeded: {_usd(spend)} of {_usd(cap)} spent in the last 24h. "
             "The agent has been suspended."
         )
 

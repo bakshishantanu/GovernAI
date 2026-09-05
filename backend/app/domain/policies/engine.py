@@ -43,8 +43,20 @@ class PolicyEngine:
             permissions = await self.perm_repo.get_permissions_for_passport(agent.passport.id)
             perm_strings = [p.permission for p in permissions]
             
-            if required_permission and required_permission not in perm_strings:
-                return PolicyDecision(False, f"Missing required permission: '{required_permission}'")
+            # A tool may need several permissions at once — the SQL tool sets
+            # `required_permission` to a comma-joined list of one per permitted
+            # table. Comparing that joined string against individual passport
+            # entries could never match, so every run_sql_query call was denied
+            # for a missing permission the agent actually held, and the SQL
+            # skill was unusable by any agent. Split and require ALL parts,
+            # which is the fail-closed reading.
+            if required_permission:
+                needed = [p.strip() for p in required_permission.split(",") if p.strip()]
+                missing = [p for p in needed if p not in perm_strings]
+                if missing:
+                    return PolicyDecision(
+                        False, f"Missing required permission: '{', '.join(missing)}'"
+                    )
 
             # 4. DYNAMIC DATABASE POLICIES
             # Fetch all active policies configured by the Org Admin in the database
@@ -56,7 +68,16 @@ class PolicyEngine:
                         continue
                         
                     # Evaluate SQL Blocklist Rule
-                    if rule.rule_type == "sql_blocklist" and tool_name == "sql_query":
+                    # The tool is named `run_sql_query`; `sql_query` is the
+                    # *skill*. Matching only "sql_query" meant this rule could
+                    # never fire, which made the one implemented rule type dead
+                    # code and FRD-14's "toggle a rule and watch the same call
+                    # flip" impossible to demonstrate. Both names are accepted
+                    # so existing rule rows keep working.
+                    if rule.rule_type == "sql_blocklist" and tool_name in (
+                        "sql_query",
+                        "run_sql_query",
+                    ):
                         blocked_keywords = rule.config.get("keywords", [])
                         query = tool_args.get("query", "")
                         for keyword in blocked_keywords:

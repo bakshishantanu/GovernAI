@@ -60,6 +60,7 @@ export function RunViewer({ executionId }: { executionId: string }) {
   const run = useExecutionStream(executionId);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [settled, setSettled] = useState<{ status: string; result?: string | null; error?: string | null } | null>(null);
+  const [history, setHistory] = useState<RunEntry[]>([]);
   const [killing, setKilling] = useState(false);
   const [killError, setKillError] = useState<string | null>(null);
 
@@ -89,14 +90,61 @@ export function RunViewer({ executionId }: { executionId: string }) {
     };
   }, [executionId]);
 
+  // What the run already did, before this page opened.
+  //
+  // The SSE stream only carries events that occur while it is connected, so a
+  // run that finished a second before you clicked it showed an empty timeline
+  // and "produced no governance events" — for a run that had produced plenty.
+  // The audit log is the record; this reads it and the stream appends to it.
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi(`/audits/?execution_id=${executionId}&limit=200`)
+      .then((data) => {
+        if (cancelled) return;
+        const rows: any[] = Array.isArray(data) ? data : [];
+        setHistory(
+          rows
+            .slice()
+            .reverse() // the audit log is newest-first; a timeline reads forwards
+            .map((event) => ({
+              key: `history-${event.id}`,
+              at: event.timestamp,
+              kind: (event.policy_decision || "").toUpperCase().startsWith("DEN")
+                ? "denied"
+                : "allowed",
+              tool: event.tool ?? event.action,
+              reason: event.reason,
+            })),
+        );
+      })
+      .catch(() => {
+        /* the live stream is still the primary source */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [executionId]);
+
   const live = !run.finished && !settled && !TERMINAL.includes(run.status);
   const reconnecting = run.reconnecting;
+
+  // History first, then anything the stream delivered. A live event that is
+  // also in history would duplicate, so live entries are dropped when an
+  // identical tool+reason already sits in the backfill.
+  const seen = new Set(history.map((e) => `${e.kind}|${e.tool}|${e.reason ?? ""}`));
+  const entries: RunEntry[] = [
+    ...history,
+    ...run.entries.filter(
+      (e) => e.kind === "cost" || !seen.has(`${e.kind}|${e.tool}|${e.reason ?? ""}`),
+    ),
+  ];
 
   // The stream wins once it has spoken; `settled` only fills the gap before it.
   const status = run.finished ? run.status : (settled?.status ?? run.status);
   const result = run.result ?? settled?.result;
   const error = run.error ?? settled?.error;
   const finished = run.finished || settled !== null;
+  const deniedCount = entries.filter((e) => e.kind === "denied").length;
 
   const handleKill = async () => {
     if (killing) return;
@@ -156,8 +204,8 @@ export function RunViewer({ executionId }: { executionId: string }) {
               {status}
             </span>
 
-            <ToolbarChip icon="filter" active={run.deniedCount > 0}>
-              {run.deniedCount} denied
+            <ToolbarChip icon="filter" active={deniedCount > 0}>
+              {deniedCount} denied
             </ToolbarChip>
 
             <ToolbarChip>${run.spendUsd.toFixed(4)} this run</ToolbarChip>
@@ -208,12 +256,12 @@ export function RunViewer({ executionId }: { executionId: string }) {
 
         {/* aria-live so a screen reader hears each decision as it lands */}
         <ul aria-live="polite" className="divide-y divide-gv-rule/40">
-          {run.entries.map((entry) => (
+          {entries.map((entry) => (
             <TimelineRow key={entry.key} entry={entry} />
           ))}
         </ul>
 
-        {run.entries.length === 0 && !run.connectionError && (
+        {entries.length === 0 && !run.connectionError && (
           <p className="px-4 py-8 text-[13px] font-bold text-gv-muted">
             {live
               ? "Connected. Waiting for the first tool call…"

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
@@ -45,14 +46,27 @@ def _to_response(event) -> AuditEventResponse:
 @router.get("/", response_model=Envelope[list[AuditEventResponse]])
 async def list_audit_events(
     limit: int = Query(50, ge=1, le=200),
+    agent_id: uuid.UUID | None = Query(None, description="Narrow to one agent"),
+    execution_id: uuid.UUID | None = Query(None, description="Narrow to one run"),
     current_user: CurrentUser = Depends(get_current_user),
     repo: AuditRepository = Depends(get_audit_repo)
 ):
+    """Audit events for the caller's organisation, most recent first.
+
+    `execution_id` is what lets the run viewer show a run that finished before
+    anyone opened it: the SSE stream only carries events that happen while it
+    is connected, so without a way to read a run's history the viewer showed
+    "no governance events" for a run that had plenty.
+
+    The filters are applied after the org fetch because the repository has no
+    filtered query. That is fine at this size and wrong at scale — worth
+    pushing down into `AuditRepository` when the table grows.
     """
-    List audit events (security logs) for the current user's organization.
-    Ordered by most recent first.
-    """
-    # Fetch all events (repository already orders by timestamp desc)
-    # If the database gets large, we should pass 'limit' down to the repository.
     events = await repo.get_events_for_org(current_user.org_id)
+
+    if agent_id is not None:
+        events = [e for e in events if e.agent_id == agent_id]
+    if execution_id is not None:
+        events = [e for e in events if e.execution_id == execution_id]
+
     return Envelope(data=[_to_response(e) for e in events[:limit]])

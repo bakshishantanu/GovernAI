@@ -20,7 +20,7 @@ from app.domain.executions.service import ExecutionService
 from app.runtime.llm.service import LLMService
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
-from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
+from app.runtime.llm.base import LLMProvider, LLMResponse, ToolCall, TokenUsage
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.governance.budget import BudgetGuard
@@ -28,22 +28,87 @@ from app.infrastructure.event_bus import event_bus
 
 
 class MockFallbackProvider(LLMProvider):
-    """Stands in when no provider key is configured, so the console can be run
-    and demonstrated locally without a Groq or Gemini account.
+    """Stands in when no provider key is configured.
 
-    `provider` and `usage` are required on `LLMResponse` and were both missing,
-    so every mock call raised TypeError, the service exhausted its retries, and
-    *every* run failed with "All LLM providers failed" — i.e. an agent could
-    not be run at all without API keys. Zero usage is honest here: no tokens
-    were bought, so the cost service records nothing.
+    It **drives real tool calls** rather than returning a canned sentence. That
+    matters more than it sounds: without it the governance path could not be
+    exercised at all locally. The model is the only simulated part — the policy
+    engine, the budget guard, the audit log, the kill switch and the SSE stream
+    all run exactly as they would behind a real LLM, because they sit
+    downstream of this and cannot tell the difference.
+
+    It is deliberately scripted, not random, so a demo and a CI run produce the
+    same sequence every time:
+
+        turn 1  a permitted read  -> expected ALLOWED
+        turn 2  a SQL query that trips the blocklist rule -> expected DENIED
+        turn 3  a final answer, ending the run
+
+    Zero token usage is honest: no tokens were bought, so the cost service
+    records nothing. A non-zero figure would put invented spend into a
+    cost-governance product.
     """
 
     name = "mock"
 
+    #: Arguments for the tools the script drives. Anything else is called with
+    #: no arguments, which the tool itself will reject if it needs them.
+    _ARGS = {
+        "read_ticket": {"ticket_id": "TCK-1002"},
+        "search_tickets": {"query": "refund"},
+        # `internal_payroll` is the keyword the seeded blocklist rule denies.
+        # The point of the script is to attempt something governance refuses.
+        "run_sql_query": {
+            "query": "SELECT * FROM internal_payroll WHERE employee_id = 1"
+        },
+    }
+
+    #: Preference order for the first, expected-to-be-allowed call.
+    _FIRST_CHOICE = ("read_ticket", "search_tickets")
+
+    def _call(self, name: str, index: int) -> ToolCall:
+        return ToolCall(
+            id=f"mock-call-{index}",
+            name=name,
+            arguments=self._ARGS.get(name, {}),
+        )
+
     async def chat(self, messages: list[dict], **kwargs) -> LLMResponse:
-        last_msg = messages[-1]["content"] if messages else ""
+        tool_specs = kwargs.get("tools") or []
+        available = {
+            spec.get("function", {}).get("name")
+            for spec in tool_specs
+            if isinstance(spec, dict)
+        }
+        # How many tool results have already come back tells us where we are.
+        step = sum(1 for m in messages if m.get("role") == "tool")
+
+        tool_calls: list[ToolCall] = []
+        if available:
+            if step == 0:
+                first = next((n for n in self._FIRST_CHOICE if n in available), None)
+                if first:
+                    tool_calls = [self._call(first, 0)]
+            elif step == 1 and "run_sql_query" in available:
+                tool_calls = [self._call("run_sql_query", 1)]
+
+        if tool_calls:
+            return LLMResponse(
+                content="",
+                model="mock-simulator",
+                provider=self.name,
+                usage=TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+                tool_calls=tool_calls,
+            )
+
+        goal = next(
+            (m.get("content", "") for m in messages if m.get("role") == "user"), ""
+        )
         return LLMResponse(
-            content=f"Execution simulated successfully for prompt: '{last_msg}'",
+            content=(
+                "Simulated run finished. The governance gate was exercised for real; "
+                f"only the model was mocked. Goal: '{goal}'"
+            ),
             model="mock-simulator",
             provider=self.name,
             usage=TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
