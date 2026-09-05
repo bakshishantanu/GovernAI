@@ -1,11 +1,14 @@
-import { PagePlaceholder } from "@/components/layout/page-placeholder";
+import { PageHeader } from "@/components/board/page-header";
+import { SettingsBoard } from "./components/settings-board";
 
 export default function SettingsPage() {
   return (
-    <PagePlaceholder
-      title="Settings"
-      subtitle="Organisation and account"
-      description="Organisation profile, members and roles."
-    />
+    <>
+      <PageHeader
+        title="Settings"
+        subtitle="What is configured for this organisation, and what enforces it"
+      />
+      <SettingsBoard />
+    </>
   );
 }

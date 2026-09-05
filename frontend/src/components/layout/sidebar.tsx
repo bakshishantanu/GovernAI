@@ -136,21 +136,55 @@ export function Sidebar() {
       <div className="flex flex-col gap-2.5 border-t-2 border-border p-3">
         <OrgBudgetMeter />
 
-        <div className="flex items-center gap-2.5 p-0.5">
-          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border-2 border-border bg-gv-lilac text-[11px] font-extrabold text-gv-ink">
-            PL
-          </div>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-[12.5px] font-extrabold text-foreground">
-              Pranav Ladha
-            </span>
-            <span className="truncate text-[11px] font-semibold text-gv-subtle">
-              Admin
-            </span>
-          </div>
-        </div>
+        <SignedInAs />
       </div>
     </aside>
+  );
+}
+
+/**
+ * Who is actually signed in, from GET /auth/me.
+ *
+ * This card used to render a hardcoded name and role. On a product about who
+ * is allowed to do what, showing a member the word "Admin" beside their own
+ * initials is not a cosmetic problem. The name is not shown at all: it lives
+ * in Supabase rather than this database, and the role is what governs access,
+ * so the role is what the card leads with.
+ */
+function SignedInAs() {
+  const [me, setMe] = useState<{ id: string; role: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi("/auth/me")
+      .then((data) => {
+        if (!cancelled) setMe(data ?? null);
+      })
+      .catch(() => {
+        /* the nav still works signed out; the card just stays unknown */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <Link
+      href="/settings"
+      className="flex items-center gap-2.5 rounded-lg p-0.5 transition-colors hover:bg-muted"
+    >
+      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border-2 border-border bg-gv-lilac text-[11px] font-extrabold text-gv-ink">
+        {me ? me.role.slice(0, 2).toUpperCase() : "··"}
+      </span>
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="truncate text-[12.5px] font-extrabold capitalize text-foreground">
+          {me ? me.role : "Signed in"}
+        </span>
+        <span className="truncate font-mono text-[10.5px] text-gv-subtle">
+          {me ? `${me.id.slice(0, 8)}…` : "loading…"}
+        </span>
+      </span>
+    </Link>
   );
 }
 

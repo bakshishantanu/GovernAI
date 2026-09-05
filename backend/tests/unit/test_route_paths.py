@@ -32,6 +32,8 @@ EXPECTED_PATHS = {
     "/api/v1/automations/",
     "/api/v1/automations/{automation_id}",
     "/api/v1/automation-runs/",
+    "/api/v1/auth/me",
+    "/api/v1/auth/settings",
     "/api/v1/policies/{policy_id}",
     "/api/v1/policies/{policy_id}/rules",
     "/api/v1/policies/{policy_id}/rules/{rule_id}",

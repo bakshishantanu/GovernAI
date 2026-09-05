@@ -76,6 +76,7 @@ export function AgentDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [policies, setPolicies] = useState<any[] | null>(null)
   // kept separate from `error`: a failed submit/activate must not replace the
   // whole page with the load-failure screen, the way setError would
   const [actionError, setActionError] = useState<string | null>(null)
@@ -95,6 +96,24 @@ export function AgentDetail({ id }: { id: string }) {
   useEffect(() => {
     fetchAgent()
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchApi("/policies/")
+      .then((data) => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        setPolicies(list.filter((policy: any) => policy.enabled))
+      })
+      .catch(() => {
+        // The passport is the important half of this panel; a failed policy
+        // lookup shows "none enabled" rather than breaking the page.
+        if (!cancelled) setPolicies([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleAction = async (action: "submit" | "activate") => {
     try {
@@ -304,10 +323,36 @@ export function AgentDetail({ id }: { id: string }) {
               </div>
 
               <div className="border-t-2 border-border pt-4">
-                <span className={`${LABEL} mb-2 block`}>Active policies</span>
-                <p className="text-[13px] font-semibold text-gv-body">
-                  Per-agent policy display is not wired yet.
-                </p>
+                <span className={`${LABEL} mb-2 block`}>Enforced policies</span>
+                {/* Policies are org-wide — there is no per-agent policy link in
+                    the model — so every enabled policy applies to this agent.
+                    Saying that is more useful than the "not wired yet" note
+                    this replaces, which implied a relationship that does not
+                    exist. */}
+                {policies === null ? (
+                  <p className="text-[13px] font-semibold text-gv-body">Loading…</p>
+                ) : policies.length === 0 ? (
+                  <p className="text-[13px] font-semibold text-gv-body">
+                    No policies are enabled. Tool calls are still checked against this
+                    agent&apos;s passport and its budget.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {policies.map((policy: any) => (
+                        <span
+                          key={policy.id}
+                          className="inline-flex h-[22px] items-center rounded-full border-2 border-border bg-gv-review px-2.5 text-[11px] font-extrabold text-gv-review-fg"
+                        >
+                          {policy.name}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[12.5px] font-semibold text-gv-muted">
+                      Policies apply to every agent in the organisation.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </Card>
