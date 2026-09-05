@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { ShieldAlert, ShieldCheck, Minus } from "lucide-react";
 import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
+import { useConsoleEvents } from "@/components/events/console-events";
 
 /**
  * The audit log, as one component used in more than one place.
@@ -71,6 +72,9 @@ export function AuditFeed({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const still = useReducedMotion();
+  // Every forwarded event bumps this, so the feed follows the live stream
+  // instead of showing whatever was true when the page opened.
+  const { revision } = useConsoleEvents();
 
   const load = useCallback(async () => {
     try {
@@ -89,7 +93,7 @@ export function AuditFeed({
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, revision]);
 
   if (loading) {
     return <FeedNote>Loading the audit log…</FeedNote>;

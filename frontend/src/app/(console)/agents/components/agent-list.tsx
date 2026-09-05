@@ -10,6 +10,7 @@ import {
   type BoardView,
 } from "@/components/board/board-panel"
 import { motion, useReducedMotion, DURATION, EASE } from "@/components/motion"
+import { useConsoleEvents } from "@/components/events/console-events"
 import { Search, ShieldAlert, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
@@ -81,6 +82,7 @@ export function AgentList() {
   const [view, setView] = useState("Table")
   const [grouped, setGrouped] = useState(false)
   const still = useReducedMotion()
+  const { connected, revision } = useConsoleEvents()
 
   const fetchAgents = async () => {
     try {
@@ -117,7 +119,9 @@ export function AgentList() {
 
     window.addEventListener("agent-created", handleCreated)
     return () => window.removeEventListener("agent-created", handleCreated)
-  }, [])
+    // `revision` bumps on every org event, so a suspension or a new agent
+    // shows up here without a refresh.
+  }, [revision])
 
   const formatDate = (dateString: string) => {
     const d = new Date(dateString)
@@ -187,7 +191,7 @@ export function AgentList() {
         {filteredAgents.length} of {agents.length}
       </span>
 
-      <LiveMarker label="Not connected" />
+      <LiveMarker live={connected} label={connected ? "Live · connected" : "Not connected"} />
     </>
   )
 

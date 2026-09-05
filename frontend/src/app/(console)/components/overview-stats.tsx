@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { isDenied, type AuditEvent } from "@/components/audit/audit-feed";
 import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
+import { useConsoleEvents } from "@/components/events/console-events";
 
 /**
  * The three Overview figures, read from the API.
@@ -48,6 +49,7 @@ type State =
 export function OverviewStats() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const still = useReducedMotion();
+  const { revision } = useConsoleEvents();
 
   useEffect(() => {
     let cancelled = false;
@@ -110,7 +112,7 @@ export function OverviewStats() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [revision]);
 
   if (state.kind === "error") {
     return (

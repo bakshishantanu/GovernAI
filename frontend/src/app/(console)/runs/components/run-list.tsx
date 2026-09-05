@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchApi } from "@/lib/api-client";
 import { BoardPanel, ViewTabs, LiveMarker } from "@/components/board/board-panel";
 import { ChevronRight } from "lucide-react";
+import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
 
 /**
  * Every run in the organisation, newest first, on the board primitive.
@@ -71,6 +72,7 @@ export function RunList() {
   }, []);
 
   const activeCount = runs.filter((r) => !TERMINAL.includes(r.status)).length;
+  const still = useReducedMotion();
 
   return (
     <>
@@ -79,6 +81,7 @@ export function RunList() {
       <BoardPanel
         toolbar={
           <LiveMarker
+            live={activeCount > 0}
             label={
               activeCount > 0
                 ? `${activeCount} run${activeCount === 1 ? "" : "s"} in flight`
@@ -113,10 +116,15 @@ export function RunList() {
                 <th className="w-9" />
               </tr>
             </thead>
-            <tbody>
+            <motion.tbody
+              variants={staggerContainer}
+              initial={still ? false : "hidden"}
+              animate="shown"
+            >
               {runs.map((run) => (
-                <tr
+                <motion.tr
                   key={run.id}
+                  variants={staggerItem}
                   className="relative h-12 border-b border-gv-rule/40 hover:bg-gv-row-sel"
                 >
                   <td className="px-3">
@@ -144,9 +152,9 @@ export function RunList() {
                       aria-hidden="true"
                     />
                   </td>
-                </tr>
+                </motion.tr>
               ))}
-            </tbody>
+            </motion.tbody>
           </table>
         )}
       </BoardPanel>

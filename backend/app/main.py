@@ -17,6 +17,7 @@ from app.api.v1.policies import router as policies_router
 from app.api.v1.audits import router as audits_router
 from app.api.v1.costs import router as costs_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.events import router as events_router
 from app.api.v1.automations import router as automations_router
 from app.api.v1.automations import runs_router as automation_runs_router
 from app.api.v1.executions import router as executions_router
@@ -138,6 +139,7 @@ app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
 app.include_router(auth_router, prefix="/api/v1", tags=["Auth"])
+app.include_router(events_router, prefix="/api/v1", tags=["Events"])
 app.include_router(automations_router, prefix="/api/v1", tags=["Automations"])
 app.include_router(automation_runs_router, prefix="/api/v1", tags=["Automations"])
 
