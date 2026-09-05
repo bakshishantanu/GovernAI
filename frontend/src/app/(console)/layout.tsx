@@ -7,11 +7,14 @@ export default function ConsoleLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-white dark:bg-[#0a0a0a] text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    // Full-height, non-scrolling frame: the sidebar and the black bar stay put
+    // and the board panel scrolls inside itself, as on the canvas. Pages own
+    // their own padding via PageHeader / BoardPanel, so there is none here.
+    <div className="flex h-screen overflow-hidden text-foreground">
       <Sidebar />
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="flex-1 p-8 overflow-auto bg-white dark:bg-[#0a0a0a]">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </main>
       </div>

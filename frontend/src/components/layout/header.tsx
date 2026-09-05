@@ -1,44 +1,93 @@
 "use client";
 
 import { logout } from "@/app/auth/actions";
-import { LogOut, User, Bell } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { LogOut, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+/**
+ * The black top bar, per design/governai-pro Main.dc.html.
+ *
+ * This is the storefront hero's black log strip, reused as console chrome:
+ * breadcrumb, a search field, then a live alert chip, the people on the
+ * workspace, and the account controls.
+ */
+
+const CRUMBS: Record<string, string> = {
+  "/": "Dashboard",
+  "/agents": "Agents",
+  "/skills": "Skills",
+  "/policies": "Policies",
+  "/audit": "Audit log",
+  "/costs": "Costs",
+  "/settings": "Settings",
+  "/automations": "Automations",
+};
+
+function crumbFor(pathname: string) {
+  if (CRUMBS[pathname]) return CRUMBS[pathname];
+  const base = Object.keys(CRUMBS).find(
+    (href) => href !== "/" && pathname.startsWith(href),
+  );
+  return base ? CRUMBS[base] : "Console";
+}
+
 export function Header() {
+  const pathname = usePathname();
+
   return (
-    <header className="h-14 bg-white dark:bg-[#0a0a0a] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-10 transition-colors duration-300">
-      <div className="flex items-center text-sm font-medium text-slate-600 dark:text-slate-400">
-        <span className="bg-slate-100 dark:bg-slate-900 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-800">
-          Organization: Default Org
-        </span>
+    <header className="sticky top-0 z-10 flex h-[60px] shrink-0 items-center gap-3.5 bg-gv-bar px-5">
+      <div className="flex shrink-0 items-center gap-2 text-[13px] font-bold text-gv-bar-text">
+        <span>Acme Corp</span>
+        <span aria-hidden>/</span>
+        <span className="text-gv-yellow">{crumbFor(pathname)}</span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <ThemeToggle />
-        
-        <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
-          <Bell className="w-4 h-4" />
-        </button>
+      <label className="ml-2.5 flex h-9 w-[300px] shrink-0 items-center gap-2 rounded-xl border-2 border-gv-bar-border bg-gv-bar-field px-3.5">
+        <Search className="h-[15px] w-[15px] shrink-0 text-gv-subtle" strokeWidth={2.2} />
+        <input
+          type="search"
+          placeholder="Search everything"
+          className="min-w-0 flex-1 bg-transparent text-[12.5px] font-semibold text-gv-bar-text placeholder:text-gv-subtle focus:outline-none"
+        />
+        <kbd className="shrink-0 font-mono text-[10.5px] text-gv-subtle">/</kbd>
+      </label>
 
-        <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-2"></div>
-
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-medium text-slate-900 dark:text-slate-200">Pranav Ladha</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-500">Admin</span>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400">
-            <User className="w-4 h-4" />
-          </div>
+      <div className="ml-auto flex items-center gap-3">
+        {/* TODO: wire to the denied-tool-call event stream. */}
+        <div className="hidden h-8 items-center gap-[7px] rounded-xl border-2 border-border bg-gv-pink px-3 lg:flex">
+          <span className="h-[7px] w-[7px] rounded-full bg-gv-ink" />
+          <span className="text-[12px] font-extrabold text-gv-ink">
+            6 denied this hour
+          </span>
         </div>
+
+        <div className="hidden md:flex">
+          {[
+            { initials: "SB", tint: "bg-gv-teal" },
+            { initials: "PA", tint: "bg-gv-lilac" },
+            { initials: "PL", tint: "bg-gv-pink" },
+          ].map((person, i) => (
+            <div
+              key={person.initials}
+              className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-gv-paper text-[10.5px] font-extrabold text-gv-ink ${person.tint}`}
+              style={{ marginLeft: i === 0 ? 0 : -9 }}
+            >
+              {person.initials}
+            </div>
+          ))}
+        </div>
+
+        <ThemeToggle />
 
         <form action={logout}>
           <button
             type="submit"
-            className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 ml-2"
             title="Log out"
+            className="flex h-8 items-center gap-2 rounded-xl border-2 border-border bg-gv-yellow px-3 text-[12.5px] font-extrabold text-gv-ink transition-colors hover:bg-gv-pink"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="h-[14px] w-[14px]" strokeWidth={2.4} />
+            Sign out
           </button>
         </form>
       </div>
