@@ -39,8 +39,13 @@ export type RunStream = {
   error?: string | null;
   /** True once the server sent `done` or closed the stream. */
   finished: boolean;
+  /** Non-null while the connection has dropped and is being retried. */
+  reconnecting: { attempt: number; maxAttempts: number } | null;
   connectionError: string | null;
 };
+
+/** Matches the client's default; shown in the UI so the count means something. */
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED", "TERMINATED"];
 
@@ -51,6 +56,7 @@ export function useExecutionStream(executionId: string | undefined): RunStream {
     spendUsd: 0,
     deniedCount: 0,
     finished: false,
+    reconnecting: null,
     connectionError: null,
   });
 
@@ -58,22 +64,31 @@ export function useExecutionStream(executionId: string | undefined): RunStream {
   // lives in a ref rather than in state.
   const seq = useRef(0);
 
+  // Read synchronously by `shouldReconnect`, which runs outside React's
+  // render cycle and so cannot consult state.
+  const doneRef = useRef(false);
+
   useEffect(() => {
     if (!executionId) return;
 
     const controller = new AbortController();
     seq.current = 0;
+    doneRef.current = false;
     setState({
       status: "PENDING",
       entries: [],
       spendUsd: 0,
       deniedCount: 0,
       finished: false,
+      reconnecting: null,
       connectionError: null,
     });
 
     const handle = (event: SseEvent) => {
       const data = event.data ?? {};
+
+      // The protocol, not the transport, decides when the run is over.
+      if (event.type === "done") doneRef.current = true;
 
       setState((prev) => {
         switch (event.type) {
@@ -122,6 +137,7 @@ export function useExecutionStream(executionId: string | undefined): RunStream {
               result: data.result,
               error: data.error,
               finished: true,
+              reconnecting: null,
             };
 
           default:
@@ -134,17 +150,30 @@ export function useExecutionStream(executionId: string | undefined): RunStream {
       `/executions/${executionId}/stream`,
       {
         onEvent: handle,
-        onClose: () =>
+        onOpen: () => setState((prev) => ({ ...prev, reconnecting: null })),
+        onReconnecting: (attempt) =>
           setState((prev) => ({
             ...prev,
-            finished: true,
-            // The stream only closes after `done` or when the run vanished.
-            status: TERMINAL.includes(prev.status) ? prev.status : prev.status,
+            reconnecting: { attempt, maxAttempts: MAX_RECONNECT_ATTEMPTS },
           })),
+        onClose: () =>
+          setState((prev) => ({ ...prev, finished: true, reconnecting: null })),
         onError: (err) =>
-          setState((prev) => ({ ...prev, connectionError: err.message, finished: true })),
+          setState((prev) => ({
+            ...prev,
+            connectionError: err.message,
+            finished: true,
+            reconnecting: null,
+          })),
       },
       controller.signal,
+      {
+        // Reopen a stream that ended without a `done` frame: the run was
+        // still going, so the body ending means the connection dropped, not
+        // that the server was finished with us.
+        shouldReconnect: () => !doneRef.current,
+        retry: { maxAttempts: MAX_RECONNECT_ATTEMPTS },
+      },
     );
 
     return () => controller.abort();

@@ -90,6 +90,7 @@ export function RunViewer({ executionId }: { executionId: string }) {
   }, [executionId]);
 
   const live = !run.finished && !settled && !TERMINAL.includes(run.status);
+  const reconnecting = run.reconnecting;
 
   // The stream wins once it has spoken; `settled` only fills the gap before it.
   const status = run.finished ? run.status : (settled?.status ?? run.status);
@@ -161,7 +162,18 @@ export function RunViewer({ executionId }: { executionId: string }) {
 
             <ToolbarChip>${run.spendUsd.toFixed(4)} this run</ToolbarChip>
 
-            <LiveMarker live={live} label={live ? "Live · streaming" : "Stream closed"} />
+            {/* A dropped connection must not look like a finished run — the
+                marker says which of the three it is. */}
+            <LiveMarker
+              live={live && !reconnecting}
+              label={
+                reconnecting
+                  ? `Reconnecting · attempt ${reconnecting.attempt} of ${reconnecting.maxAttempts}`
+                  : live
+                    ? "Live · streaming"
+                    : "Stream closed"
+              }
+            />
           </>
         }
       >
@@ -171,6 +183,17 @@ export function RunViewer({ executionId }: { executionId: string }) {
             className="m-4 rounded-lg border-2 border-gv-held bg-gv-held/10 p-3 text-[13px] font-extrabold text-gv-held-fg"
           >
             {killError}
+          </div>
+        )}
+
+        {reconnecting && (
+          <div
+            role="status"
+            className="m-4 rounded-lg border-2 border-gv-watch bg-gv-watch/20 p-3 text-[13px] font-extrabold text-gv-watch-fg"
+          >
+            Lost the live connection. Reconnecting — attempt {reconnecting.attempt} of{" "}
+            {reconnecting.maxAttempts}. Events recorded while disconnected are still in the
+            audit log.
           </div>
         )}
 
