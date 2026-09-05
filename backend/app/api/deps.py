@@ -56,10 +56,13 @@ class MockFallbackProvider(LLMProvider):
     _ARGS = {
         "read_ticket": {"ticket_id": "TCK-1002"},
         "search_tickets": {"query": "refund"},
-        # `internal_payroll` is the keyword the seeded blocklist rule denies.
-        # The point of the script is to attempt something governance refuses.
+        # Arguments match the tool's declared schema ({question, sql}) — an
+        # off-schema argument made the tool fail before it could demonstrate
+        # anything. `internal_payroll` is the keyword the blocklist rule
+        # denies: the script exists to attempt what governance refuses.
         "run_sql_query": {
-            "query": "SELECT * FROM internal_payroll WHERE employee_id = 1"
+            "question": "What is the disputed payroll amount?",
+            "sql": "SELECT amount FROM internal_payroll WHERE employee_id = 1",
         },
     }
 

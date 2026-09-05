@@ -14,6 +14,32 @@ DEFAULT_TOOL_TIMEOUT_SECONDS = 30.0
 logger = logging.getLogger(__name__)
 
 
+async def _audit_quietly(
+    audit_service: AuditService,
+    org_id: UUID,
+    agent_id: UUID,
+    execution_id: UUID,
+    tool_name: str,
+    allowed: bool,
+    reason: str,
+) -> None:
+    """Write an audit entry, and never let its failure mask the real outcome.
+
+    Used on the paths that already have a result to report. A failed audit
+    write is loud in the log but must not turn a tool outcome into an
+    exception the model would react to.
+    """
+    try:
+        await audit_service.log_tool_call(
+            org_id, agent_id, execution_id, tool_name, allowed, reason
+        )
+    except Exception:
+        logger.exception(
+            "AUDIT WRITE FAILED — agent=%s execution=%s tool=%s reason=%s",
+            agent_id, execution_id, tool_name, reason,
+        )
+
+
 async def govern_tool(
     *,
     policy_engine: PolicyEngine,
@@ -59,11 +85,22 @@ async def govern_tool(
             tool.execute(**arguments), timeout=timeout_seconds
         )
     except asyncio.TimeoutError:
-        return {
-            "error": "timeout",
-            "reason": f"tool execution exceeded {timeout_seconds:.0f}s",
-        }
+        # Audited, not just returned. The policy ALLOWED this call and the tool
+        # was then actually invoked against the outside world — it may well have
+        # had an effect before it timed out. Returning without a record left an
+        # allowed, attempted call completely absent from the audit trail, which
+        # breaks the platform's central claim that every tool call is logged.
+        # The decision really was "allow"; the reason carries the outcome.
+        reason = f"Allowed, but tool execution exceeded {timeout_seconds:.0f}s"
+        await _audit_quietly(
+            audit_service, org_id, agent_id, execution_id, tool.name, True, reason
+        )
+        return {"error": "timeout", "reason": reason}
     except Exception as exc:
+        reason = f"Allowed, but the tool failed: {exc}"
+        await _audit_quietly(
+            audit_service, org_id, agent_id, execution_id, tool.name, True, reason
+        )
         return {"error": "tool_failed", "reason": str(exc)}
 
     # The tool has already run and may have changed the outside world. A failed

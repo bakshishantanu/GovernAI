@@ -79,7 +79,17 @@ class PolicyEngine:
                         "run_sql_query",
                     ):
                         blocked_keywords = rule.config.get("keywords", [])
-                        query = tool_args.get("query", "")
+                        # The SQL tool's schema is {question, sql}; it is never
+                        # given a "query" argument. Reading only "query" meant
+                        # the rule inspected an empty string for any correctly
+                        # formed call and could not match — the same dead-rule
+                        # problem as the tool-name check above, one layer in.
+                        # All three keys are scanned so the rule sees whatever
+                        # the caller actually sent.
+                        query = " ".join(
+                            str(tool_args.get(key, ""))
+                            for key in ("sql", "query", "question")
+                        )
                         for keyword in blocked_keywords:
                             # Use regex to find exact word matches (case insensitive)
                             if re.search(rf"\b{keyword}\b", query, re.IGNORECASE):
