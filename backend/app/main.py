@@ -3,7 +3,10 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.api.v1.agents import router as agents_router
@@ -46,6 +49,56 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+
+class UnhandledErrorMiddleware(BaseHTTPMiddleware):
+    """Turn an unhandled exception into a JSON 500 *inside* the CORS layer.
+
+    Starlette's own ServerErrorMiddleware sits outside every user middleware,
+    so a 500 it produces never passes back through CORSMiddleware and carries
+    no `Access-Control-Allow-Origin` header. The browser then rejects the
+    response before any JavaScript sees it, and `fetch` rejects with the
+    useless "Failed to fetch" — the real error, and its status code, are
+    invisible in the console during exactly the incident you most need them.
+
+    Catching here means the response is generated inside CORS, so the headers
+    are added normally and the frontend can show what actually went wrong.
+    The exception is still logged, and re-raised nowhere: the traceback is
+    already on its way to the logger below.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception:
+            logger.exception(
+                "governai.unhandled_error",
+                path=str(request.url.path),
+                method=request.method,
+            )
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "data": None,
+                    "meta": None,
+                    "errors": [
+                        {
+                            "type": "internal_error",
+                            "title": "Internal Server Error",
+                            "status": 500,
+                            "detail": (
+                                "The server failed to handle this request. "
+                                "Check the API logs for the traceback."
+                            ),
+                            "instance": str(request.url.path),
+                        }
+                    ],
+                },
+            )
+
+
+# Added before CORS so that CORS ends up OUTSIDE it: the last middleware added
+# is the outermost, and CORS must wrap this one to put its headers on the 500.
+app.add_middleware(UnhandledErrorMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

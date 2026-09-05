@@ -19,6 +19,17 @@ class PassportResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class AgentSkillRef(BaseModel):
+    """A skill attached to an agent, as the console needs to show it.
+
+    Carries the display name as well as the id: `agent_skills` stores only
+    `skill_id`, and showing a raw slug where a human expects a skill name is
+    the sort of thing that makes a governance console look unfinished.
+    """
+    id: str
+    name: str
+
+
 class AgentCreate(BaseModel):
     name: str
     description: str
@@ -38,6 +49,11 @@ class AgentResponse(BaseModel):
     description: str
     status: AgentStatus
     passport: Optional[PassportResponse] = None
+    #: The agent's skills. `Agent` has no `skills` relationship, so this is
+    #: filled by the route from `agent_skills`; it was absent entirely, and the
+    #: console consequently told the user that an agent with two skills had
+    #: none and "cannot call any tool".
+    skills: list[AgentSkillRef] = []
     created_at: datetime
     updated_at: datetime
 

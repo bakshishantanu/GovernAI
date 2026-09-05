@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { fetchApi } from "@/lib/api-client";
 import {
   LayoutDashboard,
   Bot,
@@ -134,31 +136,100 @@ export function Sidebar() {
   );
 }
 
+type BudgetStatus = {
+  cap_usd: number;
+  window_hours: number;
+  total_spend_usd: number;
+  closest: {
+    agent_id: string;
+    name: string;
+    spend_usd: number;
+    cap_usd: number;
+    percent_of_cap: number;
+    suspended: boolean;
+  } | null;
+};
+
+function money(value: number) {
+  return value >= 0.01 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;
+}
+
 /**
- * TODO: wire to GET /api/v1/costs/summary against the org cap.
- * Hardcoded until then, and says so rather than pretending.
+ * The live budget meter, read from GET /costs/budget.
+ *
+ * It shows the agent **closest to its own cap**, not an org-wide percentage —
+ * there is no org-wide budget in the system. The cap is enforced per agent
+ * over a rolling window, so the agent nearest to being auto-suspended is the
+ * number that actually means something, and it is the one worth watching
+ * during a demo.
+ *
+ * The bar caps its width at 100% while the label keeps the true figure: an
+ * agent can finish the call that crosses its cap before the guard suspends
+ * it, so >100% is real and must not be hidden.
  */
 function OrgBudgetMeter() {
-  const percent = 78;
+  const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi("/costs/budget")
+      .then((data) => {
+        if (!cancelled) setBudget(data ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (failed) {
+    return (
+      <div className="gv-chip rounded-lg border-2 border-border bg-gv-row p-3">
+        <span className="text-[11.5px] font-extrabold text-foreground">Budget</span>
+        <span className="mt-1.5 block font-mono text-[11px] text-gv-muted">
+          unavailable
+        </span>
+      </div>
+    );
+  }
+
+  const closest = budget?.closest ?? null;
+  const percent = closest ? closest.percent_of_cap : 0;
+  const heading = closest ? closest.name : "Budget";
 
   return (
     <div className="gv-chip rounded-lg border-2 border-border bg-gv-row p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[11.5px] font-extrabold text-foreground">
-          Org budget today
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11.5px] font-extrabold text-foreground">
+          {heading}
         </span>
-        <span className="font-mono text-[11px] text-foreground">{percent}%</span>
+        <span className="shrink-0 font-mono text-[11px] text-foreground">
+          {budget ? `${percent.toFixed(0)}%` : "—"}
+        </span>
       </div>
 
       <div className="mt-2 h-[9px] overflow-hidden rounded-xl border border-border bg-gv-track">
         <div
-          className="h-full bg-gv-teal"
-          style={{ width: `${percent}%` }}
+          className={
+            percent >= 100
+              ? "h-full bg-gv-held"
+              : percent >= 80
+                ? "h-full bg-gv-watch"
+                : "h-full bg-gv-teal"
+          }
+          style={{ width: `${Math.min(percent, 100)}%` }}
         />
       </div>
 
       <span className="mt-1.5 block font-mono text-[11px] text-gv-muted">
-        placeholder — not wired
+        {!budget
+          ? "loading…"
+          : closest
+            ? `${money(closest.spend_usd)} of ${money(closest.cap_usd)} · ${budget.window_hours}h`
+            : `no spend in ${budget.window_hours}h`}
       </span>
     </div>
   );

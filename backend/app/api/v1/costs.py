@@ -10,18 +10,27 @@ estimated, sampled or filled in.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope, PaginatedResponse
-from app.api.schemas.cost import CostEventResponse, CostSummaryResponse
+from app.api.schemas.cost import (
+    AgentBudgetStatus,
+    BudgetStatusResponse,
+    CostEventResponse,
+    CostSummaryResponse,
+)
 from app.domain.auth.middleware import get_current_user
 from app.domain.costs.models import CostEvent
 from app.domain.costs.repository import CostRepository
+from app.domain.agents.models import Agent
+from app.domain.governance.budget import BUDGET_WINDOW, resolve_cap
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 
@@ -126,5 +135,68 @@ async def cost_summary(
             total_cost_usd=round(total, 6),
             by_agent={k: round(v, 6) for k, v in by_agent.items()},
             by_model={k: round(v, 6) for k, v in by_model.items()},
+        )
+    )
+
+
+@router.get("/budget", response_model=Envelope[BudgetStatusResponse])
+async def budget_status(
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Every agent's spend inside the enforced window, against its own cap.
+
+    This is the read side of the platform's headline control. The cap and the
+    window come from `domain/governance/budget`, the same module the guard
+    consults before every tool call, so the console cannot drift into showing
+    a different number from the one actually being enforced.
+
+    Spend is grouped in SQL over the window rather than summed per agent in
+    Python, so this stays one query however many agents an org has.
+    """
+    since = datetime.now(timezone.utc) - BUDGET_WINDOW
+    window_hours = int(BUDGET_WINDOW.total_seconds() // 3600)
+
+    agents = (
+        await db.execute(select(Agent).where(Agent.org_id == user.org_id))
+    ).scalars().all()
+
+    spend_rows = await db.execute(
+        select(CostEvent.agent_id, func.coalesce(func.sum(CostEvent.cost_usd), 0.0))
+        .where(CostEvent.org_id == user.org_id)
+        .where(CostEvent.timestamp >= since)
+        .group_by(CostEvent.agent_id)
+    )
+    spend_by_agent = {agent_id: float(total or 0.0) for agent_id, total in spend_rows.all()}
+
+    statuses: list[AgentBudgetStatus] = []
+    for agent in agents:
+        cap = resolve_cap(agent.id)
+        spend = spend_by_agent.get(agent.id, 0.0)
+        statuses.append(
+            AgentBudgetStatus(
+                agent_id=agent.id,
+                name=agent.name,
+                spend_usd=round(spend, 6),
+                cap_usd=cap,
+                percent_of_cap=round((spend / cap) * 100, 2) if cap > 0 else 0.0,
+                suspended=agent.status == "SUSPENDED",
+            )
+        )
+
+    statuses.sort(key=lambda a: a.percent_of_cap, reverse=True)
+
+    return Envelope(
+        data=BudgetStatusResponse(
+            # resolve_cap currently ignores its argument — the cap is one
+            # org-wide env value until a per-agent column exists — so any
+            # agent's cap is the org's. Read from the first agent rather than
+            # passing an org id into a function that asks for an agent id.
+            cap_usd=statuses[0].cap_usd if statuses else resolve_cap(user.id),
+            window_hours=window_hours,
+            total_spend_usd=round(sum(s.spend_usd for s in statuses), 6),
+            agents=statuses,
+            # Only meaningful once something has actually been spent.
+            closest=statuses[0] if statuses and statuses[0].spend_usd > 0 else None,
         )
     )

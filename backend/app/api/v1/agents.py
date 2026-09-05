@@ -2,7 +2,16 @@ from __future__ import annotations
 from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from app.api.schemas.agent import AgentResponse, AgentCreate, AgentUpdate, PassportResponse
+from app.api.schemas.agent import (
+    AgentResponse,
+    AgentCreate,
+    AgentSkillRef,
+    AgentUpdate,
+    PassportResponse,
+)
+from app.domain.agents.models import AgentSkill
+from app.domain.skills.models import SkillModel
+from sqlalchemy import select
 from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
 from app.domain.auth.middleware import get_current_user
@@ -19,7 +28,7 @@ from app.domain.agents.service import (
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
-def _agent_response(agent) -> AgentResponse:
+def _agent_response(agent, skills: list[AgentSkillRef] | None = None) -> AgentResponse:
     """Build the API shape for one agent.
 
     Done explicitly rather than by `model_validate` alone because
@@ -57,17 +66,42 @@ def _agent_response(agent) -> AgentResponse:
         description=agent.description,
         status=agent.status,
         passport=passport,
+        skills=skills or [],
         created_at=agent.created_at,
         updated_at=agent.updated_at,
     )
 
 
 
+async def _skills_for(db: AsyncSession, agent_ids: list) -> dict:
+    """Skill refs for several agents in one query, keyed by agent id.
+
+    One statement for the whole page rather than one per agent — the agents
+    board lists up to 200 rows at a time.
+    """
+    if not agent_ids:
+        return {}
+
+    rows = await db.execute(
+        select(AgentSkill.agent_id, SkillModel.id, SkillModel.display_name)
+        .join(SkillModel, SkillModel.id == AgentSkill.skill_id)
+        .where(AgentSkill.agent_id.in_(agent_ids))
+    )
+
+    by_agent: dict = {}
+    for agent_id, skill_id, display_name in rows.all():
+        by_agent.setdefault(agent_id, []).append(
+            AgentSkillRef(id=skill_id, name=display_name)
+        )
+    return by_agent
+
+
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
     payload: AgentCreate,
     user: CurrentUser = Depends(get_current_user),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new agent draft."""
     try:
@@ -80,7 +114,8 @@ async def create_agent(
         )
     except SkillNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return Envelope(data=_agent_response(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_agent_response(agent, skills.get(agent.id)))
 
 
 @router.get("/", response_model=PaginatedResponse[AgentResponse])
@@ -88,16 +123,18 @@ async def list_agents(
     user: CurrentUser = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """List all agents for the current user's organization."""
     agents = await service.agent_repo.list_agents_by_org(user.org_id, limit=limit, offset=offset)
     count = await service.agent_repo.count_agents_by_org(user.org_id)
     
-    # We must construct the response objects explicitly to ensure the passport is included.
-    # The agent.passport is a joined load if the repo supports it, let's assume it does.
+    # Built explicitly so the passport and the skills are both included; one
+    # skills query covers the whole page rather than one per row.
+    skills = await _skills_for(db, [a.id for a in agents])
     return PaginatedResponse(
-        data=[_agent_response(a) for a in agents],
+        data=[_agent_response(a, skills.get(a.id)) for a in agents],
         meta={"has_more": offset + limit < count, "total": count}
     )
 
@@ -106,20 +143,23 @@ async def list_agents(
 async def get_agent(
     agent_id: UUID,
     user: CurrentUser = Depends(get_current_user),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get specific agent details."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return Envelope(data=_agent_response(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_agent_response(agent, skills.get(agent.id)))
 
 
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
 async def submit_agent_for_review(
     agent_id: UUID,
     user: CurrentUser = Depends(get_current_user),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Submit a draft agent for governance review."""
     agent = await service.agent_repo.get_agent(agent_id)
@@ -135,14 +175,16 @@ async def submit_agent_for_review(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=_agent_response(updated_agent))
+    skills = await _skills_for(db, [updated_agent.id])
+    return Envelope(data=_agent_response(updated_agent, skills.get(updated_agent.id)))
 
 
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
 async def activate_agent(
     agent_id: UUID,
     user: CurrentUser = Depends(require_admin),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Activate an approved agent."""
     agent = await service.agent_repo.get_agent(agent_id)
@@ -156,7 +198,8 @@ async def activate_agent(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=_agent_response(updated_agent))
+    skills = await _skills_for(db, [updated_agent.id])
+    return Envelope(data=_agent_response(updated_agent, skills.get(updated_agent.id)))
 
 
 @router.patch("/{agent_id}", response_model=Envelope[AgentResponse])
@@ -196,7 +239,8 @@ async def update_agent(
 
     await db.commit()
     refreshed = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=_agent_response(refreshed))
+    skills = await _skills_for(db, [refreshed.id])
+    return Envelope(data=_agent_response(refreshed, skills.get(refreshed.id)))
 
 
 @router.post("/{agent_id}/kill", response_model=Envelope[AgentResponse])
@@ -206,6 +250,7 @@ async def kill_agent(
     user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service),
     kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Stop an agent immediately (FRD-12).
 
@@ -221,7 +266,8 @@ async def kill_agent(
         raise HTTPException(status_code=404, detail=str(exc))
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=_agent_response(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_agent_response(agent, skills.get(agent.id)))
 
 
 @router.post("/{agent_id}/reactivate", response_model=Envelope[AgentResponse])
@@ -231,6 +277,7 @@ async def reactivate_agent(
     user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service),
     kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Bring a suspended agent back. Never automatic — FRD-12 requires a person."""
     try:
@@ -243,4 +290,5 @@ async def reactivate_agent(
         raise HTTPException(status_code=code, detail=detail)
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=_agent_response(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_agent_response(agent, skills.get(agent.id)))
