@@ -1,11 +1,14 @@
-import { PagePlaceholder } from "@/components/layout/page-placeholder";
+import { PageHeader } from "@/components/board/page-header";
+import { CostBoard } from "./components/cost-board";
 
 export default function CostsPage() {
   return (
-    <PagePlaceholder
-      title="Costs"
-      subtitle="What the agents actually spent, metered per call"
-      description="Real spend from GET /api/v1/costs/ and /costs/summary. Every figure is a SUM over cost_events."
-    />
+    <>
+      <PageHeader
+        title="Costs"
+        subtitle="What every agent spent, metered call by call"
+      />
+      <CostBoard />
+    </>
   );
 }

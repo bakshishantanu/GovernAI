@@ -1,11 +1,14 @@
-import { PagePlaceholder } from "@/components/layout/page-placeholder";
+import { PageHeader } from "@/components/board/page-header";
+import { SkillBoard } from "./components/skill-board";
 
 export default function SkillsPage() {
   return (
-    <PagePlaceholder
-      title="Skill library"
-      subtitle="Reusable capabilities an agent can be given"
-      description="The skill marketplace. GET /api/v1/skills/ already serves this; skills are immutable after creation (D-018)."
-    />
+    <>
+      <PageHeader
+        title="Skills"
+        subtitle="The registry agents are built from, and the permissions each one grants"
+      />
+      <SkillBoard />
+    </>
   );
 }
