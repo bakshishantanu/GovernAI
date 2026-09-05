@@ -9,6 +9,7 @@ import {
   LiveMarker,
   type BoardView,
 } from "@/components/board/board-panel"
+import { motion, useReducedMotion, DURATION, EASE } from "@/components/motion"
 import { Search, ShieldAlert, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
@@ -20,8 +21,14 @@ import Link from "next/link"
  * is a filled badge rather than an outline — a passport is a governance fact,
  * not a decoration, and the canvas fills the five states solid.
  *
- * The fetching, the agent-created listener and the search filter are unchanged
- * from the version this replaces; only the presentation is new.
+ * The cells carry the canvas's "real scopes, spend, caps and timestamps",
+ * which is why Description is not among them: it was truncated to uselessness
+ * at this width, and it is on the detail page in full. Scope chips and a live
+ * budget bar say things about an agent that a name cannot.
+ *
+ * Grouping is by passport state, which is what the canvas means by "Groups &
+ * colour columns" — the states that matter (Suspended, Draft) sort to the top,
+ * because a board is for spotting what needs attention, not for browsing.
  */
 
 const VIEWS: BoardView[] = [
@@ -46,15 +53,34 @@ function passportOf(status: string, lifecycle?: string) {
   return { label: status || "Unknown", fill: "bg-gv-draft text-gv-draft-fg", spine: "bg-gv-rule" }
 }
 
+/** Groups a board should show first are the ones needing attention. */
+const GROUP_ORDER = ["Suspended", "Draft", "Approved", "Active", "Unknown"]
+
+type AgentBudget = {
+  agent_id: string
+  spend_usd: number
+  cap_usd: number
+  percent_of_cap: number
+}
+
+function money(value: number) {
+  // Real per-call spend is fractions of a cent; two decimals would print
+  // $0.00 for every row and make a working meter look broken.
+  return value >= 0.01 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`
+}
+
 const HEAD_CELL =
   "px-3 py-0 text-left text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label"
 
 export function AgentList() {
   const [agents, setAgents] = useState<any[]>([])
+  const [budgets, setBudgets] = useState<Record<string, AgentBudget>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [view, setView] = useState("Table")
+  const [grouped, setGrouped] = useState(false)
+  const still = useReducedMotion()
 
   const fetchAgents = async () => {
     try {
@@ -68,11 +94,25 @@ export function AgentList() {
     }
   }
 
+  const fetchBudgets = async () => {
+    try {
+      const data = await fetchApi("/costs/budget")
+      const byAgent: Record<string, AgentBudget> = {}
+      for (const row of data?.agents ?? []) byAgent[row.agent_id] = row
+      setBudgets(byAgent)
+    } catch {
+      // The board is still usable without spend; the column just stays empty
+      // rather than showing a zero that might be mistaken for real.
+    }
+  }
+
   useEffect(() => {
     fetchAgents()
+    fetchBudgets()
 
     const handleCreated = () => {
       fetchAgents()
+      fetchBudgets()
     }
 
     window.addEventListener("agent-created", handleCreated)
@@ -98,6 +138,22 @@ export function AgentList() {
     )
   }, [agents, searchQuery])
 
+  // The Compliance view is grouping — that is what it always meant.
+  const isGrouped = grouped || view === "Compliance"
+
+  const groups = useMemo(() => {
+    if (!isGrouped) return null
+    const byLabel: Record<string, any[]> = {}
+    for (const agent of filteredAgents) {
+      const { label } = passportOf(agent.status, agent.passport?.lifecycle_state)
+      ;(byLabel[label] ??= []).push(agent)
+    }
+    return GROUP_ORDER.filter((label) => byLabel[label]?.length).map((label) => ({
+      label,
+      agents: byLabel[label],
+    }))
+  }, [filteredAgents, isGrouped])
+
   const toolbar = (
     <>
       <span className="flex h-8 shrink-0 items-center gap-2 rounded-xl border-2 border-border bg-gv-row px-3">
@@ -118,12 +174,142 @@ export function AgentList() {
         </ToolbarChip>
       )}
 
+      <ToolbarChip
+        icon="group"
+        active={isGrouped}
+        onClick={() => setGrouped((current) => !current)}
+        onRemove={grouped ? () => setGrouped(false) : undefined}
+      >
+        {isGrouped ? "Grouped by passport" : "Group"}
+      </ToolbarChip>
+
       <span className="shrink-0 text-[12px] font-extrabold text-gv-muted">
         {filteredAgents.length} of {agents.length}
       </span>
 
       <LiveMarker label="Not connected" />
     </>
+  )
+
+  /** One agent, as a table row. Shared by the flat and grouped layouts. */
+  const renderRow = (agent: any) => {
+    const passport = passportOf(agent.status, agent.passport?.lifecycle_state)
+    const scopes: string[] = agent.passport?.permissions ?? []
+    const budget = budgets[agent.id]
+
+    return (
+      <tr
+        key={agent.id}
+        className="group relative h-12 border-b-2 border-border last:border-b-0 hover:bg-gv-row-sel"
+      >
+        <td className={`w-1 p-0 ${passport.spine}`} aria-hidden="true" />
+
+        <td className="max-w-[200px] truncate px-3 text-[13.5px] font-extrabold text-gv-ink">
+          <Link
+            href={`/agents/${agent.id}`}
+            className="after:absolute after:inset-0 after:content-['']"
+          >
+            {agent.name}
+          </Link>
+        </td>
+
+        <td className="px-3">
+          <span
+            className={`inline-flex h-[22px] items-center whitespace-nowrap rounded-full border-2 border-border px-2.5 text-[11px] font-extrabold ${passport.fill}`}
+          >
+            {passport.label}
+          </span>
+        </td>
+
+        {/* Scopes: what this agent may actually reach. Two, then a count —
+            the point is the shape of its access, not the full list. */}
+        <td className="hidden px-3 lg:table-cell">
+          {scopes.length === 0 ? (
+            <span className="font-mono text-[11px] text-gv-muted">none</span>
+          ) : (
+            <span className="flex items-center gap-1">
+              {scopes.slice(0, 2).map((scope) => (
+                <span
+                  key={scope}
+                  className="inline-flex h-[20px] max-w-[150px] items-center truncate rounded-full border border-border bg-gv-lilac px-2 font-mono text-[10.5px] text-gv-ink"
+                >
+                  {scope}
+                </span>
+              ))}
+              {scopes.length > 2 && (
+                <span className="font-mono text-[10.5px] font-bold text-gv-muted">
+                  +{scopes.length - 2}
+                </span>
+              )}
+            </span>
+          )}
+        </td>
+
+        {/* Budget: spend against the cap the guard actually enforces. */}
+        <td className="hidden px-3 md:table-cell">
+          {budget ? (
+            <span className="flex w-[120px] flex-col gap-1">
+              <span className="flex items-baseline justify-between font-mono text-[10.5px] text-gv-muted">
+                <span>{money(budget.spend_usd)}</span>
+                <span>{budget.percent_of_cap.toFixed(0)}%</span>
+              </span>
+              <span className="h-[7px] overflow-hidden rounded-full border border-border bg-gv-track">
+                <motion.span
+                  className={`block h-full ${
+                    budget.percent_of_cap >= 100
+                      ? "bg-gv-held"
+                      : budget.percent_of_cap >= 80
+                        ? "bg-gv-watch"
+                        : "bg-gv-teal"
+                  }`}
+                  initial={still ? false : { width: 0 }}
+                  animate={{ width: `${Math.min(budget.percent_of_cap, 100)}%` }}
+                  transition={{ duration: DURATION.slow, ease: EASE }}
+                />
+              </span>
+            </span>
+          ) : (
+            <span className="font-mono text-[11px] text-gv-muted">—</span>
+          )}
+        </td>
+
+        <td className="whitespace-nowrap px-3 text-right font-mono text-[12px] font-bold text-gv-muted">
+          {formatDate(agent.created_at)}
+        </td>
+
+        <td className="w-9 pr-3 text-right">
+          <ChevronRight
+            className="ml-auto h-4 w-4 text-gv-muted opacity-0 transition-opacity group-hover:opacity-100"
+            strokeWidth={2.6}
+          />
+        </td>
+      </tr>
+    )
+  }
+
+  const head = (
+    <thead className="sticky top-0 z-10 bg-gv-head">
+      <tr className="h-10 border-b-2 border-border">
+        {/* the spine column has no label — it is colour, not data */}
+        <th className="w-1 p-0" aria-hidden="true" />
+        <th scope="col" className={HEAD_CELL}>
+          Agent
+        </th>
+        <th scope="col" className={HEAD_CELL}>
+          Passport
+        </th>
+        <th scope="col" className={`${HEAD_CELL} hidden lg:table-cell`}>
+          Scopes
+        </th>
+        <th scope="col" className={`${HEAD_CELL} hidden md:table-cell`}>
+          Budget · 24h
+        </th>
+        <th scope="col" className={`${HEAD_CELL} text-right`}>
+          Created
+        </th>
+        <th className="w-9 p-0" aria-hidden="true" />
+      </tr>
+    </thead>
   )
 
   let body: React.ReactNode
@@ -175,75 +361,41 @@ export function AgentList() {
         </p>
       </div>
     )
+  } else if (groups) {
+    body = (
+      <table className="w-full border-collapse">
+        {head}
+        {groups.map((group) => {
+          const skin = passportOf(
+            group.label === "Active" ? "ACTIVE" : group.label === "Suspended" ? "SUSPENDED" : "",
+            group.label.toUpperCase(),
+          )
+          return (
+            <tbody key={group.label}>
+              <tr>
+                <td className={`w-1 p-0 ${skin.spine}`} aria-hidden="true" />
+                <th
+                  colSpan={6}
+                  scope="colgroup"
+                  className="border-b-2 border-border bg-gv-head/70 px-3 py-1.5 text-left text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label"
+                >
+                  {group.label}
+                  <span className="ml-2 font-mono text-[10.5px] font-bold text-gv-muted">
+                    {group.agents.length}
+                  </span>
+                </th>
+              </tr>
+              {group.agents.map(renderRow)}
+            </tbody>
+          )
+        })}
+      </table>
+    )
   } else {
     body = (
       <table className="w-full border-collapse">
-        <thead className="sticky top-0 z-10 bg-gv-head">
-          <tr className="h-10 border-b-2 border-border">
-            {/* the spine column has no label — it is colour, not data */}
-            <th className="w-1 p-0" aria-hidden="true" />
-            <th scope="col" className={HEAD_CELL}>
-              Agent
-            </th>
-            <th scope="col" className={HEAD_CELL}>
-              Passport
-            </th>
-            <th scope="col" className={`${HEAD_CELL} hidden md:table-cell`}>
-              Description
-            </th>
-            <th scope="col" className={`${HEAD_CELL} text-right`}>
-              Created
-            </th>
-            <th className="w-9 p-0" aria-hidden="true" />
-          </tr>
-        </thead>
-
-        <tbody>
-          {filteredAgents.map((agent) => {
-            const passport = passportOf(agent.status, agent.passport?.lifecycle_state)
-
-            return (
-              <tr
-                key={agent.id}
-                className="group relative h-12 border-b-2 border-border last:border-b-0 hover:bg-gv-row-sel"
-              >
-                <td className={`w-1 p-0 ${passport.spine}`} aria-hidden="true" />
-
-                <td className="max-w-[220px] truncate px-3 text-[13.5px] font-extrabold text-gv-ink">
-                  <Link
-                    href={`/agents/${agent.id}`}
-                    className="after:absolute after:inset-0 after:content-['']"
-                  >
-                    {agent.name}
-                  </Link>
-                </td>
-
-                <td className="px-3">
-                  <span
-                    className={`inline-flex h-[22px] items-center whitespace-nowrap rounded-full border-2 border-border px-2.5 text-[11px] font-extrabold ${passport.fill}`}
-                  >
-                    {passport.label}
-                  </span>
-                </td>
-
-                <td className="hidden max-w-[320px] truncate px-3 text-[13px] font-semibold text-gv-body md:table-cell">
-                  {agent.description}
-                </td>
-
-                <td className="whitespace-nowrap px-3 text-right font-mono text-[12px] font-bold text-gv-muted">
-                  {formatDate(agent.created_at)}
-                </td>
-
-                <td className="w-9 pr-3 text-right">
-                  <ChevronRight
-                    className="ml-auto h-4 w-4 text-gv-muted opacity-0 transition-opacity group-hover:opacity-100"
-                    strokeWidth={2.6}
-                  />
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
+        {head}
+        <tbody>{filteredAgents.map(renderRow)}</tbody>
       </table>
     )
   }
@@ -252,21 +404,7 @@ export function AgentList() {
     <>
       <ViewTabs views={VIEWS} active={view} onSelect={setView} />
 
-      <BoardPanel toolbar={toolbar}>
-        {view === "Table" ? (
-          body
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
-            <span className="text-[13px] font-extrabold tracking-[0.05em] text-gv-muted">
-              NOT BUILT YET
-            </span>
-            <p className="max-w-md text-[13.5px] font-semibold text-gv-body">
-              The compliance view will group agents by passport state and show
-              what each one is still missing before it can be activated.
-            </p>
-          </div>
-        )}
-      </BoardPanel>
+      <BoardPanel toolbar={toolbar}>{body}</BoardPanel>
     </>
   )
 }
