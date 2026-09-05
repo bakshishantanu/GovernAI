@@ -1,0 +1,244 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { fetchApi } from "@/lib/api-client";
+import { useExecutionStream, type RunEntry } from "@/hooks/use-execution-stream";
+import { PageHeader } from "@/components/board/page-header";
+import { BoardPanel, ViewTabs, ToolbarChip, LiveMarker } from "@/components/board/board-panel";
+import {
+  ArrowLeft,
+  ShieldAlert,
+  ShieldCheck,
+  Coins,
+  OctagonX,
+  CircleCheck,
+  CircleAlert,
+} from "lucide-react";
+
+/**
+ * The live run viewer — the screen the three demo moments happen on.
+ *
+ *   1. a tool call BLOCKED   a denied entry appears in the timeline, filled
+ *                            red, carrying the policy's own reason
+ *   2. budget AUTO-PAUSE     the denial whose reason is the budget cap, after
+ *                            which the guard suspends the agent
+ *   3. the KILL SWITCH       "Stop this run" posts /executions/{id}/cancel and
+ *                            the stream closes on its next heartbeat
+ *
+ * Until this existed the backend could only be demonstrated from a terminal.
+ *
+ * Everything below the header is driven by the stream, not by polling. The
+ * running spend and denial count are totals over the frames this connection
+ * has seen — this run's spend, not the organisation's.
+ */
+
+const TERMINAL = ["COMPLETED", "FAILED", "CANCELLED", "TERMINATED"];
+
+function statusSkin(status: string) {
+  if (status === "COMPLETED") return "bg-gv-cleared text-gv-cleared-fg";
+  if (status === "FAILED") return "bg-gv-held text-gv-held-fg";
+  if (status === "CANCELLED" || status === "TERMINATED") return "bg-gv-held text-gv-held-fg";
+  if (status === "RUNNING") return "bg-gv-watch text-gv-watch-fg";
+  return "bg-gv-draft text-gv-draft-fg";
+}
+
+function timeOf(iso?: string) {
+  if (!iso) return "--:--:--";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "--:--:--";
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+export function RunViewer({ executionId }: { executionId: string }) {
+  const run = useExecutionStream(executionId);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [killing, setKilling] = useState(false);
+  const [killError, setKillError] = useState<string | null>(null);
+
+  // The stream carries the goal but not the agent, and a run should link back
+  // to the agent it belongs to.
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi(`/executions/${executionId}`)
+      .then((data) => {
+        if (!cancelled) setAgentId(data?.agent_id ?? null);
+      })
+      .catch(() => {
+        /* the stream is the primary source; a missing back-link is not fatal */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [executionId]);
+
+  const live = !run.finished && !TERMINAL.includes(run.status);
+
+  const handleKill = async () => {
+    if (killing) return;
+    setKilling(true);
+    setKillError(null);
+    try {
+      await fetchApi(`/executions/${executionId}/cancel`, { method: "POST" });
+      // The stream sees the terminal status on its next heartbeat and closes
+      // itself, so nothing is forced here.
+    } catch (err: any) {
+      setKillError(err.message || "Could not stop the run");
+    } finally {
+      setKilling(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="Run"
+        subtitle={run.goal || "Watching this run as it happens"}
+        actions={
+          <>
+            <Link
+              href={agentId ? `/agents/${agentId}` : "/runs"}
+              className="gv-chip inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-card px-[15px] text-[13px] font-extrabold text-gv-ink transition-transform active:translate-x-px active:translate-y-px"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={2.6} />
+              {agentId ? "Agent" : "Runs"}
+            </Link>
+
+            {live && (
+              <button
+                type="button"
+                onClick={handleKill}
+                disabled={killing}
+                className="gv-card inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-gv-held px-[17px] text-[13.5px] font-extrabold text-gv-held-fg transition-transform active:translate-x-px active:translate-y-px disabled:opacity-60"
+              >
+                <OctagonX className="h-4 w-4" strokeWidth={2.6} />
+                {killing ? "Stopping…" : "Stop this run"}
+              </button>
+            )}
+          </>
+        }
+      />
+
+      <ViewTabs views={[{ name: "Timeline", icon: "timeline" }]} active="Timeline" />
+
+      <BoardPanel
+        toolbar={
+          <>
+            <span
+              className={`inline-flex h-8 shrink-0 items-center rounded-xl border-2 border-border px-3 text-[12px] font-extrabold uppercase tracking-[0.06em] ${statusSkin(
+                run.status,
+              )}`}
+            >
+              {run.status}
+            </span>
+
+            <ToolbarChip icon="filter" active={run.deniedCount > 0}>
+              {run.deniedCount} denied
+            </ToolbarChip>
+
+            <ToolbarChip>${run.spendUsd.toFixed(4)} this run</ToolbarChip>
+
+            <LiveMarker label={live ? "Live · streaming" : "Stream closed"} />
+          </>
+        }
+      >
+        {killError && (
+          <div
+            role="alert"
+            className="m-4 rounded-lg border-2 border-gv-held bg-gv-held/10 p-3 text-[13px] font-extrabold text-gv-held-fg"
+          >
+            {killError}
+          </div>
+        )}
+
+        {run.connectionError && (
+          <div
+            role="alert"
+            className="m-4 rounded-lg border-2 border-gv-held bg-gv-held/10 p-3 text-[13px] font-extrabold text-gv-held-fg"
+          >
+            {run.connectionError}
+          </div>
+        )}
+
+        {/* aria-live so a screen reader hears each decision as it lands */}
+        <ul aria-live="polite" className="divide-y divide-gv-rule/40">
+          {run.entries.map((entry) => (
+            <TimelineRow key={entry.key} entry={entry} />
+          ))}
+        </ul>
+
+        {run.entries.length === 0 && !run.connectionError && (
+          <p className="px-4 py-8 text-[13px] font-bold text-gv-muted">
+            {live
+              ? "Connected. Waiting for the first tool call…"
+              : "This run produced no governance events."}
+          </p>
+        )}
+
+        {run.finished && (run.result || run.error) && (
+          <section className="m-4 overflow-hidden rounded-lg border-2 border-border bg-gv-row">
+            <header className="flex h-[38px] items-center gap-2 border-b-2 border-border bg-gv-head px-4">
+              {run.error ? (
+                <CircleAlert className="h-4 w-4 text-gv-held" strokeWidth={2.6} />
+              ) : (
+                <CircleCheck className="h-4 w-4 text-gv-cleared" strokeWidth={2.6} />
+              )}
+              <h3 className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label">
+                {run.error ? "Run failed" : "Result"}
+              </h3>
+            </header>
+            <p className="whitespace-pre-wrap p-4 text-[13px] font-semibold text-gv-body">
+              {run.error || run.result}
+            </p>
+          </section>
+        )}
+      </BoardPanel>
+    </>
+  );
+}
+
+function TimelineRow({ entry }: { entry: RunEntry }) {
+  const skin =
+    entry.kind === "denied"
+      ? { fill: "bg-gv-held text-gv-held-fg", label: "Denied", Icon: ShieldAlert }
+      : entry.kind === "allowed"
+        ? { fill: "bg-gv-cleared text-gv-cleared-fg", label: "Allowed", Icon: ShieldCheck }
+        : { fill: "bg-gv-draft text-gv-draft-fg", label: "Cost", Icon: Coins };
+
+  return (
+    <li
+      className={`flex min-h-[38px] items-center gap-3 px-4 py-1 ${
+        entry.kind === "denied" ? "bg-gv-held/10" : ""
+      }`}
+    >
+      <span className="w-[68px] shrink-0 font-mono text-[11px] text-gv-muted">
+        {timeOf(entry.at)}
+      </span>
+
+      <span
+        className={`inline-flex h-[22px] shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[10px] font-extrabold uppercase tracking-[0.06em] ${skin.fill}`}
+      >
+        <skin.Icon className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
+        {skin.label}
+      </span>
+
+      <span className="min-w-0 flex-1 text-[12.5px] font-bold text-foreground">
+        {entry.kind === "cost" ? (
+          <span className="font-mono text-[12px] text-gv-muted">
+            ${(entry.costUsd ?? 0).toFixed(6)} · {entry.tokens ?? 0} tokens
+          </span>
+        ) : (
+          <>
+            <span className="font-mono text-[12px]">{entry.tool}</span>
+            {entry.reason && <span className="text-gv-muted"> — {entry.reason}</span>}
+          </>
+        )}
+      </span>
+    </li>
+  );
+}

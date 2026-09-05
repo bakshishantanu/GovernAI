@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { fetchApi } from "@/lib/api-client"
 import { PageHeader, ActionPill } from "@/components/board/page-header"
 import { BoardPanel } from "@/components/board/board-panel"
+import { AuditFeed } from "@/components/audit/audit-feed"
+import { RunAgentDialog } from "./run-agent-dialog"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import {
@@ -187,6 +189,8 @@ export function AgentDetail({ id }: { id: string }) {
               </ActionPill>
             )}
 
+            {agent.status === "ACTIVE" && <RunAgentDialog agentId={agent.id} />}
+
             {lifecycle === "APPROVED" && agent.status !== "ACTIVE" && (
               <ActionPill tone="teal" onClick={() => !actionLoading && handleAction("activate")}>
                 <PlayCircle className="h-4 w-4" strokeWidth={2.6} />
@@ -263,14 +267,13 @@ export function AgentDetail({ id }: { id: string }) {
               title="Recent activity"
               icon={<Activity className="h-[18px] w-[18px] text-gv-ink" strokeWidth={2.4} />}
             >
-              <div className="flex flex-col items-center justify-center gap-1.5 py-8 text-center">
-                <span className="text-[12.5px] font-extrabold tracking-[0.05em] text-gv-muted">
-                  NOT WIRED YET
-                </span>
-                <p className="max-w-sm text-[13px] font-semibold text-gv-body">
-                  Tool calls, policy decisions and cost events for this agent will
-                  stream in here once the console subscribes to the event feed.
-                </p>
+              {/* the same feed as Overview, filtered to this agent */}
+              <div className="-mx-4 -mb-4">
+                <AuditFeed
+                  agentId={agent.id}
+                  limit={100}
+                  emptyLabel="No governance events for this agent yet."
+                />
               </div>
             </Card>
           </div>

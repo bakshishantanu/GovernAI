@@ -11,6 +11,7 @@ import {
   DollarSign,
   Workflow,
   Shield,
+  Radio,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -37,6 +38,7 @@ const sections: { label: string; items: NavItem[] }[] = [
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Agents", href: "/agents", icon: Bot },
+      { name: "Runs", href: "/runs", icon: Radio, live: true },
       { name: "Skills", href: "/skills", icon: Puzzle },
     ],
   },
