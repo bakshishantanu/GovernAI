@@ -1,29 +1,21 @@
 import { Plus, Workflow } from "lucide-react";
+import Link from "next/link";
 import { PageHeader, ActionPill } from "@/components/board/page-header";
-import {
-  BoardPanel,
-  ViewTabs,
-  LiveMarker,
-} from "@/components/board/board-panel";
+import { BoardPanel, ViewTabs, LiveMarker } from "@/components/board/board-panel";
+import { OverviewStats } from "./components/overview-stats";
+import { AuditFeed } from "@/components/audit/audit-feed";
 
 /**
  * Dashboard.
  *
- * WARNING — the figures below are still HARDCODED. The canvas rule is "real
- * data in the cells, never invented", so these must be wired before any demo:
- *   Active agents      -> GET /api/v1/agents/
- *   Denied this week   -> GET /api/v1/audits/   (denied tool calls)
- *   Spend today        -> GET /api/v1/costs/summary
- * Those routes exist but sit on the unmerged p1/complete-api-routes branch.
- * Every tile says "not wired" on screen so nobody mistakes them for real.
+ * The three figures and the activity feed are now read from the API —
+ * `OverviewStats` names the routes behind each tile. Nothing on this page is
+ * invented any more.
+ *
+ * Still to come: the live marker below says "polling" because the single
+ * console EventSource does not exist yet. When it does, both this page's feed
+ * and its tiles subscribe to it instead of fetching once on mount.
  */
-
-const tiles = [
-  { label: "Active agents", value: "4", meta: "across 2 environments" },
-  { label: "Denied this week", value: "12", meta: "policy gate held" },
-  { label: "Spend today", value: "$42.50", meta: "of $54.00 cap" },
-];
-
 export default function DashboardPage() {
   return (
     <>
@@ -36,7 +28,7 @@ export default function DashboardPage() {
               <Workflow className="h-[15px] w-[15px]" strokeWidth={2.2} />
               Automate
             </ActionPill>
-            <ActionPill tone="teal">
+            <ActionPill tone="teal" href="/agents">
               <Plus className="h-4 w-4" strokeWidth={2.8} />
               New agent
             </ActionPill>
@@ -44,40 +36,25 @@ export default function DashboardPage() {
         }
       />
 
-      <ViewTabs
-        views={[{ name: "Overview", icon: "overview" }]}
-        active="Overview"
-      />
+      <ViewTabs views={[{ name: "Overview", icon: "overview" }]} active="Overview" />
 
       <BoardPanel toolbar={<LiveMarker label="Live · not connected" />}>
-        <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
-          {tiles.map((tile) => (
-            <div
-              key={tile.label}
-              className="gv-card rounded-lg border-2 border-border bg-gv-row p-4"
-            >
-              <div className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-gv-muted">
-                {tile.label}
-              </div>
-              {/* hero numeral — the other place Bungee is allowed */}
-              <div className="mt-2 font-display text-[30px] leading-none text-foreground">
-                {tile.value}
-              </div>
-              <div className="mt-1.5 font-mono text-[11px] text-gv-muted">
-                {tile.meta}
-              </div>
-              <div className="mt-2 inline-flex items-center rounded border border-border bg-gv-head px-1.5 py-0.5 font-mono text-[10px] text-gv-muted">
-                not wired
-              </div>
-            </div>
-          ))}
-        </div>
+        <OverviewStats />
 
-        <div className="mx-4 mb-4 flex min-h-[280px] items-center justify-center rounded-lg border-2 border-dashed border-gv-rule">
-          <p className="text-[13px] font-extrabold tracking-[0.05em] text-gv-muted">
-            ACTIVITY FEED — PENDING TASK #11
-          </p>
-        </div>
+        <section className="mx-4 mb-4 overflow-hidden rounded-lg border-2 border-border bg-gv-row">
+          <header className="flex h-[38px] items-center gap-2 border-b-2 border-border bg-gv-head px-4">
+            <h3 className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label">
+              Recent governance activity
+            </h3>
+            <Link
+              href="/audit"
+              className="ml-auto text-[11px] font-extrabold text-gv-muted underline underline-offset-2 hover:text-foreground"
+            >
+              Full audit log
+            </Link>
+          </header>
+          <AuditFeed limit={25} emptyLabel="No governance events yet — run an agent to fill this." />
+        </section>
       </BoardPanel>
     </>
   );
