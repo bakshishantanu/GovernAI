@@ -51,7 +51,7 @@ const sections: { label: string; items: NavItem[] }[] = [
       { name: "Policies", href: "/policies", icon: ShieldCheck },
       { name: "Audit log", href: "/audit", icon: FileText, live: true },
       { name: "Costs", href: "/costs", icon: DollarSign },
-      { name: "Automations", href: "/automations", icon: Workflow, badge: "NEW" },
+      { name: "Automations", href: "/automations", icon: Workflow },
     ],
   },
 ];

@@ -44,7 +44,11 @@ class CostService:
             timestamp=datetime.now(timezone.utc)
         )
         await self.cost_repo.record_cost(event)
+        # See the note in AuditService.log_tool_call: subscribers need to know
+        # whose spend this is, and both ids are already in hand here.
         await self.event_bus.publish(Event.create("cost.llm.incurred", {
+            "org_id": str(org_id),
+            "agent_id": str(agent_id),
             "execution_id": str(execution_id),
             "cost_usd": cost_usd,
             "tokens": total_tokens

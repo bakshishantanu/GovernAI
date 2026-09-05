@@ -56,7 +56,14 @@ class AuditService:
         await self.audit_repo.record_event(event)
         
         topic = "audit.tool.allowed" if allowed else "audit.tool.denied"
+        # org_id and agent_id are carried on the event, not just the row.
+        # Without them a subscriber cannot tell whose call this was, which
+        # blocked both the org-wide event feed and the automation engine —
+        # both are given an execution id and no way to resolve it. Both values
+        # are already arguments to this method, so this costs nothing.
         await self.event_bus.publish(Event.create(topic, {
+            "org_id": str(org_id),
+            "agent_id": str(agent_id),
             "execution_id": str(execution_id),
             "tool": tool,
             "reason": reason

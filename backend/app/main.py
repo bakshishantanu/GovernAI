@@ -1,5 +1,6 @@
 from __future__ import annotations
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 from fastapi import FastAPI
@@ -9,11 +10,14 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.domain.automations.engine import run_automation_engine
 from app.api.v1.agents import router as agents_router
 from app.api.v1.skills import router as skills_router
 from app.api.v1.policies import router as policies_router
 from app.api.v1.audits import router as audits_router
 from app.api.v1.costs import router as costs_router
+from app.api.v1.automations import router as automations_router
+from app.api.v1.automations import runs_router as automation_runs_router
 from app.api.v1.executions import router as executions_router
 
 # Import every domain's ORM models so SQLAlchemy's mapper registry knows
@@ -27,6 +31,7 @@ import app.domain.audit.models  # noqa: F401
 import app.domain.auth.models  # noqa: F401
 import app.domain.costs.models  # noqa: F401
 import app.domain.documents.models  # noqa: F401
+import app.domain.automations.models  # noqa: F401
 import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401
@@ -37,10 +42,27 @@ logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup / shutdown lifecycle."""
+    """Startup / shutdown lifecycle.
+
+    The automation engine is the one subscriber that lives as long as the
+    process — every other bus subscriber is an SSE connection that comes and
+    goes. It is started here so rules are evaluated whether or not anyone has
+    the console open: an automation that only fires while somebody is watching
+    would be worthless.
+    """
     logger.info("governai.startup", version=settings.APP_VERSION)
-    yield
-    logger.info("governai.shutdown")
+
+    engine_task = asyncio.create_task(run_automation_engine())
+
+    try:
+        yield
+    finally:
+        engine_task.cancel()
+        # Wait for the cancellation to land so the subscription is removed
+        # from the bus rather than leaking on every reload.
+        with suppress(asyncio.CancelledError):
+            await engine_task
+        logger.info("governai.shutdown")
 
 
 app = FastAPI(
@@ -114,6 +136,8 @@ app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
 app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
+app.include_router(automations_router, prefix="/api/v1", tags=["Automations"])
+app.include_router(automation_runs_router, prefix="/api/v1", tags=["Automations"])
 
 @app.get("/health")
 async def health():
