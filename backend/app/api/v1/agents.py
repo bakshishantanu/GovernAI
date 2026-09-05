@@ -19,6 +19,50 @@ from app.domain.agents.service import (
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
+def _agent_response(agent) -> AgentResponse:
+    """Build the API shape for one agent.
+
+    Done explicitly rather than by `model_validate` alone because
+    `passport.permissions` is a relationship of `Permission` ORM objects while
+    `PassportResponse.permissions` is `list[str]`. Validating the ORM object
+    directly raises `string_type` on every permission, so `GET /agents/` failed
+    with a 500 for any agent that actually had permissions — which is every
+    real one. `SkillResponse` solves the same problem with a field validator;
+    that lives in `api/schemas/`, a shared file, so the normalisation is done
+    here instead.
+    """
+    passport = None
+    if agent.passport is not None:
+        passport = PassportResponse.model_validate(
+            {
+                "id": agent.passport.id,
+                "agent_id": agent.passport.agent_id,
+                "compliance_status": agent.passport.compliance_status,
+                "compliance_checked_at": agent.passport.compliance_checked_at,
+                "lifecycle_state": agent.passport.lifecycle_state,
+                "permissions": [
+                    p.permission if hasattr(p, "permission") else p
+                    for p in (agent.passport.permissions or [])
+                ],
+                "created_at": agent.passport.created_at,
+                "updated_at": agent.passport.updated_at,
+            }
+        )
+
+    return AgentResponse(
+        id=agent.id,
+        org_id=agent.org_id,
+        owner_id=agent.owner_id,
+        name=agent.name,
+        description=agent.description,
+        status=agent.status,
+        passport=passport,
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
+
+
+
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
     payload: AgentCreate,
@@ -36,7 +80,7 @@ async def create_agent(
         )
     except SkillNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return Envelope(data=AgentResponse.model_validate(agent))
+    return Envelope(data=_agent_response(agent))
 
 
 @router.get("/", response_model=PaginatedResponse[AgentResponse])
@@ -53,7 +97,7 @@ async def list_agents(
     # We must construct the response objects explicitly to ensure the passport is included.
     # The agent.passport is a joined load if the repo supports it, let's assume it does.
     return PaginatedResponse(
-        data=[AgentResponse.model_validate(a) for a in agents],
+        data=[_agent_response(a) for a in agents],
         meta={"has_more": offset + limit < count, "total": count}
     )
 
@@ -68,7 +112,7 @@ async def get_agent(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return Envelope(data=AgentResponse.model_validate(agent))
+    return Envelope(data=_agent_response(agent))
 
 
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
@@ -91,7 +135,7 @@ async def submit_agent_for_review(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(updated_agent))
+    return Envelope(data=_agent_response(updated_agent))
 
 
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
@@ -112,7 +156,7 @@ async def activate_agent(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(updated_agent))
+    return Envelope(data=_agent_response(updated_agent))
 
 
 @router.patch("/{agent_id}", response_model=Envelope[AgentResponse])
@@ -152,7 +196,7 @@ async def update_agent(
 
     await db.commit()
     refreshed = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(refreshed))
+    return Envelope(data=_agent_response(refreshed))
 
 
 @router.post("/{agent_id}/kill", response_model=Envelope[AgentResponse])
@@ -177,7 +221,7 @@ async def kill_agent(
         raise HTTPException(status_code=404, detail=str(exc))
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(agent))
+    return Envelope(data=_agent_response(agent))
 
 
 @router.post("/{agent_id}/reactivate", response_model=Envelope[AgentResponse])
@@ -199,4 +243,4 @@ async def reactivate_agent(
         raise HTTPException(status_code=code, detail=detail)
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(agent))
+    return Envelope(data=_agent_response(agent))

@@ -20,7 +20,7 @@ from app.domain.executions.service import ExecutionService
 from app.runtime.llm.service import LLMService
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
-from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.governance.budget import BudgetGuard
@@ -28,14 +28,26 @@ from app.infrastructure.event_bus import event_bus
 
 
 class MockFallbackProvider(LLMProvider):
+    """Stands in when no provider key is configured, so the console can be run
+    and demonstrated locally without a Groq or Gemini account.
+
+    `provider` and `usage` are required on `LLMResponse` and were both missing,
+    so every mock call raised TypeError, the service exhausted its retries, and
+    *every* run failed with "All LLM providers failed" — i.e. an agent could
+    not be run at all without API keys. Zero usage is honest here: no tokens
+    were bought, so the cost service records nothing.
+    """
+
     name = "mock"
 
     async def chat(self, messages: list[dict], **kwargs) -> LLMResponse:
         last_msg = messages[-1]["content"] if messages else ""
         return LLMResponse(
             content=f"Execution simulated successfully for prompt: '{last_msg}'",
-            tool_calls=[],
             model="mock-simulator",
+            provider=self.name,
+            usage=TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+            tool_calls=[],
         )
 
 

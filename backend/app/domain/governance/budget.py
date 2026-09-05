@@ -24,6 +24,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Protocol
 from uuid import UUID
 
+from app.config import settings
+
 #: Org-wide default cap in USD when nothing more specific is configured.
 DEFAULT_BUDGET_USD_24H = 5.0
 
@@ -34,15 +36,18 @@ BUDGET_WINDOW = timedelta(hours=24)
 def resolve_cap(agent_id: UUID) -> float:
     """The spend ceiling for one agent over the window.
 
-    Currently one org-wide number from the environment. When a per-agent cap
+    Currently one org-wide number from configuration. When a per-agent cap
     column exists this is the only function that needs to change.
+
+    Checked in the process environment first, then in `settings`. The
+    environment-only lookup this replaces silently ignored a cap set in `.env`
+    — pydantic-settings never exports `.env` to `os.environ` — so the value
+    `.env.example` documents had no effect and every agent ran on the default.
     """
     raw = os.environ.get("AGENT_BUDGET_USD_24H", "").strip()
-    if not raw:
-        return DEFAULT_BUDGET_USD_24H
     try:
-        cap = float(raw)
-    except ValueError:
+        cap = float(raw) if raw else float(settings.AGENT_BUDGET_USD_24H)
+    except (TypeError, ValueError):
         return DEFAULT_BUDGET_USD_24H
     # A negative or zero cap would silently disable every agent, which is far
     # more likely a typo than an intention.

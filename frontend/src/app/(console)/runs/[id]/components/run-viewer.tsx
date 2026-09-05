@@ -58,16 +58,27 @@ function timeOf(iso?: string) {
 export function RunViewer({ executionId }: { executionId: string }) {
   const run = useExecutionStream(executionId);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [settled, setSettled] = useState<{ status: string; result?: string | null; error?: string | null } | null>(null);
   const [killing, setKilling] = useState(false);
   const [killError, setKillError] = useState<string | null>(null);
 
   // The stream carries the goal but not the agent, and a run should link back
   // to the agent it belongs to.
+  //
+  // This also settles a run that was already over before the page opened. The
+  // stream sends its `status` frame immediately but only sends `done` — which
+  // carries the result and the error — on its next heartbeat, up to ten
+  // seconds later. Without this the viewer sat blank for those ten seconds
+  // with no result and no error for a run that had long since finished.
   useEffect(() => {
     let cancelled = false;
     fetchApi(`/executions/${executionId}`)
       .then((data) => {
-        if (!cancelled) setAgentId(data?.agent_id ?? null);
+        if (cancelled) return;
+        setAgentId(data?.agent_id ?? null);
+        if (data?.status && TERMINAL.includes(data.status)) {
+          setSettled({ status: data.status, result: data.result, error: data.error });
+        }
       })
       .catch(() => {
         /* the stream is the primary source; a missing back-link is not fatal */
@@ -77,7 +88,13 @@ export function RunViewer({ executionId }: { executionId: string }) {
     };
   }, [executionId]);
 
-  const live = !run.finished && !TERMINAL.includes(run.status);
+  const live = !run.finished && !settled && !TERMINAL.includes(run.status);
+
+  // The stream wins once it has spoken; `settled` only fills the gap before it.
+  const status = run.finished ? run.status : (settled?.status ?? run.status);
+  const result = run.result ?? settled?.result;
+  const error = run.error ?? settled?.error;
+  const finished = run.finished || settled !== null;
 
   const handleKill = async () => {
     if (killing) return;
@@ -131,10 +148,10 @@ export function RunViewer({ executionId }: { executionId: string }) {
           <>
             <span
               className={`inline-flex h-8 shrink-0 items-center rounded-xl border-2 border-border px-3 text-[12px] font-extrabold uppercase tracking-[0.06em] ${statusSkin(
-                run.status,
+                status,
               )}`}
             >
-              {run.status}
+              {status}
             </span>
 
             <ToolbarChip icon="filter" active={run.deniedCount > 0}>
@@ -180,20 +197,20 @@ export function RunViewer({ executionId }: { executionId: string }) {
           </p>
         )}
 
-        {run.finished && (run.result || run.error) && (
+        {finished && (result || error) && (
           <section className="m-4 overflow-hidden rounded-lg border-2 border-border bg-gv-row">
             <header className="flex h-[38px] items-center gap-2 border-b-2 border-border bg-gv-head px-4">
-              {run.error ? (
+              {error ? (
                 <CircleAlert className="h-4 w-4 text-gv-held" strokeWidth={2.6} />
               ) : (
                 <CircleCheck className="h-4 w-4 text-gv-cleared" strokeWidth={2.6} />
               )}
               <h3 className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-gv-label">
-                {run.error ? "Run failed" : "Result"}
+                {error ? "Run failed" : "Result"}
               </h3>
             </header>
             <p className="whitespace-pre-wrap p-4 text-[13px] font-semibold text-gv-body">
-              {run.error || run.result}
+              {error || result}
             </p>
           </section>
         )}

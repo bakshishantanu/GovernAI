@@ -74,7 +74,12 @@ async def create_and_run_execution(
     # Committed before the task is queued: the run opens its own session and
     # must be able to see this row.
     await db.commit()
-    await db.refresh(execution)
+    # `steps` must be refreshed by name as well. `ExecutionResponse` includes
+    # the collection, and a plain refresh leaves it expired — serialising it
+    # then triggers a lazy load inside the async context and raises
+    # MissingGreenlet, so this endpoint returned 500 before the run ever
+    # started. A brand-new execution has no steps; this loads the empty list.
+    await db.refresh(execution, attribute_names=["steps"])
 
     background_tasks.add_task(
         run_execution,

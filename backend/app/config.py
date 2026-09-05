@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
+    #: Local development only. When true, the literal token "dummy-token" is
+    #: accepted as an admin user so the console works without a Supabase
+    #: project. Must be declared here, not read from os.environ — a value in
+    #: `.env` is loaded by pydantic-settings and never reaches os.environ.
+    AUTH_ALLOW_DEV_TOKEN: bool = False
+
     # --- LLM Providers ---
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
@@ -22,6 +28,11 @@ class Settings(BaseSettings):
 
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
+
+    #: Live budget cap enforced before every tool call (FRD-11). Org-wide until
+    #: a per-agent cap column exists. Declared here for the same reason as
+    #: AUTH_ALLOW_DEV_TOKEN above.
+    AGENT_BUDGET_USD_24H: float = 5.00
 
     # --- Application ---
     APP_VERSION: str = "0.1.0"

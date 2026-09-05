@@ -83,9 +83,12 @@ async def list_costs(
         limit=limit,
         offset=offset,
     )
+    # `PaginatedMeta` declares `next_cursor` and a required `has_more`; the
+    # old {count, limit, offset} dict failed validation, so this endpoint
+    # returned 500 as soon as there was a single cost row to return.
     return PaginatedResponse(
         data=[_to_response(e) for e in events],
-        meta={"count": len(events), "limit": limit, "offset": offset},
+        meta={"has_more": len(events) == limit},
     )
 
 

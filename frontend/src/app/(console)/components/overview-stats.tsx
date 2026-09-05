@@ -24,6 +24,15 @@ import { isDenied, type AuditEvent } from "@/components/audit/audit-feed";
 
 const PAGE = 200;
 
+/**
+ * Real per-call spend is fractions of a cent, so a plain toFixed(2) rendered
+ * a live total of $0.0015 as "$0.00" — a working meter that looked broken.
+ * Same rule as the costs board.
+ */
+function money(value: number) {
+  return value >= 0.01 ? `$${value.toFixed(2)}` : `$${value.toFixed(6)}`;
+}
+
 type Tile = {
   label: string;
   value: string;
@@ -80,7 +89,7 @@ export function OverviewStats() {
             },
             {
               label: "Spend to date",
-              value: `$${total.toFixed(2)}`,
+              value: money(total),
               meta:
                 agentsWithSpend === 1
                   ? "across 1 agent"

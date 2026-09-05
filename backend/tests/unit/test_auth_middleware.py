@@ -3,6 +3,7 @@ import pytest
 from uuid import uuid4
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from app.config import settings
 from app.domain.auth.middleware import (
     DEV_TOKEN,
     get_current_user,
@@ -32,8 +33,17 @@ def dev_bypass_on(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def dev_bypass_off_by_default(monkeypatch):
-    """Every test starts with the bypass off unless it asks for it."""
+    """Every test starts with the bypass off unless it asks for it.
+
+    Both sources have to be cleared. The flag is now read from the environment
+    first and from `settings` second, and `settings` is populated from `.env`
+    at import — so on a developer machine with AUTH_ALLOW_DEV_TOKEN=true in
+    `.env` (the normal local setup), deleting the environment variable alone
+    left the bypass on and this suite silently stopped testing the default
+    posture.
+    """
     monkeypatch.delenv("AUTH_ALLOW_DEV_TOKEN", raising=False)
+    monkeypatch.setattr(settings, "AUTH_ALLOW_DEV_TOKEN", False)
 
 
 @pytest.mark.asyncio

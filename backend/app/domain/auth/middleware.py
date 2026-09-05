@@ -18,8 +18,19 @@ def dev_token_allowed() -> bool:
 
     Off unless AUTH_ALLOW_DEV_TOKEN is set explicitly, so the bypass can never
     be active in a deployed environment by accident.
+
+    Checked in the process environment first, then in `settings`. The
+    environment-only lookup this replaces silently ignored a value set in
+    `.env` — pydantic-settings loads `.env` into the Settings object and never
+    exports it to `os.environ` — so the flag `.env.example` documents had no
+    effect. Keeping the environment first preserves an override applied after
+    import, which `settings` (built once at import) cannot see. Same shape as
+    `get_supabase_jwt_secret` below.
     """
-    return os.environ.get("AUTH_ALLOW_DEV_TOKEN", "").strip().lower() in {"1", "true", "yes"}
+    raw = os.environ.get("AUTH_ALLOW_DEV_TOKEN")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes"}
+    return bool(settings.AUTH_ALLOW_DEV_TOKEN)
 
 
 def get_supabase_jwt_secret() -> str:

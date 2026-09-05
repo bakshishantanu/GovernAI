@@ -14,6 +14,34 @@ def get_audit_repo(db: AsyncSession = Depends(get_db)) -> AuditRepository:
     return AuditRepository(db)
 
 
+def _to_response(event) -> AuditEventResponse:
+    """Map a stored audit row onto the API shape.
+
+    The JSONB column is called `metadata` in the database but is mapped as
+    `metadata_json` on the model, because `metadata` is reserved on a
+    SQLAlchemy declarative class. Validating the ORM object directly therefore
+    read SQLAlchemy's own `MetaData()` object into the response field and
+    failed with `dict_type`, so this endpoint returned 500 for every real row.
+    `costs.py` maps explicitly for exactly the same reason.
+    """
+    return AuditEventResponse(
+        id=event.id,
+        timestamp=event.timestamp,
+        actor_type=event.actor_type,
+        actor_id=event.actor_id,
+        agent_id=event.agent_id,
+        execution_id=event.execution_id,
+        action=event.action,
+        resource=event.resource,
+        tool=event.tool,
+        policy_decision=event.policy_decision,
+        result=event.result,
+        reason=event.reason,
+        cost_usd=event.cost_usd,
+        metadata=event.metadata_json,
+    )
+
+
 @router.get("/", response_model=Envelope[list[AuditEventResponse]])
 async def list_audit_events(
     limit: int = Query(50, ge=1, le=200),
@@ -27,4 +55,4 @@ async def list_audit_events(
     # Fetch all events (repository already orders by timestamp desc)
     # If the database gets large, we should pass 'limit' down to the repository.
     events = await repo.get_events_for_org(current_user.org_id)
-    return Envelope(data=events[:limit])
+    return Envelope(data=[_to_response(e) for e in events[:limit]])
