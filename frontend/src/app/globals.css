@@ -4,12 +4,71 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+   GovernAI design tokens — from design/governai-pro (D-014).
+   Light values come straight from DesignLanguage.dc.html.
+   Dark values were derived here (D-021) because the canvas has no dark version.
+   Change colours HERE and nowhere else. Components must never hardcode a hex.
+   --------------------------------------------------------------------------- */
+
 @theme inline {
+  /* brand — usable as bg-gv-teal, text-gv-ink, border-gv-ink, etc. */
+  --color-gv-canvas: var(--gv-canvas);
+  --color-gv-paper: var(--gv-paper);
+  --color-gv-ink: var(--gv-ink);
+  --color-gv-yellow: var(--gv-yellow);
+  --color-gv-teal: var(--gv-teal);
+  --color-gv-pink: var(--gv-pink);
+  --color-gv-lilac: var(--gv-lilac);
+  --color-gv-red: var(--gv-red);
+  --color-gv-body: var(--gv-body);
+  --color-gv-muted: var(--gv-muted);
+  --color-gv-rule: var(--gv-rule);
+  --color-gv-onyellow: var(--gv-onyellow);
+
+  /* board surfaces */
+  --color-gv-row: var(--gv-row);
+  --color-gv-row-sel: var(--gv-row-sel);
+  --color-gv-head: var(--gv-head);
+  --color-gv-tab-idle: var(--gv-tab-idle);
+  --color-gv-label: var(--gv-label);
+  --color-gv-subtle: var(--gv-subtle);
+  --color-gv-track: var(--gv-track);
+
+  /* the black strip out of the storefront hero */
+  --color-gv-bar: var(--gv-bar);
+  --color-gv-bar-text: var(--gv-bar-text);
+  --color-gv-bar-field: var(--gv-bar-field);
+  --color-gv-bar-border: var(--gv-bar-border);
+
+  /* status column fills — one filled colour column per row */
+  --color-gv-cleared: var(--gv-cleared);
+  --color-gv-cleared-fg: var(--gv-cleared-fg);
+  --color-gv-watch: var(--gv-watch);
+  --color-gv-watch-fg: var(--gv-watch-fg);
+  --color-gv-held: var(--gv-held);
+  --color-gv-held-fg: var(--gv-held-fg);
+  --color-gv-review: var(--gv-review);
+  --color-gv-review-fg: var(--gv-review-fg);
+  --color-gv-draft: var(--gv-draft);
+  --color-gv-draft-fg: var(--gv-draft-fg);
+
+  /* density — fixed scale, not free choice */
+  --spacing-row: 48px;
+  --spacing-logrow: 38px;
+  --spacing-navitem: 42px;
+  --spacing-chip: 34px;
+  --spacing-sidebar: 240px;
+
+  /* type — three faces, fixed roles */
+  --font-display: var(--font-bungee), "Nunito", sans-serif;
+  --font-sans: var(--font-nunito), "Trebuchet MS", sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* shadcn semantic tokens, remapped onto the brand */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,11 +77,11 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -39,82 +98,191 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 999px;
 }
+
+/* --------------------------------- LIGHT ---------------------------------
+   Verbatim from the canvas. Do not re-darken the greys: the pro pass lifted
+   every one of them off the 3:1 contrast floor on purpose.
+   ------------------------------------------------------------------------- */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --gv-canvas: #ffd23f;
+  --gv-canvas-dot: #ecc236;
+  --gv-paper: #fff9ec;
+  --gv-ink: #1a1a1a;
+
+  --gv-yellow: #ffd23f;
+  --gv-teal: #2ec4b6;
+  --gv-pink: #ff6fa8;
+  --gv-lilac: #cbb3ea;
+  --gv-red: #e2432f;
+
+  --gv-body: #4a4842;
+  --gv-muted: #6d6a60;
+  --gv-rule: #8a8578;
+  --gv-onyellow: #6b5709;
+
+  --gv-row: #ffffff;
+  --gv-row-sel: #fffdf2;
+  --gv-head: #f6f2e2;
+  --gv-tab-idle: #f0c236;
+  --gv-label: #7d6a35;
+  --gv-subtle: #6b675c;
+  --gv-track: #f2efe2;
+
+  --gv-bar: #1a1a1a;
+  --gv-bar-text: #c9c3b4;
+  --gv-bar-field: #262420;
+  --gv-bar-border: #55524a;
+
+  --gv-cleared: #1a7a44;
+  --gv-cleared-fg: #ffffff;
+  --gv-watch: #ffd23f;
+  --gv-watch-fg: #1a1a1a;
+  --gv-held: #c8341f;
+  --gv-held-fg: #ffffff;
+  --gv-review: #3565bd;
+  --gv-review-fg: #ffffff;
+  --gv-draft: #ece7d4;
+  --gv-draft-fg: #6d6a60;
+
+  /* a shadow means elevation, not enthusiasm */
+  --gv-shadow: #1a1a1a;
+  --gv-shadow-panel: 4px 4px 0 var(--gv-shadow);
+  --gv-shadow-card: 3px 3px 0 var(--gv-shadow);
+  --gv-shadow-chip: 2px 2px 0 var(--gv-shadow);
+
+  --background: var(--gv-canvas);
+  --foreground: var(--gv-ink);
+  --card: var(--gv-paper);
+  --card-foreground: var(--gv-ink);
+  --popover: var(--gv-paper);
+  --popover-foreground: var(--gv-ink);
+  --primary: var(--gv-yellow);
+  --primary-foreground: var(--gv-ink);
+  --secondary: var(--gv-paper);
+  --secondary-foreground: var(--gv-ink);
+  --muted: var(--gv-draft);
+  --muted-foreground: var(--gv-muted);
+  --accent: var(--gv-teal);
+  --accent-foreground: var(--gv-ink);
+  --destructive: var(--gv-red);
+  --border: var(--gv-ink);
+  --input: var(--gv-ink);
+  --ring: var(--gv-pink);
+  --chart-1: var(--gv-teal);
+  --chart-2: var(--gv-pink);
+  --chart-3: var(--gv-lilac);
+  --chart-4: var(--gv-yellow);
+  --chart-5: var(--gv-red);
+  --radius: 10px;
+  --sidebar: var(--gv-paper);
+  --sidebar-foreground: var(--gv-ink);
+  --sidebar-primary: var(--gv-pink);
+  --sidebar-primary-foreground: var(--gv-ink);
+  --sidebar-accent: var(--gv-yellow);
+  --sidebar-accent-foreground: var(--gv-ink);
+  --sidebar-border: var(--gv-ink);
+  --sidebar-ring: var(--gv-pink);
 }
 
+/* ---------------------------------- DARK ---------------------------------
+   DERIVED, NOT DESIGNED BY THE CANVAS (D-021). The rule used:
+
+   In light, yellow is the FIELD and ink is the LINE. A dark version cannot
+   keep a full-screen #ffd23f field, so the two roles swap — the field goes
+   warm near-black and yellow becomes the line and the accent. Every dark
+   value stays in the same warm family, so it reads as the same product at
+   night rather than a different one.
+
+   Revised 2026-09-05: the first pass kept every accent at full chroma and
+   the ink at near-white, which read as neon rather than as the same product
+   after dark. Dark is now the QUIET theme — accents desaturated, ink dropped
+   from #f5e9c8 to a parchment #cdc2a4, shadow off pure black. The structure
+   is unchanged: borders keep the same 2px weight, so nothing goes soft, the
+   chrome is simply no longer shouting.
+   ------------------------------------------------------------------------- */
+
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --gv-canvas: #191610;
+  --gv-canvas-dot: #272115;
+  --gv-paper: #221e15;
+  --gv-ink: #cdc2a4;
+
+  /* accents are desaturated, not just darkened: at full chroma against a
+     near-black field they glow, which is what made the first pass loud */
+  --gv-yellow: #d9ab3c;
+  --gv-teal: #4f9c93;
+  --gv-pink: #c97a94;
+  --gv-lilac: #a99bc4;
+  --gv-red: #c85f48;
+
+  --gv-body: #b7ad93;
+  --gv-muted: #8f8770;
+  --gv-rule: #4f4a3c;
+  --gv-onyellow: #b8a670;
+
+  --gv-row: #1c1911;
+  --gv-row-sel: #241f16;
+  --gv-head: #262115;
+  --gv-tab-idle: #262115;
+  --gv-label: #8f8770;
+  --gv-subtle: #8f8770;
+  --gv-track: #100e09;
+
+  /* the bar must stay darker than the field so it still reads as a bar */
+  --gv-bar: #0d0c08;
+  --gv-bar-text: #a89e84;
+  --gv-bar-field: #191510;
+  --gv-bar-border: #46402f;
+
+  /* fills still take dark type, the reverse of the light theme, but sit at
+     the same reduced chroma as the accents so a badge cannot outshout a row */
+  --gv-cleared: #3a9a5e;
+  --gv-cleared-fg: #191610;
+  --gv-watch: #d9ab3c;
+  --gv-watch-fg: #191610;
+  --gv-held: #c85f48;
+  --gv-held-fg: #191610;
+  --gv-review: #6a8fc9;
+  --gv-review-fg: #191610;
+  --gv-draft: #332e22;
+  --gv-draft-fg: #8f8770;
+
+  /* a hair off pure black: still reads as depth against a near-black field,
+     without the stark cut-out edge that #000 gave the hard-offset shadow */
+  --gv-shadow: #0b0a07;
+
+  --background: var(--gv-canvas);
+  --foreground: var(--gv-ink);
+  --card: var(--gv-paper);
+  --card-foreground: var(--gv-ink);
+  --popover: var(--gv-paper);
+  --popover-foreground: var(--gv-ink);
+  --primary: var(--gv-yellow);
+  --primary-foreground: #191610;
+  --secondary: #262115;
+  --secondary-foreground: var(--gv-ink);
+  --muted: #262115;
+  --muted-foreground: var(--gv-muted);
+  --accent: var(--gv-teal);
+  --accent-foreground: #191610;
+  --destructive: var(--gv-red);
+  --border: var(--gv-ink);
+  --input: var(--gv-ink);
+  --ring: var(--gv-pink);
+  --sidebar: var(--gv-paper);
+  --sidebar-foreground: var(--gv-ink);
+  --sidebar-primary: var(--gv-pink);
+  --sidebar-primary-foreground: #191610;
+  --sidebar-accent: var(--gv-yellow);
+  --sidebar-accent-foreground: #191610;
+  --sidebar-border: var(--gv-ink);
+  --sidebar-ring: var(--gv-pink);
 }
 
 @layer base {
@@ -122,9 +290,58 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-weight: 700;
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
+  }
+
+  /* Bungee is the wordmark, page titles and hero numerals only. It was
+     setting 9.5px table headers, which is what made the console read as a
+     poster rather than a product. Nothing under 19px. */
+  h1,
+  h2 {
+    @apply font-display;
+    font-weight: 400;
+  }
+  code,
+  kbd,
+  samp {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  /* the page field: yellow with its dot grid, not a white app with yellow
+     buttons. In dark this is the warm near-black with the same grid. */
+  .gv-field {
+    background-color: var(--gv-canvas);
+    background-image: radial-gradient(var(--gv-canvas-dot) 1.1px, transparent 1.1px);
+    background-size: 24px 24px;
+  }
+
+  /* elevation scale — 4 panel / 3 card / 2 live chip / none static */
+  .gv-panel {
+    box-shadow: 4px 4px 0 var(--gv-shadow);
+  }
+  .gv-card {
+    box-shadow: 3px 3px 0 var(--gv-shadow);
+  }
+  .gv-chip {
+    box-shadow: 2px 2px 0 var(--gv-shadow);
+  }
+
+  /* the dashed rule used between sections on the canvas */
+  .gv-rule {
+    height: 3px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--gv-ink),
+      var(--gv-ink) 8px,
+      transparent 8px,
+      transparent 16px
+    );
   }
 }
