@@ -36,11 +36,10 @@ EXPECTED_PATHS = {
 
 def api_paths() -> set[str]:
     return {
-        route.path
-        for route in app.routes
-        if getattr(route, "methods", None) and route.path.startswith("/api/v1")
+        path
+        for path in app.openapi()["paths"].keys()
+        if path.startswith("/api/v1")
     }
-
 
 def test_no_path_segment_is_repeated():
     """`/api/v1/skills/skills/` is the exact failure this catches."""
@@ -49,19 +48,15 @@ def test_no_path_segment_is_repeated():
         duplicated = [s for s in set(segments) if segments.count(s) > 1]
         assert not duplicated, f"{path} repeats {duplicated}"
 
-
 def test_every_expected_route_is_mounted_where_the_frontend_expects_it():
     missing = EXPECTED_PATHS - api_paths()
     assert not missing, f"routes missing or moved: {sorted(missing)}"
 
-
 def test_every_api_route_lives_under_the_version_prefix():
-    for route in app.routes:
-        if not getattr(route, "methods", None):
+    for path in app.openapi()["paths"].keys():
+        if path.startswith(("/docs", "/redoc", "/openapi", "/health", "/api/v1")):
             continue
-        path = route.path
-        if path.startswith(("/docs", "/redoc", "/openapi", "/health", "/")):
-            continue
+        # If it doesn't match the standard prefixes, it must start with /api/v1
         assert path.startswith("/api/v1"), f"{path} is outside the versioned API"
 
 
