@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { isDenied, type AuditEvent } from "@/components/audit/audit-feed";
+import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
 
 /**
  * The three Overview figures, read from the API.
@@ -46,6 +47,7 @@ type State =
 
 export function OverviewStats() {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const still = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -125,10 +127,16 @@ export function OverviewStats() {
     state.kind === "loading" ? [null, null, null] : state.tiles;
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
+    <motion.div
+      className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3"
+      variants={staggerContainer}
+      initial={still ? false : "hidden"}
+      animate="shown"
+    >
       {tiles.map((tile, index) => (
-        <div
+        <motion.div
           key={tile?.label ?? index}
+          variants={staggerItem}
           className="gv-card rounded-lg border-2 border-border bg-gv-row p-4"
         >
           <div className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-gv-muted">
@@ -141,8 +149,8 @@ export function OverviewStats() {
           <div className="mt-1.5 font-mono text-[11px] text-gv-muted">
             {tile?.meta ?? "loading…"}
           </div>
-        </div>
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }

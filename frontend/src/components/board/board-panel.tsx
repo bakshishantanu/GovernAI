@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { motion, useReducedMotion, DURATION, EASE } from "@/components/motion";
 import {
   Table2,
   Columns3,
@@ -94,8 +95,13 @@ export function BoardPanel({
   /** false when the panel stands alone with no tabs above it */
   attached?: boolean;
 }) {
+  const still = useReducedMotion();
+
   return (
-    <div
+    <motion.div
+      initial={still ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DURATION.slow, ease: EASE }}
       className={`gv-panel mx-[22px] mb-[22px] flex min-h-0 flex-1 flex-col overflow-hidden border-2 border-border bg-card ${
         attached ? "rounded-b-lg rounded-tr-lg" : "rounded-lg"
       }`}
@@ -106,7 +112,7 @@ export function BoardPanel({
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto">{children}</div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -161,11 +167,41 @@ export function ToolbarChip({
   );
 }
 
-/** The "Live · 2s ago" marker that sits at the right of a board toolbar. */
-export function LiveMarker({ label = "Live" }: { label?: string }) {
+/**
+ * The "Live · 2s ago" marker at the right of a board toolbar.
+ *
+ * The dot pulses **only when `live` is true**. A pulsing dot is a claim that
+ * something is connected, so a page with no open stream must not make it —
+ * every caller that is merely showing a static count passes nothing and gets
+ * a still dot.
+ */
+export function LiveMarker({
+  label = "Live",
+  live = false,
+}: {
+  label?: string;
+  /** true only when a stream is actually open */
+  live?: boolean;
+}) {
+  const still = useReducedMotion();
+
   return (
     <span className="ml-auto flex shrink-0 items-center gap-[7px] text-[12px] font-bold text-gv-muted">
-      <span className="h-2 w-2 rounded-full border border-border bg-gv-teal" />
+      <span className="relative flex h-2 w-2 shrink-0">
+        {live && !still && (
+          <motion.span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full bg-gv-teal"
+            animate={{ opacity: [0.65, 0, 0.65], scale: [1, 2.1, 1] }}
+            transition={{ duration: 1.9, ease: "easeOut", repeat: Infinity }}
+          />
+        )}
+        <span
+          className={`relative h-2 w-2 rounded-full border border-border ${
+            live ? "bg-gv-teal" : "bg-gv-rule"
+          }`}
+        />
+      </span>
       {label}
     </span>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchApi } from "@/lib/api-client";
 import { useExecutionStream, type RunEntry } from "@/hooks/use-execution-stream";
+import { motion, useReducedMotion, DURATION, EASE, Reveal } from "@/components/motion";
 import { PageHeader } from "@/components/board/page-header";
 import { BoardPanel, ViewTabs, ToolbarChip, LiveMarker } from "@/components/board/board-panel";
 import {
@@ -160,7 +161,7 @@ export function RunViewer({ executionId }: { executionId: string }) {
 
             <ToolbarChip>${run.spendUsd.toFixed(4)} this run</ToolbarChip>
 
-            <LiveMarker label={live ? "Live · streaming" : "Stream closed"} />
+            <LiveMarker live={live} label={live ? "Live · streaming" : "Stream closed"} />
           </>
         }
       >
@@ -198,7 +199,8 @@ export function RunViewer({ executionId }: { executionId: string }) {
         )}
 
         {finished && (result || error) && (
-          <section className="m-4 overflow-hidden rounded-lg border-2 border-border bg-gv-row">
+          <Reveal className="m-4">
+          <section className="overflow-hidden rounded-lg border-2 border-border bg-gv-row">
             <header className="flex h-[38px] items-center gap-2 border-b-2 border-border bg-gv-head px-4">
               {error ? (
                 <CircleAlert className="h-4 w-4 text-gv-held" strokeWidth={2.6} />
@@ -213,13 +215,27 @@ export function RunViewer({ executionId }: { executionId: string }) {
               {error || result}
             </p>
           </section>
+          </Reveal>
         )}
       </BoardPanel>
     </>
   );
 }
 
+/**
+ * One event as it lands.
+ *
+ * The row slides in from the left, the way a log line arrives — 8px, once,
+ * fast. A denial additionally flashes: it is the single most important thing
+ * that can happen on this screen, and in a live demo it has to be impossible
+ * to miss the moment the gate refuses a call. The flash is a separate overlay
+ * that fades to nothing, so the row's resting colour is still plain CSS and
+ * nothing depends on an animation having finished.
+ */
 function TimelineRow({ entry }: { entry: RunEntry }) {
+  const still = useReducedMotion();
+  const denied = entry.kind === "denied";
+
   const skin =
     entry.kind === "denied"
       ? { fill: "bg-gv-held text-gv-held-fg", label: "Denied", Icon: ShieldAlert }
@@ -228,23 +244,36 @@ function TimelineRow({ entry }: { entry: RunEntry }) {
         : { fill: "bg-gv-draft text-gv-draft-fg", label: "Cost", Icon: Coins };
 
   return (
-    <li
-      className={`flex min-h-[38px] items-center gap-3 px-4 py-1 ${
-        entry.kind === "denied" ? "bg-gv-held/10" : ""
+    <motion.li
+      initial={still ? false : { opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: DURATION.base, ease: EASE }}
+      className={`relative flex min-h-[38px] items-center gap-3 px-4 py-1 ${
+        denied ? "bg-gv-held/10" : ""
       }`}
     >
-      <span className="w-[68px] shrink-0 font-mono text-[11px] text-gv-muted">
+      {denied && !still && (
+        <motion.span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gv-held"
+          initial={{ opacity: 0.32 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+        />
+      )}
+
+      <span className="relative w-[68px] shrink-0 font-mono text-[11px] text-gv-muted">
         {timeOf(entry.at)}
       </span>
 
       <span
-        className={`inline-flex h-[22px] shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[10px] font-extrabold uppercase tracking-[0.06em] ${skin.fill}`}
+        className={`relative inline-flex h-[22px] shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[10px] font-extrabold uppercase tracking-[0.06em] ${skin.fill}`}
       >
         <skin.Icon className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
         {skin.label}
       </span>
 
-      <span className="min-w-0 flex-1 text-[12.5px] font-bold text-foreground">
+      <span className="relative min-w-0 flex-1 text-[12.5px] font-bold text-foreground">
         {entry.kind === "cost" ? (
           <span className="font-mono text-[12px] text-gv-muted">
             ${(entry.costUsd ?? 0).toFixed(6)} · {entry.tokens ?? 0} tokens
@@ -256,6 +285,6 @@ function TimelineRow({ entry }: { entry: RunEntry }) {
           </>
         )}
       </span>
-    </li>
+    </motion.li>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { BoardPanel, ViewTabs, ToolbarChip } from "@/components/board/board-panel";
 import { ShieldCheck, Users, FlaskConical, Wrench } from "lucide-react";
+import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
 
 /**
  * The skill registry.
@@ -62,6 +63,7 @@ export function SkillBoard() {
   }, []);
 
   const toolCount = skills.reduce((sum, skill) => sum + (skill.tools?.length ?? 0), 0);
+  const still = useReducedMotion();
 
   return (
     <>
@@ -91,12 +93,18 @@ export function SkillBoard() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2">
+        <motion.div
+          className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2"
+          variants={staggerContainer}
+          initial={still ? false : "hidden"}
+          animate="shown"
+        >
           {skills.map((skill) => {
             const trust = trustOf(skill.trust_level);
             return (
-              <article
+              <motion.article
                 key={skill.id}
+                variants={staggerItem}
                 className="gv-card flex flex-col overflow-hidden rounded-lg border-2 border-border bg-gv-row"
               >
                 <header className="flex h-12 items-center gap-2 border-b-2 border-border px-4">
@@ -166,10 +174,10 @@ export function SkillBoard() {
                     {skill.name} · v{skill.version}
                   </footer>
                 </div>
-              </article>
+              </motion.article>
             );
           })}
-        </div>
+        </motion.div>
       </BoardPanel>
     </>
   );

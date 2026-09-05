@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { fetchApi } from "@/lib/api-client";
+import { motion, useReducedMotion, DURATION, EASE } from "@/components/motion";
 import {
   LayoutDashboard,
   Bot,
@@ -57,6 +58,7 @@ const sections: { label: string; items: NavItem[] }[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const still = useReducedMotion();
 
   return (
     <aside className="sticky top-0 flex h-screen w-sidebar shrink-0 flex-col border-r-2 border-border bg-sidebar">
@@ -86,25 +88,41 @@ export function Sidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex h-navitem items-center gap-2.5 rounded-xl px-3 text-[14px] transition-colors ${
+                  aria-current={isActive ? "page" : undefined}
+                  className={`relative flex h-navitem items-center gap-2.5 rounded-xl px-3 text-[14px] transition-colors ${
                     isActive
-                      ? "gv-chip border-2 border-border bg-sidebar-primary font-extrabold text-sidebar-primary-foreground"
+                      ? "font-extrabold text-sidebar-primary-foreground"
                       : "border-2 border-transparent font-bold text-gv-body hover:border-border hover:bg-muted"
                   }`}
                 >
-                  <item.icon className="h-[17px] w-[17px] shrink-0" strokeWidth={2.2} />
-                  {item.name}
+                  {/* One pill, shared across nav items: `layoutId` makes Motion
+                      slide it from the old item to the new one instead of
+                      cross-fading two pills. Under reduced motion it is a
+                      plain div, so the active state still reads. */}
+                  {isActive &&
+                    (still ? (
+                      <span className="gv-chip absolute inset-0 rounded-xl border-2 border-border bg-sidebar-primary" />
+                    ) : (
+                      <motion.span
+                        layoutId="nav-active-pill"
+                        className="gv-chip absolute inset-0 rounded-xl border-2 border-border bg-sidebar-primary"
+                        transition={{ duration: DURATION.base, ease: EASE }}
+                      />
+                    ))}
+
+                  <item.icon className="relative h-[17px] w-[17px] shrink-0" strokeWidth={2.2} />
+                  <span className="relative">{item.name}</span>
 
                   {item.count && (
-                    <span className="ml-auto font-mono text-[11px] font-medium">
+                    <span className="relative ml-auto font-mono text-[11px] font-medium">
                       {item.count}
                     </span>
                   )}
                   {item.live && (
-                    <span className="ml-auto h-2 w-2 rounded-full border border-border bg-gv-teal" />
+                    <span className="relative ml-auto h-2 w-2 rounded-full border border-border bg-gv-teal" />
                   )}
                   {item.badge && (
-                    <span className="ml-auto inline-flex h-[18px] items-center rounded-xl border border-border bg-gv-lilac px-[7px] text-[9.5px] font-extrabold text-gv-ink">
+                    <span className="relative ml-auto inline-flex h-[18px] items-center rounded-xl border border-border bg-gv-lilac px-[7px] text-[9.5px] font-extrabold text-gv-ink">
                       {item.badge}
                     </span>
                   )}
@@ -170,6 +188,7 @@ function money(value: number) {
 function OrgBudgetMeter() {
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [failed, setFailed] = useState(false);
+  const still = useReducedMotion();
 
   useEffect(() => {
     let cancelled = false;
@@ -212,7 +231,10 @@ function OrgBudgetMeter() {
       </div>
 
       <div className="mt-2 h-[9px] overflow-hidden rounded-xl border border-border bg-gv-track">
-        <div
+        {/* The bar fills to its value once, so the eye is drawn to how far it
+            went. It never animates on refetch — a bar that re-fills every poll
+            reads as spend happening when nothing has changed. */}
+        <motion.div
           className={
             percent >= 100
               ? "h-full bg-gv-held"
@@ -220,7 +242,9 @@ function OrgBudgetMeter() {
                 ? "h-full bg-gv-watch"
                 : "h-full bg-gv-teal"
           }
-          style={{ width: `${Math.min(percent, 100)}%` }}
+          initial={still ? false : { width: 0 }}
+          animate={{ width: `${Math.min(percent, 100)}%` }}
+          transition={{ duration: DURATION.slow, ease: EASE }}
         />
       </div>
 

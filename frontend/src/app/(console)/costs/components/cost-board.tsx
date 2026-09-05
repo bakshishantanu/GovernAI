@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { BoardPanel, ViewTabs, LiveMarker } from "@/components/board/board-panel";
+import { motion, useReducedMotion, DURATION, EASE, STAGGER } from "@/components/motion";
 
 /**
  * Spend, from `cost_events` rows and nothing else.
@@ -200,6 +201,8 @@ function Breakdown({
   total: number;
   empty: string;
 }) {
+  const still = useReducedMotion();
+
   return (
     <section className="gv-card overflow-hidden rounded-lg border-2 border-border bg-gv-row">
       <header className="flex h-[38px] items-center border-b-2 border-border bg-gv-head px-4">
@@ -212,7 +215,7 @@ function Breakdown({
         <p className="px-4 py-6 text-[13px] font-bold text-gv-muted">{empty}</p>
       ) : (
         <ul className="p-3">
-          {rows.map(([label, cost]) => {
+          {rows.map(([label, cost], index) => {
             const share = total > 0 ? Math.max(2, (cost / total) * 100) : 0;
             return (
               <li key={label} className="py-1.5">
@@ -223,7 +226,16 @@ function Breakdown({
                   <span className="font-mono text-[11.5px] text-gv-muted">{money(cost)}</span>
                 </div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full border border-border bg-gv-track">
-                  <div className="h-full bg-gv-teal" style={{ width: `${share}%` }} />
+                  <motion.div
+                    className="h-full bg-gv-teal"
+                    initial={still ? false : { width: 0 }}
+                    animate={{ width: `${share}%` }}
+                    transition={{
+                      duration: DURATION.slow,
+                      ease: EASE,
+                      delay: still ? 0 : index * STAGGER,
+                    }}
+                  />
                 </div>
               </li>
             );

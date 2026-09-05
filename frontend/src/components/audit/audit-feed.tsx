@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
 import { ShieldAlert, ShieldCheck, Minus } from "lucide-react";
+import { motion, staggerContainer, staggerItem, useReducedMotion } from "@/components/motion";
 
 /**
  * The audit log, as one component used in more than one place.
@@ -69,6 +70,7 @@ export function AuditFeed({
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const still = useReducedMotion();
 
   const load = useCallback(async () => {
     try {
@@ -106,12 +108,18 @@ export function AuditFeed({
   }
 
   return (
-    <ul className="divide-y divide-gv-rule/40">
+    <motion.ul
+      className="divide-y divide-gv-rule/40"
+      variants={staggerContainer}
+      initial={still ? false : "hidden"}
+      animate="shown"
+    >
       {events.map((event) => {
         const decision = decisionOf(event);
         return (
-          <li
+          <motion.li
             key={event.id}
+            variants={staggerItem}
             className="flex h-[38px] items-center gap-3 px-4 hover:bg-gv-row-sel"
           >
             <span className="w-[68px] shrink-0 font-mono text-[11px] text-gv-muted">
@@ -142,10 +150,10 @@ export function AuditFeed({
             <span className="hidden shrink-0 font-mono text-[11px] text-gv-muted sm:block">
               {event.actor_type?.toUpperCase()}
             </span>
-          </li>
+          </motion.li>
         );
       })}
-    </ul>
+    </motion.ul>
   );
 }
 

@@ -38,7 +38,7 @@ export default function DashboardPage() {
 
       <ViewTabs views={[{ name: "Overview", icon: "overview" }]} active="Overview" />
 
-      <BoardPanel toolbar={<LiveMarker label="Live · not connected" />}>
+      <BoardPanel toolbar={<LiveMarker label="Not connected" />}>
         <OverviewStats />
 
         <section className="mx-4 mb-4 overflow-hidden rounded-lg border-2 border-border bg-gv-row">

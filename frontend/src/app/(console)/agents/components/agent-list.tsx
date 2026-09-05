@@ -122,7 +122,7 @@ export function AgentList() {
         {filteredAgents.length} of {agents.length}
       </span>
 
-      <LiveMarker />
+      <LiveMarker label="Not connected" />
     </>
   )
 
