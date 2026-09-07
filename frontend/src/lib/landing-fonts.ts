@@ -1,18 +1,13 @@
-import { Archivo_Black, Inter, Caveat, Fredoka } from "next/font/google";
+import { Inter, Caveat, Fredoka } from "next/font/google";
 
-export const archivoBlack = Archivo_Black({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-display",
-});
-
-// A rounder, friendlier display face reserved for one-off playful
-// moments (the sliding marquee statement) — distinct from Archivo
-// Black's blocky geometric weight used for section headlines.
+// The reference site's real display face is a licensed font called
+// "Champ" (bold, rounded, friendly) — not available to us. Fredoka is
+// the closest freely-available match: rounded terminals, chunky but
+// not razor-geometric like Archivo Black was.
 export const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-marquee",
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
 });
 
 export const interLanding = Inter({

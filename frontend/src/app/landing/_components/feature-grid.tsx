@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { type MouseEvent as ReactMouseEvent } from "react";
+import { motion, useMotionValue, useSpring } from "framer-motion";
 
 const FEATURES = [
   {
@@ -40,13 +41,50 @@ const container = {
   show: { transition: { staggerChildren: 0.08 } },
 };
 const item = {
-  hidden: { opacity: 0, y: 24 },
+  hidden: { opacity: 0, scale: 0.6, rotate: -8 },
   show: {
     opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: "easeOut" as const },
+    scale: 1,
+    rotate: 0,
+    transition: { type: "spring" as const, stiffness: 240, damping: 16 },
   },
 };
+
+function TiltCard({ f }: { f: (typeof FEATURES)[number] }) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const springX = useSpring(x, { stiffness: 200, damping: 14, mass: 0.4 });
+  const springY = useSpring(y, { stiffness: 200, damping: 14, mass: 0.4 });
+
+  const handleMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    x.set((e.clientX - (rect.left + rect.width / 2)) * 0.15);
+    y.set((e.clientY - (rect.top + rect.height / 2)) * 0.15);
+  };
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
+  return (
+    <motion.div
+      variants={item}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      whileHover={{ scale: 1.03 }}
+      style={{ x: springX, y: springY }}
+      className="rounded-2xl border border-[var(--l-line)] bg-white p-6 transition-shadow hover:shadow-xl hover:shadow-black/10"
+    >
+      <span className="landing-display text-2xl text-[var(--l-orange)]">
+        {f.n}
+      </span>
+      <h3 className="mt-3 font-semibold text-[var(--l-charcoal)]">{f.title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-[var(--l-charcoal)]/60">
+        {f.body}
+      </p>
+    </motion.div>
+  );
+}
 
 export function FeatureGrid() {
   return (
@@ -75,22 +113,7 @@ export function FeatureGrid() {
           className="mt-16 grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
         >
           {FEATURES.map((f) => (
-            <motion.div
-              key={f.title}
-              variants={item}
-              whileHover={{ y: -4 }}
-              className="rounded-2xl border border-[var(--l-line)] bg-white p-6 transition-shadow hover:shadow-lg hover:shadow-black/5"
-            >
-              <span className="landing-display text-2xl text-[var(--l-orange)]">
-                {f.n}
-              </span>
-              <h3 className="mt-3 font-semibold text-[var(--l-charcoal)]">
-                {f.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--l-charcoal)]/60">
-                {f.body}
-              </p>
-            </motion.div>
+            <TiltCard key={f.title} f={f} />
           ))}
         </motion.div>
       </div>

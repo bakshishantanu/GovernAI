@@ -21,7 +21,7 @@ export function Marquee() {
     >
       <motion.div
         style={{ x }}
-        className="landing-marquee-font whitespace-nowrap font-semibold text-4xl sm:text-5xl md:text-6xl text-[var(--l-charcoal)] -rotate-3 inline-block will-change-transform"
+        className="landing-display whitespace-nowrap text-4xl sm:text-5xl md:text-6xl text-[var(--l-charcoal)] -rotate-3 inline-block will-change-transform"
       >
         {STATEMENT}
       </motion.div>

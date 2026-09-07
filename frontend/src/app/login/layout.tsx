@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
-import { archivoBlack, interLanding, caveat } from "@/lib/landing-fonts";
+import { fredoka, interLanding, caveat } from "@/lib/landing-fonts";
 import "../landing/landing.css";
 
 export default function LoginLayout({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`landing ${archivoBlack.variable} ${interLanding.variable} ${caveat.variable}`}
-    >
+    <div className={`landing ${fredoka.variable} ${interLanding.variable} ${caveat.variable}`}>
       {children}
     </div>
   );
