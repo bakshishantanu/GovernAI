@@ -42,10 +42,11 @@ class KillSwitchService:
         if agent.passport:
             agent.passport.lifecycle_state = "ACTIVE"
             
-        await self.audit_service.log_agent_created( # Using created as a placeholder for reactivation log since we don't have reactivate
+        await self.audit_service.log_agent_reactivated(
             org_id=org_id,
             actor_id=actor_id,
-            agent_id=agent_id
+            agent_id=agent_id,
+            reason=reason
         )
         
         await self.session.commit()

@@ -35,7 +35,7 @@ class CostService:
             org_id=org_id,
             agent_id=agent_id,
             execution_id=execution_id,
-            event_type="llm_inference",
+            event_type="LLM_CALL",
             model=model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,

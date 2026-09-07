@@ -39,6 +39,22 @@ class AuditService:
         await self.audit_repo.record_event(event)
         await self.event_bus.publish(Event.create("audit.agent.suspended", {"agent_id": str(agent_id), "reason": reason}))
 
+    async def log_agent_reactivated(self, org_id: UUID, actor_id: UUID, agent_id: UUID, reason: str):
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            agent_id=agent_id,
+            action="agent_reactivated",
+            policy_decision="ALLOW",
+            reason=reason,
+            timestamp=datetime.now(timezone.utc)
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(Event.create("audit.agent.reactivated", {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason}))
+
+
     async def log_tool_call(self, org_id: UUID, agent_id: UUID, execution_id: UUID, tool: str, allowed: bool, reason: str = ""):
         event = AuditEvent(
             id=uuid.uuid4(),

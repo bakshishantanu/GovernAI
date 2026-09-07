@@ -75,6 +75,9 @@ class Subscription:
         self._queue = queue
         self._subscriber_list = subscriber_list
 
+    async def __aenter__(self):
+        return self
+
     def __aiter__(self):
         return self
 
