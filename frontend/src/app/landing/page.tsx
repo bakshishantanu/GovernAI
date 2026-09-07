@@ -11,7 +11,7 @@ import { Personas } from "./_components/personas";
 import { FinalCta } from "./_components/final-cta";
 
 export const metadata = {
-  title: "GovernAI — Build Agents Fast. Govern Them Faster.",
+  title: "GovernAI: Build Agents Fast. Govern Them Faster.",
   description:
     "GovernAI assembles internal AI agents from reusable skills and gives every one an identity, permission scope, and live spending budget at creation.",
 };

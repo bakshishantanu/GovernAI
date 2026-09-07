@@ -70,7 +70,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.35 }}
             className="mt-7 max-w-md text-lg text-[var(--l-ink)]/70 leading-relaxed"
           >
-            GovernAI assembles internal AI agents from reusable skills — and
+            GovernAI assembles internal AI agents from reusable skills, then
             gives every one an identity, a permission scope, and a live
             spending budget the moment it&apos;s born.
           </motion.p>

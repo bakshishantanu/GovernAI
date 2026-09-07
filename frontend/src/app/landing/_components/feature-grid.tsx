@@ -1,45 +1,37 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  Blocks,
-  ShieldCheck,
-  ScrollText,
-  Power,
-  Users,
-  Gauge,
-} from "lucide-react";
 
 const FEATURES = [
   {
-    icon: Blocks,
+    n: "01",
     title: "Skill marketplace",
-    body: "A curated registry of reusable connectors — ticketing, RAG, SQL — each declaring the permissions it needs.",
+    body: "A curated registry of reusable connectors (ticketing, RAG, SQL), each declaring the permissions it needs.",
   },
   {
-    icon: ShieldCheck,
+    n: "02",
     title: "Policy engine",
     body: "Intercepts every tool call live against the agent's scope and global deny rules. No silent access.",
   },
   {
-    icon: Gauge,
+    n: "03",
     title: "Live cost tracking",
     body: "Token counts and model pricing roll up into per-agent, per-execution cost attribution, in real time.",
   },
   {
-    icon: ScrollText,
+    n: "04",
     title: "Append-only audit log",
-    body: "Every action — allowed or blocked — is logged unconditionally. 100% coverage, by construction.",
+    body: "Every action, allowed or blocked, is logged unconditionally. 100% coverage, by construction.",
   },
   {
-    icon: Power,
+    n: "05",
     title: "One-click kill switch",
     body: "Suspend any agent instantly from the dashboard, with immediate effect on running executions.",
   },
   {
-    icon: Users,
+    n: "06",
     title: "Scoped ownership",
-    body: "Every agent has exactly one owner and an RBAC permission set — no ambiguous access.",
+    body: "Every agent has exactly one owner and an RBAC permission set, with no ambiguous access.",
   },
 ];
 
@@ -89,10 +81,10 @@ export function FeatureGrid() {
               whileHover={{ y: -4 }}
               className="rounded-2xl border border-[var(--l-line)] bg-white p-6 transition-shadow hover:shadow-lg hover:shadow-black/5"
             >
-              <div className="w-10 h-10 rounded-xl bg-[var(--l-teal)]/10 flex items-center justify-center">
-                <f.icon className="w-5 h-5 text-[var(--l-teal)]" />
-              </div>
-              <h3 className="mt-4 font-semibold text-[var(--l-charcoal)]">
+              <span className="landing-display text-2xl text-[var(--l-orange)]">
+                {f.n}
+              </span>
+              <h3 className="mt-3 font-semibold text-[var(--l-charcoal)]">
                 {f.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-[var(--l-charcoal)]/60">

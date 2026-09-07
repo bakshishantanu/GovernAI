@@ -1,23 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wrench, ShieldHalf, LineChart } from "lucide-react";
 
 const PERSONAS = [
   {
-    icon: ShieldHalf,
     tag: "Platform / security engineers",
     body: "Install GovernAI as the mandatory checkpoint every new agent must pass through before it can act.",
   },
   {
-    icon: Wrench,
     tag: "Agent builders",
     body: "Assemble agents from existing skills instead of writing the same integrations from scratch, again.",
   },
   {
-    icon: LineChart,
     tag: "IT & budget owners",
-    body: "One dashboard view of every agent — owner, access, live cost — with the power to pause any of them instantly.",
+    body: "One dashboard view of every agent (owner, access, live cost) with the power to pause any of them instantly.",
   },
 ];
 
@@ -50,8 +46,10 @@ export function Personas() {
               transition={{ duration: 0.55, delay: i * 0.1, ease: "easeOut" }}
               className="rounded-2xl bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-7"
             >
-              <p.icon className="w-6 h-6 text-[var(--l-orange-soft)]" />
-              <h3 className="mt-5 font-semibold">{p.tag}</h3>
+              <span className="landing-display text-2xl text-[var(--l-orange-soft)]">
+                0{i + 1}
+              </span>
+              <h3 className="mt-3 font-semibold">{p.tag}</h3>
               <p className="mt-2.5 text-sm leading-relaxed text-[var(--l-cream)]/60">
                 {p.body}
               </p>
