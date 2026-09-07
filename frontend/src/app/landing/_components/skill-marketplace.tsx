@@ -219,7 +219,7 @@ export function SkillMarketplace() {
         <div
           ref={trackRef}
           onScroll={updateEdges}
-          className="landing-carousel mt-12 flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory"
+          className="landing-carousel mt-10 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory"
         >
           {SKILLS.map((s, i) => {
             const Icon = s.icon;
@@ -234,13 +234,13 @@ export function SkillMarketplace() {
                 transition={{ duration: 0.5, delay: (i % 4) * 0.08, ease: "easeOut" }}
                 whileHover={{ y: -10, scale: 1.03, rotate: i % 2 === 0 ? -1 : 1 }}
                 whileTap={{ scale: 0.99 }}
-                className={`group relative shrink-0 w-64 md:w-[19rem] min-h-[460px] overflow-hidden rounded-[28px] p-6 flex flex-col snap-start text-left cursor-pointer shadow-md hover:shadow-2xl hover:shadow-black/20 transition-shadow ${
+                className={`group relative shrink-0 w-52 md:w-60 min-h-[360px] overflow-hidden rounded-[24px] p-5 flex flex-col snap-start text-left cursor-pointer shadow-md hover:shadow-2xl hover:shadow-black/20 transition-shadow ${
                   s.dashed ? "border-2 border-dashed border-[var(--l-line)]" : ""
                 }`}
                 style={{ background: s.dashed ? "transparent" : s.bg, color: s.fg }}
               >
                 <Icon
-                  className="pointer-events-none absolute -bottom-8 -right-8 w-44 h-44 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6"
+                  className="pointer-events-none absolute -bottom-6 -right-6 w-32 h-32 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6"
                   style={{ opacity: s.dashed ? 0.06 : 0.14 }}
                   strokeWidth={1}
                 />
@@ -253,10 +253,10 @@ export function SkillMarketplace() {
                   {s.status}
                 </span>
 
-                <div className="relative mt-auto pt-8">
-                  <h3 className="landing-display text-2xl leading-none">{s.name}</h3>
+                <div className="relative mt-auto pt-6">
+                  <h3 className="landing-display text-xl leading-none">{s.name}</h3>
                   <p
-                    className="mt-3 text-sm leading-relaxed"
+                    className="mt-2.5 text-xs leading-relaxed"
                     style={{ opacity: s.dashed ? 0.65 : 0.8 }}
                   >
                     {s.body}

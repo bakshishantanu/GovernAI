@@ -72,6 +72,26 @@
   animation: landing-blob-morph 14s ease-in-out infinite;
 }
 
+.landing-marquee-track {
+  width: max-content;
+  animation: landing-marquee 26s linear infinite;
+}
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee-track {
+    animation: none;
+  }
+}
+
 @keyframes landing-blob-morph {
   0%,
   100% {

@@ -5,6 +5,7 @@ import { Hero } from "./_components/hero";
 import { Problem } from "./_components/problem";
 import { Passport } from "./_components/passport";
 import { SkillMarketplace } from "./_components/skill-marketplace";
+import { Marquee } from "./_components/marquee";
 import { HowItWorks } from "./_components/how-it-works";
 import { CostGovernance } from "./_components/cost-governance";
 import { FeatureGrid } from "./_components/feature-grid";
@@ -27,6 +28,7 @@ export default function LandingPage() {
         <Problem />
         <Passport />
         <SkillMarketplace />
+        <Marquee />
         <HowItWorks />
         <CostGovernance />
         <FeatureGrid />
