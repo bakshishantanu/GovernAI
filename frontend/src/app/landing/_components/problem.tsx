@@ -36,8 +36,9 @@ const item = {
 
 export function Problem() {
   return (
-    <section id="problem" className="relative bg-[var(--l-cream)] py-28 md:py-36">
-      <div className="max-w-6xl mx-auto px-6">
+    <section id="problem" className="relative bg-[var(--l-cream)] py-28 md:py-36 overflow-hidden">
+      <div className="landing-blob pointer-events-none absolute -bottom-32 -right-32 w-[420px] h-[420px] bg-[var(--l-yellow)] opacity-30" />
+      <div className="max-w-6xl mx-auto px-6 relative">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -48,9 +49,9 @@ export function Problem() {
           <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
             The problem
           </span>
-          <h2 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight text-[var(--l-charcoal)] leading-tight">
-            Enterprises deploying AI agents today have effectively no governance
-            layer.
+          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] leading-[1] tracking-tight">
+            Enterprises deploying AI agents today have effectively no
+            governance layer.
           </h2>
         </motion.div>
 

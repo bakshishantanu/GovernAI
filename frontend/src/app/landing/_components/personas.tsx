@@ -35,7 +35,7 @@ export function Personas() {
           <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
             Built for three seats at the table
           </span>
-          <h2 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight text-[var(--l-charcoal)]">
+          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] tracking-tight">
             Who reaches for GovernAI
           </h2>
         </motion.div>

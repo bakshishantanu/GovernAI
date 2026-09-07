@@ -35,7 +35,7 @@ export function FinalCta() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.6 }}
-          className="text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]"
+          className="landing-display text-5xl md:text-7xl tracking-tight leading-[0.98]"
         >
           Ready to govern
           <br />
@@ -62,7 +62,7 @@ export function FinalCta() {
         >
           <Link
             href="/login"
-            className="group inline-flex items-center gap-2 rounded-full bg-[var(--l-orange)] text-[var(--l-navy-deep)] font-medium px-7 py-3.5 transition-transform hover:scale-[1.03]"
+            className="group inline-flex items-center gap-2 rounded-full bg-[var(--l-orange)] text-white font-semibold px-7 py-3.5 shadow-[0_6px_0_0_var(--l-orange-deep)] transition-transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_0_var(--l-orange-deep)]"
           >
             Sign in to GovernAI
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

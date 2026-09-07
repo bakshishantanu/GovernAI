@@ -47,7 +47,7 @@ export function CostGovernance() {
           <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange-soft)] font-semibold">
             The headline USP
           </span>
-          <h2 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight leading-tight">
+          <h2 className="landing-display mt-4 text-4xl md:text-5xl leading-[1.03] tracking-tight">
             Live cost governance. Not a dashboard you check later.
           </h2>
           <p className="mt-5 text-[var(--l-ink)]/60 leading-relaxed max-w-md">

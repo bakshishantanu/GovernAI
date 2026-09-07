@@ -1,18 +1,28 @@
 .landing {
-  --l-ink: #f4ede1;
-  --l-navy: #12141a;
+  --l-ink: #16130e;
+  --l-navy: #14151b;
   --l-navy-deep: #0b0c10;
-  --l-cream: #faf4e9;
-  --l-cream-deep: #f1e8d8;
+  --l-cream: #fff8ec;
+  --l-cream-deep: #fbeed4;
   --l-charcoal: #201d1a;
-  --l-orange: #de6a34;
-  --l-orange-soft: #f2a15f;
+
+  /* Aardvark-yellow hero/background */
+  --l-yellow: #f6b93b;
+  --l-yellow-deep: #f0a227;
+  --l-yellow-pale: #ffe3a6;
+
+  /* hot-pink primary accent (CTAs) */
+  --l-orange: #ff3d8a;
+  --l-orange-soft: #ff8ab8;
+  --l-orange-deep: #e62e76;
+
   --l-teal: #1f8a83;
   --l-teal-soft: #6fbcb4;
-  --l-line: rgba(32, 29, 26, 0.12);
+
+  --l-line: rgba(22, 19, 14, 0.14);
   --l-line-dark: rgba(244, 237, 225, 0.14);
 
-  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-family: var(--font-landing-body, ui-sans-serif), system-ui, sans-serif;
   background: var(--l-cream);
   color: var(--l-charcoal);
   overflow-x: clip;
@@ -24,7 +34,16 @@
 
 .landing ::selection {
   background: var(--l-orange);
-  color: var(--l-navy-deep);
+  color: white;
+}
+
+.landing-display {
+  font-family: var(--font-display, ui-sans-serif), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.landing-hand {
+  font-family: var(--font-hand, cursive);
 }
 
 .landing-scrollbar::-webkit-scrollbar {
@@ -38,4 +57,22 @@
 .landing-noise {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
+}
+
+.landing-blob {
+  border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+  animation: landing-blob-morph 14s ease-in-out infinite;
+}
+
+@keyframes landing-blob-morph {
+  0%,
+  100% {
+    border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+  }
+  34% {
+    border-radius: 63% 37% 41% 59% / 51% 61% 39% 49%;
+  }
+  67% {
+    border-radius: 37% 63% 56% 44% / 63% 37% 63% 37%;
+  }
 }

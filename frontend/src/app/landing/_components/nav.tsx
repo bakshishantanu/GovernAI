@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, useScroll, useMotionValueEvent } from "framer-motion";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, ArrowRight } from "lucide-react";
 
 const LINKS = [
   { href: "#problem", label: "Why" },
@@ -20,51 +20,30 @@ export function LandingNav() {
     setSolid(latest > 60);
   });
 
-  // Section under the nav starts dark; flip nav text color once we scroll past hero.
-  const [onDark, setOnDark] = useState(true);
-  useEffect(() => {
-    const hero = document.getElementById("hero");
-    if (!hero) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setOnDark(entry.isIntersecting),
-      { rootMargin: "-64px 0px 0px 0px", threshold: 0 }
-    );
-    observer.observe(hero);
-    return () => observer.disconnect();
-  }, []);
-
-  const light = onDark && !solid;
-
   return (
     <motion.header
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
       className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300 ${
-        solid
-          ? "bg-[var(--l-cream)]/90 backdrop-blur-md border-b border-[var(--l-line)]"
-          : "bg-transparent border-b border-transparent"
+        solid ? "bg-[var(--l-cream)]/90 backdrop-blur-md shadow-sm" : "bg-transparent"
       }`}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
         <a
           href="#hero"
-          className={`flex items-center gap-2 font-semibold tracking-tight transition-colors ${
-            light ? "text-[var(--l-ink)]" : "text-[var(--l-charcoal)]"
-          }`}
+          className="landing-display flex items-center gap-2 text-lg text-[var(--l-ink)]"
         >
           <ShieldCheck className="w-5 h-5 text-[var(--l-orange)]" />
           GovernAI
         </a>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm">
+        <nav className="hidden md:flex items-center gap-2 rounded-full bg-[var(--l-cream)]/80 backdrop-blur px-2 py-2 shadow-sm">
           {LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
-              className={`transition-colors hover:text-[var(--l-orange)] ${
-                light ? "text-[var(--l-ink)]/80" : "text-[var(--l-charcoal)]/70"
-              }`}
+              className="text-sm font-medium px-4 py-2 rounded-full text-[var(--l-ink)]/75 hover:bg-[var(--l-yellow-pale)] hover:text-[var(--l-ink)] transition-colors"
             >
               {l.label}
             </a>
@@ -73,13 +52,10 @@ export function LandingNav() {
 
         <Link
           href="/login"
-          className={`text-sm font-medium px-4 py-2 rounded-full transition-colors ${
-            light
-              ? "bg-[var(--l-cream)] text-[var(--l-navy-deep)] hover:bg-[var(--l-orange)] hover:text-white"
-              : "bg-[var(--l-navy-deep)] text-[var(--l-cream)] hover:bg-[var(--l-orange)]"
-          }`}
+          className="group inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-full bg-[var(--l-orange)] text-white shadow-[0_5px_0_0_var(--l-orange-deep)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_0_var(--l-orange-deep)] transition-transform"
         >
-          Sign in
+          Log-in / Sign-up
+          <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
         </Link>
       </div>
     </motion.header>

@@ -70,7 +70,7 @@ export function FeatureGrid() {
           <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
             Everything, built in
           </span>
-          <h2 className="mt-4 text-3xl md:text-5xl font-semibold tracking-tight text-[var(--l-charcoal)] leading-tight">
+          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] leading-[1] tracking-tight">
             Governance that ships with the agent, not after it.
           </h2>
         </motion.div>

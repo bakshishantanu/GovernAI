@@ -17,7 +17,7 @@ export function Passport() {
           <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-teal)] font-semibold">
             Meet the Agent Passport
           </span>
-          <h2 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight text-[var(--l-charcoal)] leading-tight">
+          <h2 className="landing-display mt-4 text-4xl md:text-5xl text-[var(--l-charcoal)] leading-[1.02] tracking-tight">
             Governance is generated at creation — not configured afterward.
           </h2>
           <p className="mt-5 text-[var(--l-charcoal)]/65 leading-relaxed max-w-md">
