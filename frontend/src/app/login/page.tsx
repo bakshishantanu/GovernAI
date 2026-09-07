@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { login, signup } from "../auth/actions";
-import { ShieldCheck, ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -60,9 +60,9 @@ export default function LoginPage() {
       >
         <div className="rounded-[32px] bg-white shadow-2xl shadow-black/10 p-8">
           <div className="flex flex-col items-center mb-7 text-center">
-            <div className="w-11 h-11 rounded-2xl bg-[var(--l-orange)]/10 border border-[var(--l-orange)]/25 flex items-center justify-center mb-4">
-              <ShieldCheck className="w-5 h-5 text-[var(--l-orange)]" />
-            </div>
+            <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold mb-3">
+              GovernAI
+            </span>
             <h1 className="landing-display text-2xl text-[var(--l-charcoal)] leading-none">
               {isLogin ? "Sign in to GovernAI" : "Create an account"}
             </h1>
