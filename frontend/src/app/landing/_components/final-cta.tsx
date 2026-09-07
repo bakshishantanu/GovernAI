@@ -6,7 +6,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 
 export function FinalCta() {
   return (
-    <section className="relative bg-[var(--l-navy-deep)] text-[var(--l-ink)] overflow-hidden">
+    <section className="relative bg-[var(--l-navy-deep)] text-[var(--l-cream)] overflow-hidden">
       <div className="landing-noise absolute inset-0 pointer-events-none" />
       <motion.div
         aria-hidden
@@ -47,7 +47,7 @@ export function FinalCta() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="mt-5 text-[var(--l-ink)]/60 max-w-md mx-auto"
+          className="mt-5 text-[var(--l-cream)]/60 max-w-md mx-auto"
         >
           Sign in to build your first agent, or create an account for your team in
           under a minute.
@@ -77,7 +77,7 @@ export function FinalCta() {
       </div>
 
       <div className="relative border-t border-[var(--l-line-dark)]">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--l-ink)]/40">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--l-cream)]/40">
           <span>© {new Date().getFullYear()} GovernAI · Team Fennec</span>
           <span>Deloitte Capstone Program 2026 · Manipal University Jaipur</span>
         </div>

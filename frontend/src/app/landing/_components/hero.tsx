@@ -105,7 +105,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
           className="relative hidden md:block"
         >
-          <div className="rounded-[28px] bg-[var(--l-navy-deep)] text-[var(--l-ink,#fff)] p-6 shadow-2xl shadow-black/30 border border-white/10 rotate-[-6deg]">
+          <div className="rounded-[28px] bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-6 shadow-2xl shadow-black/30 border border-white/10 rotate-[-6deg]">
             <div className="flex items-center justify-between text-[var(--l-cream)]">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-[var(--l-orange-soft)]">
                 <ShieldCheck className="w-3.5 h-3.5" />

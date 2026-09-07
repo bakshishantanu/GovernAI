@@ -120,7 +120,7 @@ export function HowItWorks() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.35, ease: "easeOut" }}
-                className="w-full max-w-sm rounded-3xl bg-[var(--l-navy-deep)] text-[var(--l-ink)] p-8 border border-[var(--l-line-dark)] shadow-2xl shadow-black/10"
+                className="w-full max-w-sm rounded-3xl bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-8 border border-[var(--l-line-dark)] shadow-2xl shadow-black/10"
               >
                 <StepVisual step={active} />
               </motion.div>
@@ -142,7 +142,7 @@ function StepVisual({ step }: { step: number }) {
           {["Ticketing", "Doc search", "SQL query", "+ Skill"].map((s) => (
             <div
               key={s}
-              className="rounded-lg border border-[var(--l-line-dark)] bg-white/[0.04] px-3 py-3 text-xs font-mono text-[var(--l-ink)]/70"
+              className="rounded-lg border border-[var(--l-line-dark)] bg-white/[0.04] px-3 py-3 text-xs font-mono text-[var(--l-cream)]/70"
             >
               {s}
             </div>
@@ -159,7 +159,7 @@ function StepVisual({ step }: { step: number }) {
           {["Identity issued", "Scope assigned", "Budget cap set"].map((s) => (
             <div key={s} className="flex items-center gap-2.5 text-sm">
               <Check className="w-4 h-4 text-[var(--l-teal-soft)]" />
-              <span className="font-mono text-[var(--l-ink)]/80">{s}</span>
+              <span className="font-mono text-[var(--l-cream)]/80">{s}</span>
             </div>
           ))}
         </div>
@@ -187,7 +187,7 @@ function StepVisual({ step }: { step: number }) {
   return (
     <div>
       <Icon className="w-7 h-7 text-[var(--l-orange-soft)]" />
-      <div className="mt-6 space-y-2 font-mono text-xs text-[var(--l-ink)]/60">
+      <div className="mt-6 space-y-2 font-mono text-xs text-[var(--l-cream)]/60">
         <div>12:04:01 · tool_call · allowed · $0.004</div>
         <div>12:04:03 · tool_call · blocked · $0.000</div>
         <div>12:04:07 · tool_call · allowed · $0.011</div>

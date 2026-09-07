@@ -34,7 +34,7 @@ export function CostGovernance() {
   return (
     <section
       id="cost"
-      className="relative bg-[var(--l-navy-deep)] text-[var(--l-ink)] py-28 md:py-36 overflow-hidden"
+      className="relative bg-[var(--l-navy-deep)] text-[var(--l-cream)] py-28 md:py-36 overflow-hidden"
     >
       <div className="landing-noise absolute inset-0 pointer-events-none" />
       <div className="max-w-6xl mx-auto px-6 relative grid md:grid-cols-2 gap-16 items-center">
@@ -50,7 +50,7 @@ export function CostGovernance() {
           <h2 className="landing-display mt-4 text-4xl md:text-5xl leading-[1.03] tracking-tight">
             Live cost governance. Not a dashboard you check later.
           </h2>
-          <p className="mt-5 text-[var(--l-ink)]/60 leading-relaxed max-w-md">
+          <p className="mt-5 text-[var(--l-cream)]/60 leading-relaxed max-w-md">
             Every agent gets a real spending budget that auto-pauses it the moment
             it&apos;s exceeded. Most governance platforms treat cost as an
             afterthought — GovernAI makes it the primary, demoable feature.
@@ -66,7 +66,7 @@ export function CostGovernance() {
           className="rounded-3xl border border-[var(--l-line-dark)] bg-white/[0.03] p-8"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-[var(--l-ink)]/60">
+            <div className="flex items-center gap-2 text-sm text-[var(--l-cream)]/60">
               <Wallet className="w-4 h-4" />
               Invoice Triage Bot — daily budget
             </div>
@@ -86,7 +86,7 @@ export function CostGovernance() {
             <span className="text-4xl font-mono font-semibold">
               ${spend.toFixed(2)}
             </span>
-            <span className="text-[var(--l-ink)]/40 text-sm">
+            <span className="text-[var(--l-cream)]/40 text-sm">
               / ${CAP.toFixed(2)} cap
             </span>
           </div>
@@ -112,7 +112,7 @@ export function CostGovernance() {
                 className="rounded-xl bg-white/[0.03] border border-[var(--l-line-dark)] py-3"
               >
                 <div className="text-sm font-mono">{s.value}</div>
-                <div className="text-[10px] uppercase tracking-wide text-[var(--l-ink)]/40 mt-1">
+                <div className="text-[10px] uppercase tracking-wide text-[var(--l-cream)]/40 mt-1">
                   {s.label}
                 </div>
               </div>

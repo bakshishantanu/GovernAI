@@ -48,11 +48,11 @@ export function Personas() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.4 }}
               transition={{ duration: 0.55, delay: i * 0.1, ease: "easeOut" }}
-              className="rounded-2xl bg-[var(--l-navy-deep)] text-[var(--l-ink)] p-7"
+              className="rounded-2xl bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-7"
             >
               <p.icon className="w-6 h-6 text-[var(--l-orange-soft)]" />
               <h3 className="mt-5 font-semibold">{p.tag}</h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-[var(--l-ink)]/60">
+              <p className="mt-2.5 text-sm leading-relaxed text-[var(--l-cream)]/60">
                 {p.body}
               </p>
             </motion.div>
