@@ -13,14 +13,24 @@ class AuditRepository:
         return event
         
     async def get_events_for_org(self, org_id: UUID, limit: int = 50, cursor: UUID | None = None) -> list[AuditEvent]:
-        query = select(AuditEvent).where(AuditEvent.org_id == org_id).order_by(AuditEvent.timestamp.desc())
+        query = (
+            select(AuditEvent)
+            .where(AuditEvent.org_id == org_id)
+            .order_by(AuditEvent.timestamp.desc(), AuditEvent.id.desc())
+        )
         
         if cursor:
-            # For cursor pagination, we find the timestamp of the cursor event and fetch events older than it
-            cursor_result = await self.session.execute(select(AuditEvent.timestamp).where(AuditEvent.id == cursor))
-            cursor_ts = cursor_result.scalar_one_or_none()
-            if cursor_ts:
-                query = query.where(AuditEvent.timestamp < cursor_ts)
+            # Composite cursor: (timestamp, id) so rows sharing a timestamp are never skipped
+            cursor_result = await self.session.execute(
+                select(AuditEvent.timestamp, AuditEvent.id).where(AuditEvent.id == cursor)
+            )
+            cursor_row = cursor_result.one_or_none()
+            if cursor_row:
+                cursor_ts, cursor_id = cursor_row
+                from sqlalchemy import tuple_
+                query = query.where(
+                    tuple_(AuditEvent.timestamp, AuditEvent.id) < tuple_(cursor_ts, cursor_id)
+                )
                 
         query = query.limit(limit)
         result = await self.session.execute(query)

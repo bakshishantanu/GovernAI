@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 from datetime import datetime
 from uuid import UUID, uuid4
-from sqlalchemy import Column, String, DateTime, ForeignKey, text
+from sqlalchemy import Column, String, DateTime, Float, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.infrastructure.database import Base
@@ -21,6 +21,7 @@ class AgentPassport(Base):
     lifecycle_state: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    budget_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     agent: Mapped["Agent"] = relationship("Agent", back_populates="passport")
     permissions: Mapped[list["Permission"]] = relationship("Permission", back_populates="passport")
