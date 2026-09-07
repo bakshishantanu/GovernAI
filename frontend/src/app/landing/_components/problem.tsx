@@ -33,7 +33,7 @@ const item = {
 export function Problem() {
   return (
     <section id="problem" className="relative bg-[var(--l-cream)] py-28 md:py-36 overflow-hidden">
-      <div className="landing-blob pointer-events-none absolute -bottom-32 -right-32 w-[420px] h-[420px] bg-[var(--l-yellow)] opacity-30" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -bottom-32 -right-32 w-[420px] h-[420px] bg-[var(--l-yellow)] opacity-30" />
       <div className="max-w-6xl mx-auto px-6 relative">
         <motion.div
           initial={{ opacity: 0, y: 24 }}

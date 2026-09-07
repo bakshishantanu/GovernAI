@@ -67,9 +67,36 @@
   mix-blend-mode: overlay;
 }
 
+/* Static organic shape only, cheap to composite (transform-only) when the
+   element is also scroll-linked via JS (e.g. Hero's blobs) — animating
+   border-radius forces a repaint every frame, which fights with a
+   simultaneous scroll transform on the same (blurred, large) layer. */
 .landing-blob {
   border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+}
+
+/* Opt-in continuous morph, only for blobs with no competing scroll
+   transform on the same element. */
+.landing-blob-animate {
   animation: landing-blob-morph 14s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-blob-animate {
+    animation: none;
+  }
+}
+
+/* Smooth in-page anchor scrolling (nav links, "see how it works", etc.)
+   scoped to routes that use the landing design system only. */
+html:has(.landing) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing) {
+    scroll-behavior: auto;
+  }
 }
 
 .landing-marquee-track {

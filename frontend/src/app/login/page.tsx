@@ -39,9 +39,9 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center bg-[var(--l-yellow)] text-[var(--l-ink)] p-4 overflow-hidden">
-      <div className="landing-blob pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] bg-[var(--l-yellow-deep)] opacity-70" />
-      <div className="landing-blob pointer-events-none absolute -bottom-48 -right-40 w-[480px] h-[480px] bg-[var(--l-orange)] opacity-20" />
-      <div className="landing-blob pointer-events-none absolute top-1/3 -right-24 w-[300px] h-[300px] bg-[var(--l-teal)] opacity-15" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -top-40 -left-40 w-[520px] h-[520px] bg-[var(--l-yellow-deep)] opacity-70" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -bottom-48 -right-40 w-[480px] h-[480px] bg-[var(--l-orange)] opacity-20" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute top-1/3 -right-24 w-[300px] h-[300px] bg-[var(--l-teal)] opacity-15" />
       <div className="landing-noise absolute inset-0 pointer-events-none" />
 
       <Link
