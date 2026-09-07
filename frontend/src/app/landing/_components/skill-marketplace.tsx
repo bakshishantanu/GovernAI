@@ -1,18 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Ticket,
+  Database,
+  FileSearch,
+  Telescope,
+  Terminal,
+  CalendarClock,
+  MessageSquare,
+} from "lucide-react";
 
 type Skill = {
-  status: "LIVE" | "NEW" | "IN THE LAB";
+  status: "LIVE" | "IN THE LAB";
   name: string;
   body: string;
   tags: string[];
   bg: string;
   fg: string;
+  icon: ElementType;
   dashed?: boolean;
 };
+
+const TAG_CHIPS = [
+  { bg: "var(--l-yellow)", fg: "var(--l-ink)" },
+  { bg: "var(--l-orange)", fg: "white" },
+  { bg: "var(--l-teal)", fg: "white" },
+  { bg: "var(--l-cream)", fg: "var(--l-charcoal)" },
+];
 
 const SKILLS: Skill[] = [
   {
@@ -22,6 +40,7 @@ const SKILLS: Skill[] = [
     tags: ["read_ticket", "search_tickets", "create_ticket_reply"],
     bg: "var(--l-teal)",
     fg: "var(--l-cream)",
+    icon: Ticket,
   },
   {
     status: "LIVE",
@@ -30,6 +49,7 @@ const SKILLS: Skill[] = [
     tags: ["Read-only", "AST-validated", "In-scope tables only"],
     bg: "var(--l-navy-deep)",
     fg: "var(--l-cream)",
+    icon: Database,
   },
   {
     status: "LIVE",
@@ -38,14 +58,17 @@ const SKILLS: Skill[] = [
     tags: ["Semantic", "Scope-filtered", "Citation-grounded"],
     bg: "var(--l-orange)",
     fg: "white",
+    icon: FileSearch,
   },
   {
-    status: "NEW",
+    status: "IN THE LAB",
     name: "Research",
     body: "Multi-source web research that comes back as structured findings, not a pile of tabs for a human to sift through.",
     tags: ["Multi-source", "Structured output"],
-    bg: "var(--l-yellow-deep)",
-    fg: "var(--l-ink)",
+    bg: "var(--l-cream)",
+    fg: "var(--l-charcoal)",
+    icon: Telescope,
+    dashed: true,
   },
   {
     status: "IN THE LAB",
@@ -54,6 +77,7 @@ const SKILLS: Skill[] = [
     tags: ["Isolated", "Time-boxed"],
     bg: "var(--l-cream)",
     fg: "var(--l-charcoal)",
+    icon: Terminal,
     dashed: true,
   },
   {
@@ -63,6 +87,7 @@ const SKILLS: Skill[] = [
     tags: ["Owner-scoped", "Policy-aware"],
     bg: "var(--l-cream)",
     fg: "var(--l-charcoal)",
+    icon: CalendarClock,
     dashed: true,
   },
   {
@@ -72,6 +97,7 @@ const SKILLS: Skill[] = [
     tags: ["Channel-scoped", "No DMs"],
     bg: "var(--l-cream)",
     fg: "var(--l-charcoal)",
+    icon: MessageSquare,
     dashed: true,
   },
 ];
@@ -112,7 +138,7 @@ export function SkillMarketplace() {
   const scrollByCard = (dir: 1 | -1) => {
     const el = trackRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir * 300, behavior: "smooth" });
+    el.scrollBy({ left: dir * 320, behavior: "smooth" });
   };
 
   return (
@@ -134,7 +160,7 @@ export function SkillMarketplace() {
             </h2>
           </motion.div>
 
-          <div className="hidden md:flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => scrollByCard(-1)}
@@ -159,58 +185,71 @@ export function SkillMarketplace() {
         <div
           ref={trackRef}
           onScroll={updateEdges}
-          className="mt-12 flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory landing-scrollbar [scrollbar-width:thin]"
+          className="landing-carousel mt-12 flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory"
         >
-          {SKILLS.map((s, i) => (
-            <motion.div
-              key={s.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.5, delay: (i % 4) * 0.08, ease: "easeOut" }}
-              whileHover={{ y: -6 }}
-              className={`shrink-0 w-64 md:w-72 min-h-[380px] rounded-[28px] p-6 flex flex-col snap-start ${
-                s.dashed ? "border-2 border-dashed border-[var(--l-line)]" : ""
-              }`}
-              style={{ background: s.dashed ? "transparent" : s.bg, color: s.fg }}
-            >
-              <span
-                className={`self-start text-[10px] font-semibold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full ${
-                  s.dashed ? "border border-current opacity-60" : "bg-black/15"
+          {SKILLS.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.div
+                key={s.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.5, delay: (i % 4) * 0.08, ease: "easeOut" }}
+                whileHover={{ y: -6 }}
+                className={`relative shrink-0 w-64 md:w-[19rem] min-h-[460px] overflow-hidden rounded-[28px] p-6 flex flex-col snap-start ${
+                  s.dashed ? "border-2 border-dashed border-[var(--l-line)]" : ""
                 }`}
+                style={{ background: s.dashed ? "transparent" : s.bg, color: s.fg }}
               >
-                {s.status}
-              </span>
+                <Icon
+                  className="pointer-events-none absolute -bottom-8 -right-8 w-44 h-44"
+                  style={{ opacity: s.dashed ? 0.06 : 0.14 }}
+                  strokeWidth={1}
+                />
 
-              <div className="mt-auto pt-8">
-                <h3 className="landing-display text-2xl leading-none">{s.name}</h3>
-                <p
-                  className="mt-3 text-sm leading-relaxed"
-                  style={{ opacity: s.dashed ? 0.65 : 0.8 }}
+                <span
+                  className={`relative self-start text-[10px] font-semibold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full ${
+                    s.dashed ? "border border-current opacity-60" : "bg-black/15"
+                  }`}
                 >
-                  {s.body}
-                </p>
+                  {s.status}
+                </span>
 
-                {s.dashed ? (
-                  <div className="mt-5 flex items-center gap-2 text-xs uppercase tracking-wide opacity-60">
-                    <BrewingDots color={s.fg} />
-                    brewing
-                  </div>
-                ) : (
-                  <div className="mt-5 flex flex-wrap gap-1.5">
-                    {s.tags.map((t) => (
-                      <span
-                        key={t}
-                        className="text-[10px] font-mono px-2 py-1 rounded-full bg-black/15"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          ))}
+                <div className="relative mt-auto pt-8">
+                  <h3 className="landing-display text-2xl leading-none">{s.name}</h3>
+                  <p
+                    className="mt-3 text-sm leading-relaxed"
+                    style={{ opacity: s.dashed ? 0.65 : 0.8 }}
+                  >
+                    {s.body}
+                  </p>
+
+                  {s.dashed ? (
+                    <div className="mt-5 flex items-center gap-2 text-xs uppercase tracking-wide opacity-60">
+                      <BrewingDots color={s.fg} />
+                      brewing
+                    </div>
+                  ) : (
+                    <div className="mt-5 flex flex-wrap gap-1.5">
+                      {s.tags.map((t, ti) => {
+                        const chip = TAG_CHIPS[ti % TAG_CHIPS.length];
+                        return (
+                          <span
+                            key={t}
+                            className="text-[10px] font-mono px-2 py-1 rounded-full"
+                            style={{ background: chip.bg, color: chip.fg }}
+                          >
+                            {t}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>
