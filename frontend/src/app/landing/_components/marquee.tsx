@@ -23,20 +23,20 @@ export function Marquee() {
   return (
     <div
       ref={ref}
-      className="relative bg-[var(--l-cream-deep)] py-6 md:py-10 overflow-hidden"
+      className="relative bg-[var(--l-cream-deep)] py-1 md:py-3 overflow-hidden"
     >
       <svg
-        viewBox="0 0 1200 260"
-        className="w-full h-[150px] md:h-[210px]"
+        viewBox="0 0 1200 200"
+        className="w-full h-[105px] md:h-[150px]"
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
-          <path id="marquee-curve" d="M -300 210 Q 600 10 1500 210" fill="none" />
+          <path id="marquee-curve" d="M -300 160 Q 600 5 1500 160" fill="none" />
         </defs>
         <text
           className="landing-display"
           style={{ fill: "var(--l-charcoal)" }}
-          fontSize="118"
+          fontSize="92"
         >
           <textPath ref={textPathRef} href="#marquee-curve" startOffset="30%">
             {STATEMENT}

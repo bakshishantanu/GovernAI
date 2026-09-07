@@ -5,12 +5,12 @@ import { motion, useMotionValue, useSpring } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
 const FEATURES = [
-  { title: "Skill marketplace", bg: "var(--l-orange)", fg: "white", pos: "md:top-[0%] md:left-[32%]" },
-  { title: "Policy engine", bg: "var(--l-navy-deep)", fg: "white", pos: "md:top-[10%] md:left-[66%]" },
-  { title: "Live cost tracking", bg: "var(--l-teal)", fg: "white", pos: "md:top-[38%] md:left-[2%]" },
-  { title: "Append-only audit log", bg: "var(--l-orange-soft)", fg: "var(--l-ink)", pos: "md:top-[42%] md:left-[70%]" },
-  { title: "One-click kill switch", bg: "var(--l-orange-deep)", fg: "white", pos: "md:top-[70%] md:left-[24%]" },
-  { title: "Scoped ownership", bg: "var(--l-teal-soft)", fg: "var(--l-ink)", pos: "md:top-[72%] md:left-[58%]" },
+  { title: "Skill marketplace", bg: "var(--l-orange)", fg: "white", pos: "md:top-[10%] md:left-[36%]" },
+  { title: "Policy engine", bg: "var(--l-navy-deep)", fg: "white", pos: "md:top-[20%] md:left-[60%]" },
+  { title: "Live cost tracking", bg: "var(--l-teal)", fg: "white", pos: "md:top-[44%] md:left-[16%]" },
+  { title: "Append-only audit log", bg: "var(--l-orange-soft)", fg: "var(--l-ink)", pos: "md:top-[46%] md:left-[64%]" },
+  { title: "One-click kill switch", bg: "var(--l-orange-deep)", fg: "white", pos: "md:top-[70%] md:left-[32%]" },
+  { title: "Scoped ownership", bg: "var(--l-teal-soft)", fg: "var(--l-ink)", pos: "md:top-[70%] md:left-[54%]" },
 ];
 
 function MagneticTag({
@@ -84,7 +84,7 @@ export function FeatureGrid() {
           </h2>
         </motion.div>
 
-        <div className="relative mt-16 md:mt-4 md:h-[560px] flex flex-col items-center gap-5 md:block">
+        <div className="relative mt-16 md:mt-4 md:h-[440px] flex flex-col items-center gap-5 md:block">
           <CentralMark />
 
           {FEATURES.map((f, i) => (
