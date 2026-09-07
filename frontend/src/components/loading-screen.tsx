@@ -33,7 +33,7 @@ export function LoadingScreen() {
 
   return (
     <div
-      className={`${archivoBlack.variable} fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-[#0b0c10] text-[#fff8ec] overflow-hidden`}
+      className={`${archivoBlack.variable} fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-8 bg-[#0b0c10]/70 backdrop-blur-md text-[#fff8ec] overflow-hidden`}
     >
       <div className="landing-noise absolute inset-0 pointer-events-none" />
       <div className="landing-blob pointer-events-none absolute -bottom-40 left-1/2 -translate-x-1/2 w-[420px] h-[420px] bg-[#ff3d8a] opacity-[0.06]" />
