@@ -12,16 +12,16 @@ export function Marquee() {
     offset: ["start end", "end start"],
   });
 
-  const x = useTransform(scrollYProgress, [0, 1], ["28vw", "-70vw"]);
+  const x = useTransform(scrollYProgress, [0, 1], ["18vw", "-45vw"]);
 
   return (
     <div
       ref={ref}
-      className="relative bg-[var(--l-cream-deep)] py-20 md:py-28 overflow-hidden"
+      className="relative bg-[var(--l-cream-deep)] py-16 md:py-24 overflow-hidden"
     >
       <motion.div
         style={{ x }}
-        className="landing-display whitespace-nowrap text-6xl sm:text-8xl md:text-9xl text-[var(--l-charcoal)] -rotate-3 inline-block will-change-transform"
+        className="landing-marquee-font whitespace-nowrap font-semibold text-4xl sm:text-5xl md:text-6xl text-[var(--l-charcoal)] -rotate-3 inline-block will-change-transform"
       >
         {STATEMENT}
       </motion.div>

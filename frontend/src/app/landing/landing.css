@@ -46,6 +46,11 @@
   font-family: var(--font-hand, cursive);
 }
 
+.landing-marquee-font {
+  font-family: var(--font-marquee, ui-sans-serif), system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
 .landing-scrollbar::-webkit-scrollbar {
   width: 10px;
 }
