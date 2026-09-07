@@ -6,20 +6,32 @@ const PERSONAS = [
   {
     tag: "Platform / security engineers",
     body: "Install GovernAI as the mandatory checkpoint every new agent must pass through before it can act.",
+    bg: "var(--l-orange)",
+    fg: "white",
+    rotate: -4,
+    shift: "md:translate-y-0",
   },
   {
     tag: "Agent builders",
     body: "Assemble agents from existing skills instead of writing the same integrations from scratch, again.",
+    bg: "var(--l-yellow-deep)",
+    fg: "var(--l-ink)",
+    rotate: 3,
+    shift: "md:translate-y-12",
   },
   {
     tag: "IT & budget owners",
     body: "One dashboard view of every agent (owner, access, live cost) with the power to pause any of them instantly.",
+    bg: "var(--l-teal)",
+    fg: "white",
+    rotate: -2,
+    shift: "md:-translate-y-4",
   },
 ];
 
 export function Personas() {
   return (
-    <section className="relative bg-[var(--l-cream-deep)] py-28 md:py-36">
+    <section className="relative bg-[var(--l-cream-deep)] py-28 md:py-36 overflow-hidden">
       <div className="max-w-6xl mx-auto px-6">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -36,23 +48,29 @@ export function Personas() {
           </h2>
         </motion.div>
 
-        <div className="mt-16 grid md:grid-cols-3 gap-6">
+        <div className="mt-20 flex flex-wrap items-start justify-center gap-x-8 gap-y-14 md:gap-y-0">
           {PERSONAS.map((p, i) => (
             <motion.div
               key={p.tag}
-              initial={{ opacity: 0, y: 32 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.4, rotate: p.rotate + (i % 2 === 0 ? -28 : 28) }}
+              whileInView={{ opacity: 1, scale: 1, rotate: p.rotate }}
               viewport={{ once: true, amount: 0.4 }}
-              transition={{ duration: 0.55, delay: i * 0.1, ease: "easeOut" }}
-              className="rounded-2xl bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-7"
+              transition={{
+                type: "spring",
+                stiffness: 220,
+                damping: 16,
+                delay: i * 0.12,
+              }}
+              whileHover={{ rotate: 0, scale: 1.04 }}
+              className={`w-full max-w-xs shrink-0 ${p.shift}`}
             >
-              <span className="landing-display text-2xl text-[var(--l-orange-soft)]">
-                0{i + 1}
-              </span>
-              <h3 className="mt-3 font-semibold">{p.tag}</h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-[var(--l-cream)]/60">
-                {p.body}
-              </p>
+              <div
+                className="rounded-[36px] px-7 py-8 shadow-lg shadow-black/10"
+                style={{ background: p.bg, color: p.fg }}
+              >
+                <h3 className="landing-display text-2xl leading-tight">{p.tag}</h3>
+                <p className="mt-3 text-sm leading-relaxed opacity-85">{p.body}</p>
+              </div>
             </motion.div>
           ))}
         </div>

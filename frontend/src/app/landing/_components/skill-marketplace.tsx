@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ElementType } from "react";
+import { useEffect, useState, type ElementType } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   Ticket,
   Database,
@@ -34,6 +32,11 @@ const TAG_CHIPS = [
   { bg: "var(--l-teal)", fg: "white" },
   { bg: "var(--l-cream)", fg: "var(--l-charcoal)" },
 ];
+
+// per-card resting tilt/offset, so the row reads as independently placed
+// cards rather than a machined grid
+const ROTATIONS = [-2, 2, -1.5, 1.5, -2, 1, -1];
+const SHIFTS = ["md:mt-0", "md:mt-6", "md:-mt-3", "md:mt-4", "md:mt-0", "md:mt-6", "md:-mt-3"];
 
 const SKILLS: Skill[] = [
   {
@@ -141,9 +144,6 @@ function BrewingDots({ color }: { color: string }) {
 }
 
 export function SkillMarketplace() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(false);
   const [openSkill, setOpenSkill] = useState<Skill | null>(null);
 
   useEffect(() => {
@@ -162,79 +162,50 @@ export function SkillMarketplace() {
     return () => window.removeEventListener("keydown", onKey);
   }, [openSkill]);
 
-  const updateEdges = () => {
-    const el = trackRef.current;
-    if (!el) return;
-    setAtStart(el.scrollLeft <= 4);
-    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
-  };
-
-  const scrollByCard = (dir: 1 | -1) => {
-    const el = trackRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * 320, behavior: "smooth" });
-  };
-
   return (
     <section id="skills" className="relative bg-[var(--l-cream-deep)] py-28 md:py-36 overflow-hidden">
       <div className="max-w-6xl mx-auto px-6">
-        <div className="flex items-end justify-between gap-6 flex-wrap">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.5 }}
-            transition={{ duration: 0.6 }}
-            className="max-w-xl"
-          >
-            <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
-              Assembled, not built from scratch
-            </span>
-            <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] leading-[1] tracking-tight">
-              Pick your skills.
-            </h2>
-          </motion.div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => scrollByCard(-1)}
-              disabled={atStart}
-              aria-label="Scroll skills left"
-              className="w-11 h-11 rounded-full bg-white border border-[var(--l-line)] flex items-center justify-center text-[var(--l-charcoal)] disabled:opacity-30 hover:border-[var(--l-orange)] hover:text-[var(--l-orange)] transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollByCard(1)}
-              disabled={atEnd}
-              aria-label="Scroll skills right"
-              className="w-11 h-11 rounded-full bg-[var(--l-charcoal)] flex items-center justify-center text-white disabled:opacity-30 hover:bg-[var(--l-orange)] transition-colors"
-            >
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div
-          ref={trackRef}
-          onScroll={updateEdges}
-          className="landing-carousel mt-10 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory"
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.5 }}
+          transition={{ duration: 0.6 }}
+          className="max-w-xl"
         >
+          <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
+            Assembled, not built from scratch
+          </span>
+          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] leading-[1] tracking-tight">
+            Pick your skills.
+          </h2>
+        </motion.div>
+
+        <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-10">
           {SKILLS.map((s, i) => {
             const Icon = s.icon;
+            const rotate = ROTATIONS[i % ROTATIONS.length];
+            const shift = SHIFTS[i % SHIFTS.length];
             return (
               <motion.button
                 type="button"
                 key={s.name}
                 onClick={() => setOpenSkill(s)}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{
+                  opacity: 0,
+                  scale: 0.5,
+                  rotate: rotate + (i % 2 === 0 ? -22 : 22),
+                }}
+                whileInView={{ opacity: 1, scale: 1, rotate }}
                 viewport={{ once: true, amount: 0.3 }}
-                transition={{ duration: 0.5, delay: (i % 4) * 0.08, ease: "easeOut" }}
-                whileHover={{ y: -10, scale: 1.03, rotate: i % 2 === 0 ? -1 : 1 }}
-                whileTap={{ scale: 0.99 }}
-                className={`group relative shrink-0 w-52 md:w-60 min-h-[360px] overflow-hidden rounded-[24px] p-5 flex flex-col snap-start text-left cursor-pointer shadow-md hover:shadow-2xl hover:shadow-black/20 transition-shadow ${
+                transition={{
+                  type: "spring",
+                  stiffness: 220,
+                  damping: 17,
+                  delay: (i % 7) * 0.07,
+                }}
+                whileHover={{ y: -10, scale: 1.05, rotate: 0 }}
+                whileTap={{ scale: 0.98 }}
+                className={`group relative shrink-0 w-52 md:w-56 min-h-[350px] overflow-hidden rounded-[24px] p-5 flex flex-col text-left cursor-pointer shadow-lg shadow-black/10 hover:shadow-2xl hover:shadow-black/20 ${shift} ${
                   s.dashed ? "border-2 border-dashed border-[var(--l-line)]" : ""
                 }`}
                 style={{ background: s.dashed ? "transparent" : s.bg, color: s.fg }}
