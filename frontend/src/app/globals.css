@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Priya's brand tokens (--l-*) and utilities (.landing-display, .landing-blob, …),
+   imported globally so the app shell can share them (D-038). Only the `.landing`
+   and `.landing *` selectors set a background/reset — everything else is inert
+   until a wrapper opts in with class="landing". */
+@import "./landing/landing.css";
 
 @custom-variant dark (&:is(.dark *));
 
