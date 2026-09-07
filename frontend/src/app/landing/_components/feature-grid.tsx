@@ -1,65 +1,36 @@
 "use client";
 
-import { type MouseEvent as ReactMouseEvent } from "react";
+import { type ReactNode, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { motion, useMotionValue, useSpring } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
 
 const FEATURES = [
-  {
-    n: "01",
-    title: "Skill marketplace",
-    body: "A curated registry of reusable connectors (ticketing, RAG, SQL), each declaring the permissions it needs.",
-  },
-  {
-    n: "02",
-    title: "Policy engine",
-    body: "Intercepts every tool call live against the agent's scope and global deny rules. No silent access.",
-  },
-  {
-    n: "03",
-    title: "Live cost tracking",
-    body: "Token counts and model pricing roll up into per-agent, per-execution cost attribution, in real time.",
-  },
-  {
-    n: "04",
-    title: "Append-only audit log",
-    body: "Every action, allowed or blocked, is logged unconditionally. 100% coverage, by construction.",
-  },
-  {
-    n: "05",
-    title: "One-click kill switch",
-    body: "Suspend any agent instantly from the dashboard, with immediate effect on running executions.",
-  },
-  {
-    n: "06",
-    title: "Scoped ownership",
-    body: "Every agent has exactly one owner and an RBAC permission set, with no ambiguous access.",
-  },
+  { title: "Skill marketplace", bg: "var(--l-orange)", fg: "white", pos: "md:top-[0%] md:left-[32%]" },
+  { title: "Policy engine", bg: "var(--l-navy-deep)", fg: "white", pos: "md:top-[10%] md:left-[66%]" },
+  { title: "Live cost tracking", bg: "var(--l-teal)", fg: "white", pos: "md:top-[38%] md:left-[2%]" },
+  { title: "Append-only audit log", bg: "var(--l-orange-soft)", fg: "var(--l-ink)", pos: "md:top-[42%] md:left-[70%]" },
+  { title: "One-click kill switch", bg: "var(--l-orange-deep)", fg: "white", pos: "md:top-[70%] md:left-[24%]" },
+  { title: "Scoped ownership", bg: "var(--l-teal-soft)", fg: "var(--l-ink)", pos: "md:top-[72%] md:left-[58%]" },
 ];
 
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
-};
-const item = {
-  hidden: { opacity: 0, scale: 0.6, rotate: -8 },
-  show: {
-    opacity: 1,
-    scale: 1,
-    rotate: 0,
-    transition: { type: "spring" as const, stiffness: 240, damping: 16 },
-  },
-};
-
-function TiltCard({ f }: { f: (typeof FEATURES)[number] }) {
+function MagneticTag({
+  children,
+  className,
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 200, damping: 14, mass: 0.4 });
-  const springY = useSpring(y, { stiffness: 200, damping: 14, mass: 0.4 });
+  const springX = useSpring(x, { stiffness: 150, damping: 12, mass: 0.4 });
+  const springY = useSpring(y, { stiffness: 150, damping: 12, mass: 0.4 });
 
   const handleMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - (rect.left + rect.width / 2)) * 0.15);
-    y.set((e.clientY - (rect.top + rect.height / 2)) * 0.15);
+    x.set((e.clientX - (rect.left + rect.width / 2)) * 0.35);
+    y.set((e.clientY - (rect.top + rect.height / 2)) * 0.35);
   };
   const handleMouseLeave = () => {
     x.set(0);
@@ -68,54 +39,80 @@ function TiltCard({ f }: { f: (typeof FEATURES)[number] }) {
 
   return (
     <motion.div
-      variants={item}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      whileHover={{ scale: 1.03 }}
-      style={{ x: springX, y: springY }}
-      className="rounded-2xl border border-[var(--l-line)] bg-white p-6 transition-shadow hover:shadow-xl hover:shadow-black/10"
+      style={{ x: springX, y: springY, ...style }}
+      className={className}
     >
-      <span className="landing-display text-2xl text-[var(--l-orange)]">
-        {f.n}
-      </span>
-      <h3 className="mt-3 font-semibold text-[var(--l-charcoal)]">{f.title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--l-charcoal)]/60">
-        {f.body}
-      </p>
+      {children}
     </motion.div>
+  );
+}
+
+function CentralMark() {
+  return (
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
+      <div className="relative w-40 h-40 flex items-center justify-center">
+        <div className="landing-slow-spin absolute inset-0 rounded-full border-2 border-dashed border-[var(--l-charcoal)]/25" />
+        <div className="w-28 h-28 rounded-full bg-[var(--l-navy-deep)] flex items-center justify-center shadow-lg shadow-black/15">
+          <ShieldCheck className="w-10 h-10 text-[var(--l-orange)]" strokeWidth={1.5} />
+        </div>
+      </div>
+    </div>
   );
 }
 
 export function FeatureGrid() {
   return (
-    <section id="features" className="relative bg-[var(--l-cream)] py-28 md:py-36">
-      <div className="max-w-6xl mx-auto px-6">
+    <section id="features" className="relative bg-[var(--l-yellow)] py-28 md:py-36 overflow-hidden">
+      <div className="landing-blob pointer-events-none absolute -top-48 -right-40 w-[520px] h-[520px] bg-[var(--l-yellow-deep)] opacity-60" />
+      <div className="landing-blob pointer-events-none absolute -bottom-40 -left-32 w-[420px] h-[420px] bg-[var(--l-yellow-pale)] opacity-70" />
+
+      <div className="max-w-6xl mx-auto px-6 relative">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.6 }}
-          className="max-w-xl"
+          className="text-center max-w-2xl mx-auto relative z-10"
         >
-          <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-orange)] font-semibold">
+          <span className="text-xs uppercase tracking-[0.14em] text-white font-semibold">
             Everything, built in
           </span>
-          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-charcoal)] leading-[1] tracking-tight">
+          <h2 className="landing-display mt-4 text-4xl md:text-6xl text-[var(--l-ink)] tracking-tight">
             Governance that ships with the agent, not after it.
           </h2>
         </motion.div>
 
-        <motion.div
-          variants={container}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
-          className="mt-16 grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
-        >
-          {FEATURES.map((f) => (
-            <TiltCard key={f.title} f={f} />
+        <div className="relative mt-16 md:mt-4 md:h-[560px] flex flex-col items-center gap-5 md:block">
+          <CentralMark />
+
+          {FEATURES.map((f, i) => (
+            <motion.div
+              key={f.title}
+              initial={{
+                opacity: 0,
+                scale: 0.3,
+                rotate: (i % 2 === 0 ? -1 : 1) * (25 + i * 3),
+              }}
+              whileInView={{ opacity: 1, scale: 1, rotate: (i % 2 === 0 ? -1 : 1) * (2 + (i % 3)) }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ type: "spring", stiffness: 240, damping: 14, delay: i * 0.08 }}
+              className={`relative md:absolute ${f.pos}`}
+            >
+              <MagneticTag className="inline-block cursor-default">
+                <div
+                  className="rounded-full px-6 py-4 md:px-7 md:py-5 shadow-xl shadow-black/15 whitespace-nowrap"
+                  style={{ background: f.bg, color: f.fg }}
+                >
+                  <h3 className="landing-display text-lg md:text-xl leading-none">
+                    {f.title}
+                  </h3>
+                </div>
+              </MagneticTag>
+            </motion.div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

@@ -31,8 +31,10 @@ const PERSONAS = [
 
 export function Personas() {
   return (
-    <section className="relative bg-[var(--l-cream-deep)] py-28 md:py-36 overflow-hidden">
-      <div className="landing-blob pointer-events-none absolute -top-40 -right-32 w-[440px] h-[440px] bg-[var(--l-yellow)] opacity-40" />
+    <section className="relative bg-[var(--l-pink-pale)] py-28 md:py-36 overflow-hidden">
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -top-52 -left-32 w-[520px] h-[520px] bg-[var(--l-pink-blush)] opacity-70" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -bottom-40 -right-40 w-[480px] h-[480px] bg-[var(--l-pink-lilac)] opacity-40" />
+      <div className="landing-blob pointer-events-none absolute top-1/4 right-1/3 w-[260px] h-[260px] bg-white opacity-30" />
 
       <div className="max-w-6xl mx-auto px-6 relative">
         <motion.div

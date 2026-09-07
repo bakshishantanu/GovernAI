@@ -1,12 +1,8 @@
-import { Inter, Caveat, Fredoka } from "next/font/google";
+import { Archivo_Black, Inter, Caveat } from "next/font/google";
 
-// The reference site's real display face is a licensed font called
-// "Champ" (bold, rounded, friendly) — not available to us. Fredoka is
-// the closest freely-available match: rounded terminals, chunky but
-// not razor-geometric like Archivo Black was.
-export const fredoka = Fredoka({
+export const archivoBlack = Archivo_Black({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "400",
   variable: "--font-display",
 });
 
