@@ -94,11 +94,12 @@ function MagneticTag({
 
 function CentralMark() {
   return (
-    <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
-      <div className="relative w-72 h-72 lg:w-80 lg:h-80 flex items-center justify-center">
-        <div className="landing-slow-spin absolute inset-0 rounded-full border-2 border-dashed border-[var(--l-charcoal)]/20" />
-        <div className="w-24 h-24 rounded-full bg-[var(--l-navy-deep)] flex items-center justify-center shadow-lg shadow-black/15">
-          <ShieldCheck className="w-9 h-9 text-[var(--l-orange)]" strokeWidth={1.5} />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block z-0">
+      <div className="relative w-[420px] h-[420px] lg:w-[520px] lg:h-[520px] flex items-center justify-center">
+        <div className="absolute inset-0 rounded-full border-[3px] border-[var(--l-charcoal)]/70" />
+        <div className="landing-slow-spin absolute inset-6 rounded-full border-2 border-dashed border-[var(--l-charcoal)]/30" />
+        <div className="w-28 h-28 rounded-full bg-[var(--l-navy-deep)] flex items-center justify-center shadow-lg shadow-black/15">
+          <ShieldCheck className="w-11 h-11 text-[var(--l-orange)]" strokeWidth={1.5} />
         </div>
       </div>
     </div>
@@ -127,7 +128,7 @@ export function FeatureGrid() {
           </h2>
         </motion.div>
 
-        <div className="relative mt-16 md:mt-6 md:h-[680px] flex flex-col items-center gap-4 md:block">
+        <div className="relative mt-16 md:mt-6 md:h-[640px] flex flex-col items-center gap-4 md:block">
           <CentralMark />
 
           {FEATURES.map((f, i) => (
@@ -137,15 +138,15 @@ export function FeatureGrid() {
               whileInView={{ opacity: 1, scale: 1, rotate: f.rotate }}
               viewport={{ once: true, amount: 0.4 }}
               transition={{ type: "spring", stiffness: 240, damping: 14, delay: i * 0.08 }}
-              className="relative md:absolute"
+              className="relative md:absolute z-10"
               style={{ ...f.pos }}
             >
               <MagneticTag className="inline-block cursor-default">
                 <div
-                  className="rounded-full px-7 py-4 md:px-9 md:py-5 shadow-xl shadow-black/20 whitespace-pre-line text-center"
+                  className="rounded-full px-8 py-5 md:px-11 md:py-7 shadow-xl shadow-black/25 whitespace-pre-line text-center"
                   style={{ background: f.bg, color: f.fg }}
                 >
-                  <h3 className="landing-display text-xl md:text-3xl leading-[0.85] tracking-tight">
+                  <h3 className="landing-display text-2xl md:text-4xl lg:text-5xl leading-[0.85] tracking-tight">
                     {f.title}
                   </h3>
                 </div>
