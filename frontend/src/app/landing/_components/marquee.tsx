@@ -1,35 +1,30 @@
-const PHRASE = "Build agents fast";
-const SEPARATOR = "✦";
-const REPEATS = 8;
+"use client";
+
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
+
+const STATEMENT = "Every agent arrives pre-governed.";
 
 export function Marquee() {
-  const group = (
-    <span className="flex shrink-0 items-center">
-      {Array.from({ length: REPEATS }).map((_, i) => (
-        <span key={i} className="flex items-center">
-          <span
-            className={`landing-display px-6 text-4xl md:text-6xl ${
-              i % 2 === 0 ? "text-[var(--l-cream)]" : "text-[var(--l-orange)]"
-            }`}
-          >
-            {PHRASE}
-          </span>
-          <span className="text-2xl md:text-3xl text-[var(--l-teal-soft)]">
-            {SEPARATOR}
-          </span>
-        </span>
-      ))}
-    </span>
-  );
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+
+  const x = useTransform(scrollYProgress, [0, 1], ["28vw", "-70vw"]);
 
   return (
-    <div className="relative bg-[var(--l-navy-deep)] py-10 md:py-14 overflow-hidden">
-      <div className="landing-marquee-track flex -rotate-2">
-        {group}
-        <span aria-hidden="true" className="flex shrink-0 items-center">
-          {group}
-        </span>
-      </div>
+    <div
+      ref={ref}
+      className="relative bg-[var(--l-cream-deep)] py-20 md:py-28 overflow-hidden"
+    >
+      <motion.div
+        style={{ x }}
+        className="landing-display whitespace-nowrap text-6xl sm:text-8xl md:text-9xl text-[var(--l-charcoal)] -rotate-3 inline-block will-change-transform"
+      >
+        {STATEMENT}
+      </motion.div>
     </div>
   );
 }

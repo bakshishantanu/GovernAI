@@ -91,22 +91,27 @@ html:has(.landing) {
   }
 }
 
-.landing-marquee-track {
-  width: max-content;
-  animation: landing-marquee 26s linear infinite;
+.landing-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.landing-hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-@keyframes landing-marquee {
+@keyframes landing-slow-spin {
   from {
-    transform: translateX(0);
+    transform: rotate(0deg);
   }
   to {
-    transform: translateX(-50%);
+    transform: rotate(360deg);
   }
 }
-
+.landing-slow-spin {
+  animation: landing-slow-spin 18s linear infinite;
+}
 @media (prefers-reduced-motion: reduce) {
-  .landing-marquee-track {
+  .landing-slow-spin {
     animation: none;
   }
 }

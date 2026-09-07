@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, type ElementType } from "react";
+import { useEffect, useRef, useState, type ElementType } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   Ticket,
   Database,
@@ -33,12 +35,7 @@ const TAG_CHIPS = [
   { bg: "var(--l-cream)", fg: "var(--l-charcoal)" },
 ];
 
-// per-card resting tilt/offset, so the row reads as independently placed
-// cards rather than a machined grid
-const ROTATIONS = [-2, 2, -1.5, 1.5, -2, 1, -1];
-const SHIFTS = ["md:mt-0", "md:mt-6", "md:-mt-3", "md:mt-4", "md:mt-0", "md:mt-6", "md:-mt-3"];
-
-const SKILLS: Skill[] = [
+const LIVE_SKILLS: Skill[] = [
   {
     status: "LIVE",
     name: "Ticketing",
@@ -72,6 +69,9 @@ const SKILLS: Skill[] = [
     fg: "white",
     icon: FileSearch,
   },
+];
+
+const LAB_SKILLS: Skill[] = [
   {
     status: "IN THE LAB",
     name: "Research",
@@ -143,8 +143,76 @@ function BrewingDots({ color }: { color: string }) {
   );
 }
 
+function SkillCardBody({ s }: { s: Skill }) {
+  const Icon = s.icon;
+  return (
+    <>
+      <Icon
+        className="pointer-events-none absolute -bottom-6 -right-6 w-32 h-32 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6"
+        style={{ opacity: s.dashed ? 0.06 : 0.14 }}
+        strokeWidth={1}
+      />
+
+      <span
+        className={`relative self-start text-[10px] font-semibold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full ${
+          s.dashed ? "border border-current opacity-60" : "bg-black/15"
+        }`}
+      >
+        {s.status}
+      </span>
+
+      <div className="relative mt-auto pt-6">
+        <h3 className="landing-display text-xl leading-none">{s.name}</h3>
+        <p
+          className="mt-2.5 text-xs leading-relaxed"
+          style={{ opacity: s.dashed ? 0.65 : 0.8 }}
+        >
+          {s.body}
+        </p>
+
+        {s.dashed ? (
+          <div className="mt-5 flex items-center gap-2 text-xs uppercase tracking-wide opacity-60">
+            <BrewingDots color={s.fg} />
+            brewing
+          </div>
+        ) : (
+          <div className="relative mt-5 h-8">
+            <div className="absolute inset-0 flex flex-wrap items-center gap-1.5 transition-all duration-300 group-hover:opacity-0 group-hover:-translate-y-1">
+              {s.tags.map((t, ti) => {
+                const chip = TAG_CHIPS[ti % TAG_CHIPS.length];
+                return (
+                  <span
+                    key={t}
+                    className="text-[10px] font-mono px-2 py-1 rounded-full"
+                    style={{ background: chip.bg, color: chip.fg }}
+                  >
+                    {t}
+                  </span>
+                );
+              })}
+            </div>
+
+            <span className="absolute inset-0 flex items-center opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--l-orange)] text-white text-xs font-semibold pl-3.5 pr-2.5 py-1.5">
+                Read more
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </span>
+            </span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+const CARD_CLASS =
+  "group relative shrink-0 w-52 md:w-56 min-h-[350px] overflow-hidden rounded-[24px] p-5 flex flex-col text-left cursor-pointer shadow-lg shadow-black/10 hover:shadow-2xl hover:shadow-black/20";
+
 export function SkillMarketplace() {
   const [openSkill, setOpenSkill] = useState<Skill | null>(null);
+  const labTrackRef = useRef<HTMLDivElement>(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = openSkill ? "hidden" : "";
@@ -161,6 +229,19 @@ export function SkillMarketplace() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openSkill]);
+
+  const updateEdges = () => {
+    const el = labTrackRef.current;
+    if (!el) return;
+    setAtStart(el.scrollLeft <= 4);
+    setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+  };
+
+  const scrollLab = (dir: 1 | -1) => {
+    const el = labTrackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * 260, behavior: "smooth" });
+  };
 
   return (
     <section id="skills" className="relative bg-[var(--l-cream-deep)] py-28 md:py-36 overflow-hidden">
@@ -180,11 +261,11 @@ export function SkillMarketplace() {
           </h2>
         </motion.div>
 
+        {/* Live skills: independent cards, part of normal page flow */}
         <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-10">
-          {SKILLS.map((s, i) => {
-            const Icon = s.icon;
-            const rotate = ROTATIONS[i % ROTATIONS.length];
-            const shift = SHIFTS[i % SHIFTS.length];
+          {LIVE_SKILLS.map((s, i) => {
+            const rotate = [-2, 2, -1.5][i % 3];
+            const shift = ["md:mt-0", "md:mt-6", "md:-mt-3"][i % 3];
             return (
               <motion.button
                 type="button"
@@ -197,76 +278,70 @@ export function SkillMarketplace() {
                 }}
                 whileInView={{ opacity: 1, scale: 1, rotate }}
                 viewport={{ once: true, amount: 0.3 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 220,
-                  damping: 17,
-                  delay: (i % 7) * 0.07,
-                }}
+                transition={{ type: "spring", stiffness: 220, damping: 17, delay: i * 0.08 }}
                 whileHover={{ y: -10, scale: 1.05, rotate: 0 }}
                 whileTap={{ scale: 0.98 }}
-                className={`group relative shrink-0 w-52 md:w-56 min-h-[350px] overflow-hidden rounded-[24px] p-5 flex flex-col text-left cursor-pointer shadow-lg shadow-black/10 hover:shadow-2xl hover:shadow-black/20 ${shift} ${
-                  s.dashed ? "border-2 border-dashed border-[var(--l-line)]" : ""
-                }`}
-                style={{ background: s.dashed ? "transparent" : s.bg, color: s.fg }}
+                className={`${CARD_CLASS} ${shift}`}
+                style={{ background: s.bg, color: s.fg }}
               >
-                <Icon
-                  className="pointer-events-none absolute -bottom-6 -right-6 w-32 h-32 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6"
-                  style={{ opacity: s.dashed ? 0.06 : 0.14 }}
-                  strokeWidth={1}
-                />
-
-                <span
-                  className={`relative self-start text-[10px] font-semibold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full ${
-                    s.dashed ? "border border-current opacity-60" : "bg-black/15"
-                  }`}
-                >
-                  {s.status}
-                </span>
-
-                <div className="relative mt-auto pt-6">
-                  <h3 className="landing-display text-xl leading-none">{s.name}</h3>
-                  <p
-                    className="mt-2.5 text-xs leading-relaxed"
-                    style={{ opacity: s.dashed ? 0.65 : 0.8 }}
-                  >
-                    {s.body}
-                  </p>
-
-                  {s.dashed ? (
-                    <div className="mt-5 flex items-center gap-2 text-xs uppercase tracking-wide opacity-60">
-                      <BrewingDots color={s.fg} />
-                      brewing
-                    </div>
-                  ) : (
-                    <div className="relative mt-5 h-8">
-                      <div className="absolute inset-0 flex flex-wrap items-center gap-1.5 transition-all duration-300 group-hover:opacity-0 group-hover:-translate-y-1">
-                        {s.tags.map((t, ti) => {
-                          const chip = TAG_CHIPS[ti % TAG_CHIPS.length];
-                          return (
-                            <span
-                              key={t}
-                              className="text-[10px] font-mono px-2 py-1 rounded-full"
-                              style={{ background: chip.bg, color: chip.fg }}
-                            >
-                              {t}
-                            </span>
-                          );
-                        })}
-                      </div>
-
-                      <span className="absolute inset-0 flex items-center opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--l-orange)] text-white text-xs font-semibold pl-3.5 pr-2.5 py-1.5">
-                          Read more
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </span>
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <SkillCardBody s={s} />
               </motion.button>
             );
           })}
+        </div>
+      </div>
+
+      {/* In the lab: a distinct, clearly-secondary horizontal strip to browse more */}
+      <div className="mt-16 md:mt-20">
+        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between gap-4">
+          <span className="text-xs uppercase tracking-[0.14em] text-[var(--l-charcoal)]/45 font-semibold">
+            More in the lab, scroll for a peek →
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollLab(-1)}
+              disabled={atStart}
+              aria-label="Scroll lab skills left"
+              className="w-9 h-9 rounded-full bg-white border border-[var(--l-line)] flex items-center justify-center text-[var(--l-charcoal)] disabled:opacity-30 hover:border-[var(--l-orange)] hover:text-[var(--l-orange)] transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollLab(1)}
+              disabled={atEnd}
+              aria-label="Scroll lab skills right"
+              className="w-9 h-9 rounded-full bg-[var(--l-charcoal)] flex items-center justify-center text-white disabled:opacity-30 hover:bg-[var(--l-orange)] transition-colors"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={labTrackRef}
+          onScroll={updateEdges}
+          className="landing-hide-scrollbar mt-6 flex gap-4 overflow-x-auto px-6 snap-x snap-mandatory"
+        >
+          {LAB_SKILLS.map((s, i) => (
+            <motion.button
+              type="button"
+              key={s.name}
+              onClick={() => setOpenSkill(s)}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.5, delay: i * 0.06, ease: "easeOut" }}
+              whileHover={{ y: -8, scale: 1.03 }}
+              whileTap={{ scale: 0.98 }}
+              className={`${CARD_CLASS} snap-start border-2 border-dashed border-[var(--l-line)]`}
+              style={{ background: "transparent", color: s.fg }}
+            >
+              <SkillCardBody s={s} />
+            </motion.button>
+          ))}
+          <div className="shrink-0 w-2 md:w-6" aria-hidden="true" />
         </div>
       </div>
 
