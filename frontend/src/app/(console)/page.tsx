@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { fetchApi } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
+import { UserDashboard } from "./_components/user-dashboard";
+import { BuilderDashboard } from "./_components/builder-dashboard";
 import { StatRing } from "./_components/stat-ring";
 import { FleetOverviewCard } from "./_components/fleet-overview-card";
 import { ActivityTrendChart } from "./_components/activity-trend-chart";
@@ -43,7 +46,7 @@ type BudgetStatus = { cap_usd: number; total_spend_usd: number; agents: AgentBud
  * how the real (sparse, uneven) audit history is aggregated honestly rather
  * than smoothed or invented.
  */
-export default function DashboardPage() {
+function AdminDashboard() {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [audits, setAudits] = useState<AuditEvent[] | null>(null);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
@@ -142,4 +145,21 @@ export default function DashboardPage() {
       </div>
     </div>
   );
+}
+
+
+/**
+ * One route, three homes.
+ *
+ * Each role's first screen answers a different question — "where is what I
+ * asked for", "what should I build next", "is anything wrong across the org" —
+ * so they are three different pages rather than one page with things hidden.
+ * The role only chooses which to render; every figure on each is still scoped
+ * by the backend to what that caller may see.
+ */
+export default function DashboardPage() {
+  const { role } = useAuth();
+  if (role === "user") return <UserDashboard />;
+  if (role === "agent_builder") return <BuilderDashboard />;
+  return <AdminDashboard />;
 }

@@ -164,7 +164,7 @@ export function RequestAgentForm({ onSubmitted }: { onSubmitted: () => void }) {
                     // Raw CSS here, not a Tailwind class, so the "/40" opacity
                     // shorthand is not available - it would be dropped silently
                     // and leave the unselected cards with no fill at all.
-                    background: isOn ? "var(--l-orange-soft)" : "var(--l-cream-deep)",
+                    background: isOn ? "var(--l-pink-pale)" : "var(--l-cream-deep)",
                   }}
                 >
                   <span className="flex items-center gap-2">

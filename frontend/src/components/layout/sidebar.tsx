@@ -37,6 +37,7 @@ export function Sidebar() {
     switch (role) {
       case "agent_builder":
         return [
+          { name: "Overview", href: "/", icon: LayoutDashboard },
           { name: "Requests Queue", href: "/requests", icon: ClipboardList },
           { name: "Skill Marketplace", href: "/skills", icon: Puzzle },
           { name: "My Builds", href: "/agents", icon: Bot },
@@ -44,6 +45,7 @@ export function Sidebar() {
         ];
       case "user":
         return [
+          { name: "Overview", href: "/", icon: LayoutDashboard },
           { name: "Request an Agent", href: "/request-agent", icon: Sparkles },
           { name: "My Agents", href: "/agents", icon: Bot },
           { name: "My Runs", href: "/executions", icon: PlayCircle },
@@ -114,6 +116,13 @@ export function Sidebar() {
  * The role is what governs access, so it leads; the raw user id is shown
  * in mono underneath, truncated, the way an id is always presented here.
  */
+/** The database's value is a key, not a label - never print it raw. */
+const ROLE_NAME: Record<string, string> = {
+  admin: "Admin",
+  agent_builder: "Agent builder",
+  user: "User",
+};
+
 function SignedInAs() {
   const [me, setMe] = useState<{ id: string; role: string } | null>(null);
 
@@ -140,8 +149,8 @@ function SignedInAs() {
         {me ? me.role.slice(0, 2).toUpperCase() : "··"}
       </span>
       <span className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-[13px] font-semibold capitalize text-[var(--l-ink)]">
-          {me ? me.role : "Signed in"}
+        <span className="truncate text-[13px] font-semibold text-[var(--l-ink)]">
+          {me ? (ROLE_NAME[me.role] ?? me.role) : "Signed in"}
         </span>
         <span className="truncate font-mono text-[10.5px] text-[var(--l-charcoal)]/50">
           {me ? `${me.id.slice(0, 8)}…` : "loading…"}
