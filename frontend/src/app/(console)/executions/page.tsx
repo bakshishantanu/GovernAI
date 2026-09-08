@@ -1,168 +1,191 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-import { Execution } from "@/lib/types";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { PlayCircle, Clock, CheckCircle2, XCircle, AlertCircle, Bot } from "lucide-react";
-import Link from "next/link";
+import { timeAgo } from "@/lib/time-ago";
+
+/**
+ * Every run, newest first — scoped by the backend to whatever the caller is
+ * allowed to see, so this page never asks who it is talking to.
+ *
+ * Fields are the ones the API actually returns (`goal`, `started_at`), not
+ * the ones lib/types.ts guesses at (`prompt`, `created_at`); confirmed
+ * against a live response before this was written.
+ */
+
+type Execution = {
+  id: string;
+  agent_id: string;
+  goal: string;
+  status: string;
+  result?: string | null;
+  error?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+};
+
+const STATUS: Record<string, { label: string; icon: LucideIcon; fill: string; ink: string }> = {
+  COMPLETED: {
+    label: "Finished",
+    icon: CheckCircle2,
+    fill: "var(--l-teal-soft)",
+    ink: "var(--l-teal)",
+  },
+  RUNNING: {
+    label: "Running",
+    icon: Loader2,
+    fill: "var(--l-yellow-pale)",
+    ink: "var(--l-yellow-deep)",
+  },
+  PENDING: {
+    label: "Queued",
+    icon: Loader2,
+    fill: "var(--l-cream-deep)",
+    ink: "var(--l-charcoal)",
+  },
+  FAILED: {
+    label: "Failed",
+    icon: XCircle,
+    fill: "var(--l-pink-blush)",
+    ink: "var(--l-orange-deep)",
+  },
+};
+
+const TITLE: Record<string, string> = {
+  admin: "All runs",
+  agent_builder: "Runs on my builds",
+  user: "My runs",
+};
+
+const BLURB: Record<string, string> = {
+  admin: "Every execution in the organisation, newest first.",
+  agent_builder: "Every run of an agent you built, newest first.",
+  user: "Everything your agents have done for you, newest first.",
+};
 
 export default function ExecutionsPage() {
-  const { role, isUser } = useAuth();
-  const [executions, setExecutions] = useState<Execution[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { role } = useAuth();
+  const [runs, setRuns] = useState<Execution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchExecutions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchApi("/executions/");
-      setExecutions(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      setError(err.message || "Failed to load execution runs.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = useCallback(() => {
+    fetchApi("/executions/")
+      .then((data) => {
+        setRuns(Array.isArray(data) ? data : []);
+        setError(null);
+      })
+      .catch((err) => {
+        setRuns([]);
+        setError(err instanceof Error ? err.message : "Could not load runs.");
+      });
+  }, []);
 
   useEffect(() => {
-    fetchExecutions();
-    const handleRoleChange = () => fetchExecutions();
-    window.addEventListener("govern-ai-role-change", handleRoleChange);
-    return () => window.removeEventListener("govern-ai-role-change", handleRoleChange);
-  }, [role]);
-
-  const getStatusBadge = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case "COMPLETED":
-        return (
-          <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-            <CheckCircle2 className="w-3 h-3 mr-1" />
-            Completed
-          </Badge>
-        );
-      case "RUNNING":
-        return (
-          <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-            <Clock className="w-3 h-3 mr-1 animate-spin" />
-            Running
-          </Badge>
-        );
-      case "FAILED":
-        return (
-          <Badge className="bg-red-500/10 text-red-500 border-red-500/20">
-            <XCircle className="w-3 h-3 mr-1" />
-            Failed
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return "-";
-    try {
-      return new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }).format(new Date(dateString));
-    } catch {
-      return dateString;
-    }
-  };
+    load();
+    const onRoleChange = () => load();
+    window.addEventListener("govern-ai-role-change", onRoleChange);
+    return () => window.removeEventListener("govern-ai-role-change", onRoleChange);
+  }, [load]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
-          {isUser ? "My Runs" : "Execution Runs"}
+    <div className="mx-auto max-w-4xl space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <h1 className="landing-display text-3xl text-[var(--l-ink)]">
+          {TITLE[role] ?? "Runs"}
         </h1>
-        <p className="text-muted-foreground">
-          {isUser 
-            ? "Track historical runs and live executions of your assigned AI agents."
-            : "Review agent task executions, runtime status, and invocation metrics across agents."}
+        <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
+          {BLURB[role] ?? "Executions, newest first."}
         </p>
-      </div>
+      </motion.div>
 
-      {loading ? (
-        <div className="border border-border rounded-xl p-8 space-y-3 bg-background">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 bg-muted/40 animate-pulse rounded-lg" />
+      {error && (
+        <p className="flex items-center gap-2 rounded-2xl border-2 border-[var(--l-orange-deep)] bg-[var(--l-orange-soft)] px-4 py-3 text-sm text-[var(--l-ink)]">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
+        </p>
+      )}
+
+      {runs === null ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="h-[84px] animate-pulse rounded-2xl border-2 border-[var(--l-line)] bg-[var(--l-cream-deep)]/40"
+            />
           ))}
         </div>
-      ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-8 text-center space-y-3">
-          <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
-          <p className="text-red-500 font-semibold">Failed to load execution runs</p>
-          <p className="text-muted-foreground text-sm">{error}</p>
-          <Button variant="outline" onClick={fetchExecutions}>Try again</Button>
-        </div>
-      ) : executions.length === 0 ? (
-        <div className="border border-dashed border-border rounded-xl p-12 text-center flex flex-col items-center justify-center bg-muted/10 space-y-3">
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-            <PlayCircle className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground">No executions found</h3>
-          <p className="text-muted-foreground max-w-sm text-sm">
-            {isUser 
-              ? "You haven't run any agents yet. Go to My Agents to trigger a task execution."
-              : "No agent executions have been dispatched in this scope."}
+      ) : runs.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-[var(--l-line)] px-6 py-14 text-center">
+          <p className="landing-display text-base text-[var(--l-ink)]">Nothing has run yet</p>
+          <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
+            {role === "user"
+              ? "Once an agent is handed to you, give it a job and it will show up here."
+              : "Give an agent a goal and its run will appear here."}
           </p>
-          <Link href="/agents">
-            <Button variant="outline">
-              <Bot className="w-4 h-4 mr-2" />
-              Go to Agents
-            </Button>
-          </Link>
         </div>
       ) : (
-        <div className="border border-border rounded-xl overflow-hidden bg-background shadow-xs">
-          <Table>
-            <TableHeader className="bg-muted/40">
-              <TableRow className="border-border">
-                <TableHead>Execution ID</TableHead>
-                <TableHead>Agent ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Started</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {executions.map((exec) => (
-                <TableRow key={exec.id} className="border-border hover:bg-muted/30">
-                  <TableCell className="font-mono text-xs text-foreground font-medium">
-                    {exec.id}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    <Link href={`/agents/${exec.agent_id}`} className="hover:text-blue-500 hover:underline">
-                      {exec.agent_id}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(exec.status)}
-                  </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground">
-                    {formatDate(exec.created_at)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <ul className="space-y-2">
+          {runs.map((run, i) => {
+            const s = STATUS[run.status?.toUpperCase()] ?? STATUS.PENDING;
+            const Icon = s.icon;
+            const spinning = run.status?.toUpperCase() === "RUNNING";
+
+            return (
+              <motion.li
+                key={run.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.03 }}
+              >
+                <Link
+                  href={`/agents/${run.agent_id}/executions/${run.id}`}
+                  className="group block rounded-2xl border-2 border-[var(--l-line)] bg-[var(--l-cream)] p-4 transition-colors hover:border-[var(--l-ink)]"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <p className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-[var(--l-ink)]">
+                      {run.goal || "No goal recorded"}
+                    </p>
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold text-[var(--l-ink)]"
+                      style={{ background: s.fill }}
+                    >
+                      <Icon
+                        className={`h-3.5 w-3.5 ${spinning ? "animate-spin" : ""}`}
+                        style={{ color: s.ink }}
+                      />
+                      {s.label}
+                    </span>
+                  </div>
+
+                  {run.error && (
+                    <p className="mt-2 line-clamp-2 text-[12.5px] leading-snug text-[var(--l-orange-deep)]">
+                      {run.error}
+                    </p>
+                  )}
+
+                  <div className="mt-3 flex items-center justify-between border-t-2 border-dashed border-[var(--l-ink)]/10 pt-3">
+                    <span className="font-mono text-[11px] text-[var(--l-charcoal)]/45">
+                      started {timeAgo(run.started_at)}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--l-charcoal)]/50 transition-colors group-hover:text-[var(--l-orange-deep)]">
+                      See every step
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </Link>
+              </motion.li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
