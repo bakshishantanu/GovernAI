@@ -1,23 +1,10 @@
-import { RequestsList } from "./components/requests-list";
+import { RequestsQueue } from "./_components/requests-queue";
 
 export const metadata = {
-  title: "Agent Requests - GovernAI",
-  description: "Queue and lifecycle management for AI agent requests",
+  title: "Requests · GovernAI",
+  description: "Agent requests, from asked for through to handed over.",
 };
 
 export default function RequestsPage() {
-  return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
-          Agent Requests
-        </h1>
-        <p className="text-muted-foreground">
-          Track the lifecycle of custom agent requests from initial intake to builder assignment, compliance testing, and handover.
-        </p>
-      </div>
-
-      <RequestsList />
-    </div>
-  );
+  return <RequestsQueue />;
 }

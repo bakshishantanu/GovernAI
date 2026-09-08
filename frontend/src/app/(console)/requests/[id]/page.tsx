@@ -1,8 +1,8 @@
-import { RequestDetail } from "./components/request-detail";
+import { RequestDetail } from "../_components/request-detail";
 
 export const metadata = {
-  title: "Request Details - GovernAI",
-  description: "View and manage lifecycle of an AI agent request",
+  title: "Request · GovernAI",
+  description: "One agent request, and what can be done about it.",
 };
 
 export default async function RequestDetailPage({
