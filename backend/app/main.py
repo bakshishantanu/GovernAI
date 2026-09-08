@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.api.v1.auth import router as auth_router
 from app.api.v1.agents import router as agents_router
 from app.api.v1.skills import router as skills_router
 from app.api.v1.policies import router as policies_router
@@ -55,6 +56,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api/v1", tags=["Auth"])
 app.include_router(agents_router, prefix="/api/v1", tags=["Agents"])
 app.include_router(skills_router, prefix="/api/v1", tags=["Skills"])
 app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
