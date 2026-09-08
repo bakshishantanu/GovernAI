@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { money } from "./cost-types";
 
-const PALETTE = ["var(--l-orange)", "var(--l-teal)", "var(--l-navy-deep)", "var(--l-charcoal)"];
+const PALETTE = ["var(--l-orange)", "var(--l-teal)", "var(--l-yellow-deep)", "var(--l-charcoal)"];
 
 /** A ranked ledger of spend by one dimension (agent or model) — bars scaled to the top entry. */
 export function SpendBreakdown({
