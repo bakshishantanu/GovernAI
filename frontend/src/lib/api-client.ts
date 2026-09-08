@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
 /**
  * True only when real Supabase credentials are configured. This repo's
@@ -33,7 +33,7 @@ const SUPABASE_CONFIGURED = Boolean(
  * dev fallback. This is deterministic (no network call, no SDK involved)
  * and changes nothing once real NEXT_PUBLIC_SUPABASE_* values are set.
  */
-async function getAuthHeader(): Promise<string> {
+export async function getAuthHeader(): Promise<string> {
   if (!SUPABASE_CONFIGURED) return 'Bearer dummy-token'
 
   try {

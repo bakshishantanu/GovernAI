@@ -36,3 +36,10 @@ export const LIFECYCLE: Record<
 export function lifecycleOf(a: Agent) {
   return LIFECYCLE[a.passport.lifecycle_state] ?? LIFECYCLE.DRAFT;
 }
+
+export type Budget = { agent_id: string; spend_usd: number; cap_usd: number; percent_of_cap: number };
+
+export function money(n: number) {
+  if (n === 0) return "$0.00";
+  return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+}
