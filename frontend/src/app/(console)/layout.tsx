@@ -1,19 +1,30 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import "../landing/landing.css";
 
+/**
+ * App shell, on Priya's design system (D-038). `RouteTransition` (root
+ * layout) already provides the navigation animation — the branded loading
+ * screen from PR #30 — so this stays a plain wrapper rather than adding a
+ * second, competing transition on `children`.
+ */
 export default function ConsoleLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-white dark:bg-[#0a0a0a] text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="landing flex min-h-screen text-[var(--l-ink)]">
       <Sidebar />
-      <div className="flex-1 flex flex-col relative">
+      {/* min-w-0 overrides the flex default of min-width:auto — without it
+          this column cannot shrink below its content's intrinsic width, so
+          any wide child (e.g. the Skills fanned-card row) pushes the whole
+          page wider instead of scrolling internally. Confirmed live: the
+          skills track's own scrollWidth/clientWidth stayed identical at
+          every viewport width until this was added. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="flex-1 p-8 overflow-auto bg-white dark:bg-[#0a0a0a]">
-          {children}
-        </main>
+        <main className="min-w-0 flex-1 overflow-auto p-8">{children}</main>
       </div>
     </div>
   );
