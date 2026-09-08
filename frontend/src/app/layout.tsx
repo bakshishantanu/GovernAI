@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { RouteTransition } from "@/components/route-transition";
-import { archivoBlack, interLanding, caveat } from "@/lib/landing-fonts";
+import { kecal, interLanding, caveat } from "@/lib/landing-fonts";
 
 export const metadata: Metadata = {
   title: "GovernAI Enterprise",
@@ -23,7 +23,7 @@ export default function RootLayout({
         route group still applies these classes itself too; harmless —
         next/font dedupes by variable name, not by call site.
       */}
-      <body className={`${archivoBlack.variable} ${interLanding.variable} ${caveat.variable}`}>
+      <body className={`${kecal.variable} ${interLanding.variable} ${caveat.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
