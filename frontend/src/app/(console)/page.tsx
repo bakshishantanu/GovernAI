@@ -2,45 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, ShieldAlert, Wallet } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
-import { StatTile } from "./_components/stat-tile";
-import { RecentActivity, type AuditEvent } from "./_components/recent-activity";
-import { BudgetBreakdown, type AgentBudget } from "./_components/budget-breakdown";
+import { StatRing } from "./_components/stat-ring";
+import { FleetOverviewCard } from "./_components/fleet-overview-card";
+import { ActivityTrendChart } from "./_components/activity-trend-chart";
+import { ToolBreakdownCard } from "./_components/tool-breakdown-card";
+import { CallsBarChart } from "./_components/calls-bar-chart";
+import { AgentGrid } from "./_components/agent-grid";
+import {
+  bucketByHour,
+  byTool,
+  fleetHealth,
+  type AuditEvent,
+} from "./_components/dashboard-data";
 
 type Agent = {
   id: string;
   name: string;
   status: string;
-  passport: { lifecycle_state: string };
+  passport: { lifecycle_state: string; compliance_status: string };
+  skills: { id: string; name: string }[];
 };
 
-type BudgetStatus = {
+type AgentBudget = {
+  agent_id: string;
+  name: string;
+  spend_usd: number;
   cap_usd: number;
-  total_spend_usd: number;
-  agents: AgentBudget[];
+  percent_of_cap: number;
+  suspended: boolean;
 };
 
-function money(n: number) {
-  // Sub-cent spend rounds to $0.00 with two decimals, which reads as "free"
-  // when it isn't — show four decimals only for genuinely nonzero sub-cent
-  // amounts, never for a true zero.
-  if (n === 0) return "$0.00";
-  return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
-}
+type BudgetStatus = { cap_usd: number; total_spend_usd: number; agents: AgentBudget[] };
 
 /**
- * Dashboard.
- *
- * Three real sources, no invented numbers:
- *  - GET /agents/        -> active-agent count, and names for the feed
- *  - GET /audits/        -> recent activity + the denied-call count
- *  - GET /costs/budget   -> spend total and the per-agent breakdown
- *
- * GET /costs/summary — the endpoint the spec names for a dashboard summary
- * — returns a live 500 right now (see DECISIONS.md). Rather than build
- * against a broken endpoint, the spend figures come from /costs/budget,
- * which already works and already backs the sidebar's own budget meter.
+ * Dashboard, restructured on the reference layout the user shared — stat
+ * rings, a hero fleet card, a real activity trend with a peak callout, a
+ * tool-usage breakdown, a call-volume bar chart, and a filterable agent
+ * grid. Every figure comes from a live endpoint; see dashboard-data.ts for
+ * how the real (sparse, uneven) audit history is aggregated honestly rather
+ * than smoothed or invented.
  */
 export default function DashboardPage() {
   const [agents, setAgents] = useState<Agent[] | null>(null);
@@ -49,17 +50,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     Promise.all([
       fetchApi("/agents/"),
-      fetchApi("/audits/?limit=50"),
+      fetchApi("/audits/?limit=200"),
       fetchApi("/costs/budget"),
     ])
-      .then(([agentsData, auditsData, budgetData]) => {
+      .then(([a, e, b]) => {
         if (cancelled) return;
-        setAgents(agentsData ?? []);
-        setAudits(auditsData ?? []);
-        setBudget(budgetData ?? null);
+        setAgents(a ?? []);
+        setAudits(e ?? []);
+        setBudget(b ?? null);
       })
       .catch(() => {
         if (!cancelled) {
@@ -68,57 +68,77 @@ export default function DashboardPage() {
           setBudget(null);
         }
       });
-
     return () => {
       cancelled = true;
     };
   }, []);
 
   const loading = agents === null || audits === null || budget === null;
-  const activeCount = agents?.filter((a) => a.passport.lifecycle_state === "ACTIVE").length ?? 0;
-  const deniedCount = audits?.filter((e) => e.policy_decision === "DENY").length ?? 0;
-  const agentNames = new Map((agents ?? []).map((a) => [a.id, a.name]));
+
+  const total = agents?.length ?? 0;
+  const activeAgents = agents?.filter((a) => a.passport.lifecycle_state === "ACTIVE") ?? [];
+  const health = fleetHealth(agents ?? []);
+  const buckets = bucketByHour(audits ?? []);
+  const tools = byTool(audits ?? []);
+  const budgetByAgent = new Map((budget?.agents ?? []).map((a) => [a.agent_id, a]));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <h1 className="landing-display text-3xl text-[var(--l-ink)]">Overview</h1>
-        <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-          Metrics and recent activity across your organisation.
-        </p>
-      </motion.div>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h1 className="landing-display text-3xl text-[var(--l-ink)]">Dashboard</h1>
+          <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
+            Monitor <strong className="text-[var(--l-ink)]">agents, governance, and spend</strong>{" "}
+            in one place.
+          </p>
+        </motion.div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatTile
-          icon={Bot}
-          label="Active agents"
-          value={String(activeCount)}
-          tint="var(--l-teal)"
-          loading={loading}
-        />
-        <StatTile
-          icon={ShieldAlert}
-          label="Policy blocks"
-          value={String(deniedCount)}
-          tint="var(--l-orange)"
-          loading={loading}
-        />
-        <StatTile
-          icon={Wallet}
-          label="Spend"
-          value={budget ? `${money(budget.total_spend_usd)} / ${money(budget.cap_usd)}` : "—"}
-          tint="var(--l-orange-deep)"
-          loading={loading}
-        />
+        <div className="flex flex-wrap gap-3">
+          <StatRing
+            pct={health.pct}
+            value={`${health.pct}%`}
+            label="Fleet health"
+            color="var(--l-teal)"
+            loading={loading}
+          />
+          <StatRing
+            pct={total === 0 ? 0 : (activeAgents.length / total) * 100}
+            value={String(total)}
+            label="Total agents"
+            color="var(--l-orange)"
+            loading={loading}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RecentActivity events={audits ?? []} agentNames={agentNames} loading={loading} />
-        <BudgetBreakdown agents={budget?.agents ?? []} loading={loading} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-3">
+          <FleetOverviewCard
+            total={total}
+            active={activeAgents.length}
+            health={health}
+            loading={loading}
+          />
+        </div>
+        <div className="lg:col-span-6">
+          <ActivityTrendChart buckets={buckets} loading={loading} />
+        </div>
+        <div className="lg:col-span-3">
+          <ToolBreakdownCard tools={tools} loading={loading} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <CallsBarChart buckets={buckets} loading={loading} />
+        </div>
+        <div className="lg:col-span-7">
+          <AgentGrid agents={agents ?? []} budgets={budgetByAgent} loading={loading} />
+        </div>
       </div>
     </div>
   );
