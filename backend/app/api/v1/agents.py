@@ -1,30 +1,31 @@
 from __future__ import annotations
-from typing import List
+
 from uuid import UUID
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_agent_service, get_db, get_kill_switch_service
 from app.api.schemas.agent import (
-    AgentResponse,
     AgentCreate,
+    AgentResponse,
     AgentSkillRef,
     AgentUpdate,
-    PassportResponse,
 )
-from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
-from app.domain.agents.models import AgentSkill
-from app.domain.skills.models import SkillModel
-from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
+from app.api.schemas.common import Envelope, PaginatedResponse
 from app.domain.agents.kill_switch import KillSwitchService
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_agent_service, get_db, get_kill_switch_service
+from app.domain.agents.models import AgentSkill
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
     InvalidStateTransitionError,
     SkillNotFoundError,
 )
+from app.domain.auth.middleware import get_current_user
+from app.domain.auth.rbac import require_admin
+from app.domain.skills.models import SkillModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -46,9 +47,7 @@ async def _skills_for(db: AsyncSession, agent_ids: list[UUID]) -> dict[UUID, lis
 
     by_agent: dict[UUID, list[AgentSkillRef]] = {}
     for agent_id, skill_id, display_name in rows.all():
-        by_agent.setdefault(agent_id, []).append(
-            AgentSkillRef(id=skill_id, name=display_name)
-        )
+        by_agent.setdefault(agent_id, []).append(AgentSkillRef(id=skill_id, name=display_name))
     return by_agent
 
 
@@ -56,6 +55,7 @@ def _with_skills(agent, skills_by_agent: dict[UUID, list[AgentSkillRef]]) -> Age
     response = AgentResponse.model_validate(agent)
     response.skills = skills_by_agent.get(agent.id, [])
     return response
+
 
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
@@ -96,7 +96,7 @@ async def list_agents(
     skills = await _skills_for(db, [a.id for a in agents])
     return PaginatedResponse(
         data=[_with_skills(a, skills) for a in agents],
-        meta={"has_more": offset + limit < count, "total": count}
+        meta={"has_more": offset + limit < count, "total": count},
     )
 
 

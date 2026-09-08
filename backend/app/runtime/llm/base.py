@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -36,7 +37,8 @@ class LLMResponse:
 class LLMProvider(ABC):
     """Common interface every LLM provider (Groq, Gemini, ...) implements.
 
-    Messages follow the OpenAI chat format: [{"role": "user"|"assistant"|"system", "content": str}, ...]
+    Messages follow the OpenAI chat format:
+    [{"role": "user"|"assistant"|"system", "content": str}, ...]
     Tools follow the OpenAI function-calling format (see BaseTool.to_openai_tool()).
     """
 
@@ -50,5 +52,4 @@ class LLMProvider(ABC):
         tools: list[dict] | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-    ) -> LLMResponse:
-        ...
+    ) -> LLMResponse: ...

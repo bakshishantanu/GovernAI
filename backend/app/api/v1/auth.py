@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Who am I.
 
 The console had no way to ask this. It rendered a hardcoded name and role in
@@ -11,6 +9,8 @@ This route reports exactly what the token proves and nothing more. It does not
 reach for a display name or an email: those live in Supabase, not in this
 database, and inventing one here would be the same mistake in a new place.
 """
+
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
@@ -54,9 +54,7 @@ async def settings_overview(
     """
     org = await db.get(Organization, user.org_id)
 
-    agent_count = await db.scalar(
-        select(func.count(Agent.id)).where(Agent.org_id == user.org_id)
-    )
+    agent_count = await db.scalar(select(func.count(Agent.id)).where(Agent.org_id == user.org_id))
     policy_count = await db.scalar(
         select(func.count(Policy.id)).where(Policy.org_id == user.org_id)
     )

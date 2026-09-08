@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import asdict, dataclass, field
 
 from app.skills.base import BaseSkill, BaseTool, TrustLevel

@@ -1,12 +1,13 @@
-from __future__ import annotations
 """In-process async event bus for SSE streaming (FRD-12).
 
 Uses asyncio.Queue per subscriber. Services publish events; the SSE endpoint
 (P1) subscribes and streams them to the frontend.
 """
 
+from __future__ import annotations
+
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -22,7 +23,7 @@ class Event:
     payload: dict[str, Any]
 
     @classmethod
-    def create(cls, event_type: str, payload: dict[str, Any]) -> "Event":
+    def create(cls, event_type: str, payload: dict[str, Any]) -> Event:
         return cls(
             id=uuid4(),
             type=event_type,
@@ -57,7 +58,7 @@ class EventBus:
                 # Drop events for slow consumers rather than blocking publishers
                 pass
 
-    def subscribe(self, maxsize: int = 256) -> "Subscription":
+    def subscribe(self, maxsize: int = 256) -> Subscription:
         """Create a new subscription. Use as an async iterator."""
         queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=maxsize)
         self._subscribers.append(queue)

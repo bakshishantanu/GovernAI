@@ -1,30 +1,33 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
-from app.infrastructure.database import get_db
+from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.agents.repository import AgentRepository
 from app.domain.agents.service import AgentService
-from app.domain.permissions.repository import PermissionRepository
-from app.domain.skills.repository import SkillRepository
-from app.domain.skills.registry import SkillRegistry
-from app.domain.policies.engine import PolicyEngine
-from app.domain.policies.repository import PolicyRepository
 from app.domain.audit.repository import AuditRepository
 from app.domain.audit.service import AuditService
 from app.domain.costs.repository import CostRepository
 from app.domain.costs.service import CostService
 from app.domain.executions.repository import ExecutionRepository
 from app.domain.executions.service import ExecutionService
-from app.runtime.llm.service import LLMService
+from app.domain.governance.budget import BudgetGuard
+from app.domain.permissions.repository import PermissionRepository
+from app.domain.policies.engine import PolicyEngine
+from app.domain.policies.repository import PolicyRepository
+from app.domain.skills.registry import SkillRegistry
+from app.domain.skills.repository import SkillRepository
+from app.infrastructure.database import get_db
+from app.infrastructure.event_bus import event_bus
+from app.runtime.llm.base import LLMProvider, LLMResponse
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
-from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
-from app.domain.agents.kill_switch import KillSwitchService
-from app.domain.governance.budget import BudgetGuard
-from app.infrastructure.event_bus import event_bus
 
 
 class MockFallbackProvider(LLMProvider):
@@ -42,9 +45,13 @@ class MockFallbackProvider(LLMProvider):
 def get_llm_service() -> LLMService:
     providers: list[LLMProvider] = []
     if settings.GROQ_API_KEY:
-        providers.append(GroqProvider(api_key=settings.GROQ_API_KEY, model=settings.LLM_PRIMARY_MODEL))
+        providers.append(
+            GroqProvider(api_key=settings.GROQ_API_KEY, model=settings.LLM_PRIMARY_MODEL)
+        )
     if settings.GEMINI_API_KEY:
-        providers.append(GeminiProvider(api_key=settings.GEMINI_API_KEY, model=settings.LLM_FALLBACK_MODEL))
+        providers.append(
+            GeminiProvider(api_key=settings.GEMINI_API_KEY, model=settings.LLM_FALLBACK_MODEL)
+        )
     if not providers:
         providers.append(MockFallbackProvider())
     return LLMService(providers)
@@ -101,6 +108,8 @@ async def get_kill_switch_service(db: AsyncSession = Depends(get_db)) -> KillSwi
         audit_service=AuditService(audit_repo=AuditRepository(db), event_bus=event_bus),
         event_bus=event_bus,
     )
+
+
 async def get_budget_guard(db: AsyncSession = Depends(get_db)) -> BudgetGuard:
     """The live spend check the governance gate runs before every tool call.
 

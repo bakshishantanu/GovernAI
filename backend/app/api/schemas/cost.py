@@ -1,25 +1,29 @@
 from __future__ import annotations
-from typing import Literal, Optional, Any
-from uuid import UUID
+
 from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
+
 from pydantic import BaseModel
 
 EventType = Literal["LLM_CALL", "TOOL_CALL"]
+
 
 class CostEventResponse(BaseModel):
     id: UUID
     agent_id: UUID
     execution_id: UUID
-    execution_step_id: Optional[UUID] = None
+    execution_step_id: UUID | None = None
     event_type: EventType
-    model: Optional[str] = None
-    provider: Optional[str] = None
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
+    model: str | None = None
+    provider: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
     cost_usd: float
     timestamp: datetime
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
+
 
 class CostSummaryResponse(BaseModel):
     total_cost_usd: float
@@ -29,6 +33,7 @@ class CostSummaryResponse(BaseModel):
 
 class AgentBudgetStatus(BaseModel):
     """One agent's spend inside the enforced window, against its own cap."""
+
     agent_id: UUID
     name: str
     spend_usd: float
@@ -46,9 +51,10 @@ class BudgetStatusResponse(BaseModel):
     (`domain/governance/budget.resolve_cap`) over the same rolling window, so
     this reports the real control rather than a second, cosmetic one.
     """
+
     cap_usd: float
     window_hours: int
     total_spend_usd: float
     agents: list[AgentBudgetStatus]
     #: The agent closest to its cap, or null when nothing has been spent.
-    closest: Optional[AgentBudgetStatus] = None
+    closest: AgentBudgetStatus | None = None

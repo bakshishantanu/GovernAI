@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from typing import Any
 
 from app.infrastructure.event_bus import Event, event_bus
 
@@ -74,9 +75,7 @@ async def stream(
     try:
         while True:
             try:
-                event = await asyncio.wait_for(
-                    subscription.__anext__(), timeout=HEARTBEAT_SECONDS
-                )
+                event = await asyncio.wait_for(subscription.__anext__(), timeout=HEARTBEAT_SECONDS)
             except asyncio.TimeoutError:
                 if on_heartbeat is None:
                     yield format_comment()

@@ -92,7 +92,9 @@ async def test_uses_exponential_backoff():
     async def fake_sleep(seconds):
         sleeps.append(seconds)
 
-    service = LLMService([provider], max_retries_per_provider=3, base_backoff_seconds=1.0, sleep=fake_sleep)
+    service = LLMService(
+        [provider], max_retries_per_provider=3, base_backoff_seconds=1.0, sleep=fake_sleep
+    )
 
     await service.chat([{"role": "user", "content": "hi"}])
 

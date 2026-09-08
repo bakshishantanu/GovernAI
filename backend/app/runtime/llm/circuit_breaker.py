@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 
@@ -64,7 +65,10 @@ class CircuitBreaker:
     def record_failure(self, key: str) -> None:
         state = self._state_for(key)
         state.consecutive_failures += 1
-        if state.state == CircuitState.HALF_OPEN or state.consecutive_failures >= self._failure_threshold:
+        if (
+            state.state == CircuitState.HALF_OPEN
+            or state.consecutive_failures >= self._failure_threshold
+        ):
             state.state = CircuitState.OPEN
             state.opened_at = self._clock()
 

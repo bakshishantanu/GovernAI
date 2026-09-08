@@ -60,9 +60,7 @@ async def test_breach_suspends_the_agent_once():
     async def on_breach(agent_id, org_id, reason):
         suspended.append((agent_id, org_id, reason))
 
-    guard = BudgetGuard(
-        FakeSpendReader(9.99), on_breach=on_breach, cap_resolver=cap_of(5.0)
-    )
+    guard = BudgetGuard(FakeSpendReader(9.99), on_breach=on_breach, cap_resolver=cap_of(5.0))
 
     decision = await guard.check(AGENT, ORG)
 
@@ -76,9 +74,7 @@ async def test_a_failed_suspension_still_denies_the_call():
     async def broken_on_breach(*_args):
         raise RuntimeError("database unavailable")
 
-    guard = BudgetGuard(
-        FakeSpendReader(9.99), on_breach=broken_on_breach, cap_resolver=cap_of(5.0)
-    )
+    guard = BudgetGuard(FakeSpendReader(9.99), on_breach=broken_on_breach, cap_resolver=cap_of(5.0))
 
     decision = await guard.check(AGENT, ORG)
 

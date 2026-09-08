@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 import sqlglot
@@ -74,9 +75,7 @@ def validate(request: ScopedQueryRequest) -> QueryValidationResult:
         )
 
     cte_names = {cte.alias for cte in statement.find_all(exp.CTE)}
-    referenced_tables = sorted(
-        {table.name for table in statement.find_all(exp.Table)} - cte_names
-    )
+    referenced_tables = sorted({table.name for table in statement.find_all(exp.Table)} - cte_names)
     out_of_scope = [t for t in referenced_tables if t not in request.permitted_tables]
     if out_of_scope:
         return QueryValidationResult(

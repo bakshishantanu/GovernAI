@@ -1,8 +1,10 @@
+from uuid import uuid4
+
 import jwt
 import pytest
-from uuid import uuid4
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+
 from app.domain.auth.middleware import (
     DEV_TOKEN,
     get_current_user,

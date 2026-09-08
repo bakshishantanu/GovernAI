@@ -1,25 +1,28 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    get_db,
     get_agent_service,
+    get_db,
     get_execution_service,
     get_llm_service,
 )
-from app.api.sse import SSE_HEADERS, format_sse, stream as sse_stream
-from app.domain.auth.middleware import get_current_user
+from app.api.execution_runner import run_execution
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.execution import ExecutionCreate, ExecutionResponse
+from app.api.sse import SSE_HEADERS, format_sse
+from app.api.sse import stream as sse_stream
 from app.domain.agents.service import AgentService
+from app.domain.auth.middleware import get_current_user
 from app.domain.executions.service import ExecutionService
-from app.runtime.llm.service import LLMService
-from app.api.execution_runner import run_execution
 from app.infrastructure.event_bus import Event
+from app.runtime.llm.service import LLMService
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 

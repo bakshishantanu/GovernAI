@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import select, func
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.costs.models import CostEvent
+
 
 class CostRepository:
     def __init__(self, session: AsyncSession):
@@ -15,7 +19,9 @@ class CostRepository:
 
     async def get_costs_for_agent(self, agent_id: UUID) -> list[CostEvent]:
         result = await self.session.execute(
-            select(CostEvent).where(CostEvent.agent_id == agent_id).order_by(CostEvent.timestamp.desc())
+            select(CostEvent)
+            .where(CostEvent.agent_id == agent_id)
+            .order_by(CostEvent.timestamp.desc())
         )
         return list(result.scalars().all())
 
@@ -26,7 +32,7 @@ class CostRepository:
                 CostEvent.agent_id,
                 CostEvent.model,
                 CostEvent.execution_id,
-                func.sum(CostEvent.cost_usd).label("total_cost_usd")
+                func.sum(CostEvent.cost_usd).label("total_cost_usd"),
             )
             .where(CostEvent.org_id == org_id)
             .group_by(CostEvent.agent_id, CostEvent.model, CostEvent.execution_id)
@@ -37,7 +43,7 @@ class CostRepository:
                 "agent_id": row.agent_id,
                 "model": row.model,
                 "execution_id": row.execution_id,
-                "total_cost_usd": float(row.total_cost_usd) if row.total_cost_usd else 0.0
+                "total_cost_usd": float(row.total_cost_usd) if row.total_cost_usd else 0.0,
             }
             for row in rows
         ]
@@ -64,6 +70,7 @@ class CostRepository:
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
     async def get_total_cost_for_agent(self, agent_id: UUID, since: datetime) -> float:
         """Total USD spent by one agent since `since`.
 
