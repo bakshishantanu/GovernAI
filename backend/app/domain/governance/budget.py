@@ -19,9 +19,10 @@ Two deliberate shortcuts, both flagged for follow-up:
 from __future__ import annotations
 
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable, Protocol
+from typing import Protocol
 from uuid import UUID
 
 #: Org-wide default cap in USD when nothing more specific is configured.

@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import select, func
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.costs.models import CostEvent
+
 
 class CostRepository:
     def __init__(self, session: AsyncSession):

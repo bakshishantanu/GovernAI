@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.agents.repository import AgentRepository
 from app.domain.permissions.repository import PermissionRepository
 from app.domain.skills.repository import SkillRepository
+
 
 class ComplianceError(Exception):
     pass

@@ -1,8 +1,11 @@
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock
-from app.domain.policies.engine import PolicyEngine, PolicyDecision
+
+import pytest
+
+from app.domain.policies.engine import PolicyEngine
 from app.domain.policies.models import Policy, PolicyRule
+
 
 @pytest.fixture
 def mock_agent_repo():

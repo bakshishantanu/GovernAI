@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Literal, Optional, Any
-from uuid import UUID
+
 from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict
 
 RuleType = Literal["PERMISSION_CHECK", "DENY_LIST", "RATE_LIMIT", "CUSTOM", "sql_blocklist"]
@@ -32,6 +34,6 @@ class PolicyResponse(BaseModel):
     name: str
     description: str
     enabled: bool
-    rules: Optional[list[PolicyRuleResponse]] = None
+    rules: list[PolicyRuleResponse] | None = None
     created_at: datetime
     updated_at: datetime

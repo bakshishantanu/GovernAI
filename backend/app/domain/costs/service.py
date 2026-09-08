@@ -1,6 +1,7 @@
 import uuid
-from uuid import UUID
 from datetime import datetime, timezone
+from uuid import UUID
+
 from app.domain.costs.models import CostEvent
 from app.domain.costs.repository import CostRepository
 from app.infrastructure.event_bus import Event, EventBus
@@ -27,9 +28,9 @@ class CostService:
     ):
         pricing = PRICING_TIERS.get(model, {"prompt": 0, "completion": 0})
         cost_usd = (prompt_tokens * pricing["prompt"]) + (completion_tokens * pricing["completion"])
-        
+
         total_tokens = prompt_tokens + completion_tokens
-        
+
         event = CostEvent(
             id=uuid.uuid4(),
             org_id=org_id,

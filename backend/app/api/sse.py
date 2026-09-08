@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncGenerator, Awaitable, Callable, Iterable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable
+from typing import Any
 
 from app.infrastructure.event_bus import Event, event_bus
 

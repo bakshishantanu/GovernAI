@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from contextlib import asynccontextmanager
 
 import structlog
@@ -6,15 +7,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-
-from app.config import settings
-from app.api.v1.auth import router as auth_router
-from app.api.v1.agents import router as agents_router
-from app.api.v1.skills import router as skills_router
-from app.api.v1.policies import router as policies_router
-from app.api.v1.audits import router as audits_router
-from app.api.v1.costs import router as costs_router
-from app.api.v1.executions import router as executions_router
 
 # Import every domain's ORM models so SQLAlchemy's mapper registry knows
 # about all tables at startup, regardless of which routers are wired up.
@@ -31,6 +23,14 @@ import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401
 import app.domain.skills.models  # noqa: F401
+from app.api.v1.agents import router as agents_router
+from app.api.v1.audits import router as audits_router
+from app.api.v1.auth import router as auth_router
+from app.api.v1.costs import router as costs_router
+from app.api.v1.executions import router as executions_router
+from app.api.v1.policies import router as policies_router
+from app.api.v1.skills import router as skills_router
+from app.config import settings
 
 logger = structlog.get_logger()
 

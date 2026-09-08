@@ -22,11 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 
-from app.domain.documents.models import Document, DocumentChunk
-from app.infrastructure.database import async_session_factory
-from app.runtime.rag.embeddings import GeminiEmbeddingProvider
-from app.runtime.rag.retrieval import _chunk_text, _seed_documents
-
 # Every domain's models must be imported so SQLAlchemy's mapper registry
 # knows about cross-domain foreign keys (e.g. documents.org_id ->
 # organizations.id) before the first flush - see app/main.py's own note.
@@ -38,6 +33,10 @@ import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401
 import app.domain.skills.models  # noqa: F401
+from app.domain.documents.models import Document, DocumentChunk
+from app.infrastructure.database import async_session_factory
+from app.runtime.rag.embeddings import GeminiEmbeddingProvider
+from app.runtime.rag.retrieval import _chunk_text, _seed_documents
 
 _DUMMY_ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 

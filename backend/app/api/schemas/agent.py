@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Literal, Optional
-from uuid import UUID
+
 from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 AgentStatus = Literal["DRAFT", "ACTIVE", "SUSPENDED", "REVOKED"]
@@ -13,7 +15,7 @@ class PassportResponse(BaseModel):
     id: UUID
     agent_id: UUID
     compliance_status: ComplianceStatus
-    compliance_checked_at: Optional[datetime] = None
+    compliance_checked_at: datetime | None = None
     lifecycle_state: LifecycleState
     permissions: list[str]
     created_at: datetime
@@ -46,9 +48,9 @@ class AgentCreate(BaseModel):
     skills: list[str]  # skill IDs
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    skills: Optional[list[str]] = None
+    name: str | None = None
+    description: str | None = None
+    skills: list[str] | None = None
 
 class AgentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -58,7 +60,7 @@ class AgentResponse(BaseModel):
     name: str
     description: str
     status: AgentStatus
-    passport: Optional[PassportResponse] = None
+    passport: PassportResponse | None = None
     #: The agent's skills. `Agent` has no `skills` relationship, so this is
     #: filled by the route from `agent_skills`; it was absent entirely, and
     #: the console consequently told the user that an agent with two skills

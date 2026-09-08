@@ -1,30 +1,33 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
-from app.infrastructure.database import get_db
+from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.agents.repository import AgentRepository
 from app.domain.agents.service import AgentService
-from app.domain.permissions.repository import PermissionRepository
-from app.domain.skills.repository import SkillRepository
-from app.domain.skills.registry import SkillRegistry
-from app.domain.policies.engine import PolicyEngine
-from app.domain.policies.repository import PolicyRepository
 from app.domain.audit.repository import AuditRepository
 from app.domain.audit.service import AuditService
 from app.domain.costs.repository import CostRepository
 from app.domain.costs.service import CostService
 from app.domain.executions.repository import ExecutionRepository
 from app.domain.executions.service import ExecutionService
-from app.runtime.llm.service import LLMService
+from app.domain.governance.budget import BudgetGuard
+from app.domain.permissions.repository import PermissionRepository
+from app.domain.policies.engine import PolicyEngine
+from app.domain.policies.repository import PolicyRepository
+from app.domain.skills.registry import SkillRegistry
+from app.domain.skills.repository import SkillRepository
+from app.infrastructure.database import get_db
+from app.infrastructure.event_bus import event_bus
+from app.runtime.llm.base import LLMProvider, LLMResponse
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
-from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
-from app.domain.agents.kill_switch import KillSwitchService
-from app.domain.governance.budget import BudgetGuard
-from app.infrastructure.event_bus import event_bus
 
 
 class MockFallbackProvider(LLMProvider):

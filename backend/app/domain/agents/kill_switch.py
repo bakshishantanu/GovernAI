@@ -1,8 +1,11 @@
 from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.agents.repository import AgentRepository
 from app.domain.audit.service import AuditService
-from app.infrastructure.event_bus import EventBus, Event
+from app.infrastructure.event_bus import Event, EventBus
+
 
 class KillSwitchService:
     def __init__(self, session: AsyncSession, agent_repo: AgentRepository, audit_service: AuditService, event_bus: EventBus):
@@ -15,18 +18,18 @@ class KillSwitchService:
         agent = await self.agent_repo.get_agent(agent_id)
         if not agent or agent.org_id != org_id:
             raise ValueError("Agent not found")
-            
+
         agent.status = "SUSPENDED"
         if agent.passport:
             agent.passport.lifecycle_state = "SUSPENDED"
-            
+
         await self.audit_service.log_agent_suspended(
             org_id=org_id,
             actor_id=actor_id,
             agent_id=agent_id,
             reason=reason
         )
-        
+
         await self.session.commit()
         await self.event_bus.publish(Event.create("agent.suspended", {"agent_id": str(agent_id), "reason": reason}))
 
@@ -34,20 +37,20 @@ class KillSwitchService:
         agent = await self.agent_repo.get_agent(agent_id)
         if not agent or agent.org_id != org_id:
             raise ValueError("Agent not found")
-            
+
         if agent.status != "SUSPENDED":
             raise ValueError("Agent is not suspended")
-            
+
         agent.status = "ACTIVE"
         if agent.passport:
             agent.passport.lifecycle_state = "ACTIVE"
-            
+
         await self.audit_service.log_agent_reactivated(
             org_id=org_id,
             actor_id=actor_id,
             agent_id=agent_id,
             reason=reason
         )
-        
+
         await self.session.commit()
         await self.event_bus.publish(Event.create("agent.reactivated", {"agent_id": str(agent_id), "reason": reason}))

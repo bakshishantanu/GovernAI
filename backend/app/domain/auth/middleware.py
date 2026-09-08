@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import os
+from uuid import UUID
+
 import jwt
 from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from app.api.schemas.auth import CurrentUser
 from app.config import settings
-from uuid import UUID
 
 security = HTTPBearer()
 
@@ -65,17 +68,17 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             algorithms=["HS256"],
             options={"verify_aud": False}  # Adjust based on exact Supabase config
         )
-        
+
         # Extract user identity from the subject claim
         user_id_str = payload.get("sub")
         if not user_id_str:
             raise HTTPException(status_code=401, detail="Invalid token: missing subject")
-        
+
         user_id = UUID(user_id_str)
 
         # Extract role and org_id from app_metadata (as specified in FRD)
         app_metadata = payload.get("app_metadata", {})
-        
+
         # Default to "member" if not specified
         role = app_metadata.get("role", "member")
         if role not in ["admin", "member"]:

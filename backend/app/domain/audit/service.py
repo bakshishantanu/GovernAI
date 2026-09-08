@@ -1,9 +1,11 @@
 import uuid
-from uuid import UUID
 from datetime import datetime, timezone
+from uuid import UUID
+
 from app.domain.audit.models import AuditEvent
 from app.domain.audit.repository import AuditRepository
 from app.infrastructure.event_bus import Event, EventBus
+
 
 class AuditService:
     def __init__(self, audit_repo: AuditRepository, event_bus: EventBus):
@@ -70,7 +72,7 @@ class AuditService:
             timestamp=datetime.now(timezone.utc)
         )
         await self.audit_repo.record_event(event)
-        
+
         topic = "audit.tool.allowed" if allowed else "audit.tool.denied"
         await self.event_bus.publish(Event.create(topic, {
             "execution_id": str(execution_id),

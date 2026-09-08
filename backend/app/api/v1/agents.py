@@ -1,30 +1,31 @@
 from __future__ import annotations
-from typing import List
+
 from uuid import UUID
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_agent_service, get_db, get_kill_switch_service
 from app.api.schemas.agent import (
-    AgentResponse,
     AgentCreate,
+    AgentResponse,
     AgentSkillRef,
     AgentUpdate,
-    PassportResponse,
 )
-from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.auth import CurrentUser
-from app.domain.agents.models import AgentSkill
-from app.domain.skills.models import SkillModel
-from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
+from app.api.schemas.common import Envelope, PaginatedResponse
 from app.domain.agents.kill_switch import KillSwitchService
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.deps import get_agent_service, get_db, get_kill_switch_service
+from app.domain.agents.models import AgentSkill
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
     InvalidStateTransitionError,
     SkillNotFoundError,
 )
+from app.domain.auth.middleware import get_current_user
+from app.domain.auth.rbac import require_admin
+from app.domain.skills.models import SkillModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 

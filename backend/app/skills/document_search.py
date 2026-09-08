@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from app.runtime.rag.citations import CITATION_INSTRUCTIONS
 from app.runtime.rag.retrieval import DocumentRetriever, DocumentSearchAdapter
 from app.skills.base import BaseSkill, BaseTool, TrustLevel

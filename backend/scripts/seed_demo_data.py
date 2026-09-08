@@ -2,16 +2,16 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.config import settings
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
-from app.domain.policies.models import Policy, PolicyRule
-from app.domain.skills.models import SkillModel, ToolModel
-from app.domain.executions.models import Execution
 from app.domain.audit.models import AuditEvent
 from app.domain.costs.models import CostEvent
 from app.domain.documents.models import Document, DocumentChunk
+from app.domain.executions.models import Execution
 from app.domain.permissions.models import Permission
-from app.config import settings
+from app.domain.policies.models import Policy, PolicyRule
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -20,7 +20,7 @@ async def seed_data():
     async with AsyncSessionLocal() as session:
         org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
         admin_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
-        
+
         # 1. Policies
         policy_id = uuid.uuid4()
         policy = Policy(
@@ -31,7 +31,7 @@ async def seed_data():
             enabled=True
         )
         session.add(policy)
-        
+
         policy_rule = PolicyRule(
             id=uuid.uuid4(),
             policy_id=policy_id,
@@ -64,7 +64,7 @@ async def seed_data():
             permissions=[]
         )
         session.add(passport)
-        
+
         permissions = [
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:read"),
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:create"),
@@ -93,7 +93,7 @@ async def seed_data():
             embedding=[0.0] * 768,
             chunk_index=0
         ))
-        
+
         doc_id_2 = uuid.uuid4()
         session.add(Document(
             id=doc_id_2,
@@ -136,7 +136,7 @@ async def seed_data():
             reason="All policies passed",
             timestamp=datetime.now(timezone.utc)
         ))
-        
+
         session.add(AuditEvent(
             id=uuid.uuid4(),
             org_id=org_id,

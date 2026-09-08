@@ -1,20 +1,20 @@
 from __future__ import annotations
+
 import json
 import operator
 from typing import Annotated, TypedDict
+from uuid import UUID
 
 from langgraph.graph import END, StateGraph
 
-from app.runtime.llm.base import ToolCall
-from app.runtime.llm.service import LLMService
-from app.skills.base import BaseTool
-from uuid import UUID
-from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
 from app.domain.governance.budget import BudgetGuard
 from app.domain.governance.middleware import govern_tool
-
+from app.domain.policies.engine import PolicyEngine
+from app.runtime.llm.base import ToolCall
+from app.runtime.llm.service import LLMService
+from app.skills.base import BaseTool
 
 TOOL_EXECUTION_TIMEOUT_SECONDS = 30.0
 
@@ -38,7 +38,7 @@ def _to_openai_tool_call(tc: ToolCall) -> dict:
 
 
 def build_agent_graph(
-    llm_service: LLMService, 
+    llm_service: LLMService,
     tools: list[BaseTool],
     agent_id: UUID,
     org_id: UUID,
@@ -143,7 +143,7 @@ async def run_agent(
 ) -> dict:
     """Run a goal through the security-hardened agent graph."""
     graph = build_agent_graph(
-        llm_service, tools, agent_id, org_id, execution_id, 
+        llm_service, tools, agent_id, org_id, execution_id,
         policy_engine, audit_service, cost_service, budget_guard
     )
 

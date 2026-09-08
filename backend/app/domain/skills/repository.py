@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.domain.skills.models import SkillModel, ToolModel
+from sqlalchemy.orm import selectinload
+
+from app.domain.skills.models import SkillModel
+
 
 class SkillRepository:
     def __init__(self, session: AsyncSession):

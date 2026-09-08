@@ -1,16 +1,23 @@
 from __future__ import annotations
+
 import uuid
+
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_db
-from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
-from app.domain.auth.rbac import require_admin
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.policy import PolicyResponse, PolicyCreate, PolicyRuleCreate, PolicyRuleResponse
-from app.domain.policies.repository import PolicyRepository
+from app.api.schemas.policy import (
+    PolicyCreate,
+    PolicyResponse,
+    PolicyRuleCreate,
+    PolicyRuleResponse,
+)
+from app.domain.auth.middleware import get_current_user
+from app.domain.auth.rbac import require_admin
 from app.domain.policies.models import Policy, PolicyRule
+from app.domain.policies.repository import PolicyRepository
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -47,7 +54,7 @@ async def create_policy(
         description=policy_in.description,
         enabled=policy_in.enabled
     )
-    
+
     for rule_in in policy_in.rules:
         new_rule = PolicyRule(
             id=uuid.uuid4(),
@@ -58,11 +65,11 @@ async def create_policy(
             enabled=rule_in.enabled
         )
         new_policy.rules.append(new_rule)
-        
+
     created_policy = await repo.create_policy(new_policy)
     await db.commit()
     await db.refresh(created_policy)
-    
+
     return Envelope(data=created_policy)
 
 

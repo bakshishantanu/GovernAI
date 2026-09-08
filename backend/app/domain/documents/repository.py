@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from sqlalchemy import cast, select
 from sqlalchemy.dialects.postgresql import JSONB, array
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.domain.documents.models import Document, DocumentChunk
+
 
 class DocumentRepository:
     def __init__(self, session: AsyncSession):

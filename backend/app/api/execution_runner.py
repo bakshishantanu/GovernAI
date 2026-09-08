@@ -22,7 +22,6 @@ from uuid import UUID
 from app.config import settings
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.agents.repository import AgentRepository
-from app.domain.agents.service import AgentService
 from app.domain.audit.repository import AuditRepository
 from app.domain.audit.service import AuditService
 from app.domain.costs.repository import CostRepository

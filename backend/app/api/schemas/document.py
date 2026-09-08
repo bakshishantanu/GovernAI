@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import Optional
-from uuid import UUID
+
 from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel
+
 
 class DocumentUpload(BaseModel):
     title: str

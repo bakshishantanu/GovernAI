@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import uuid
-from uuid import UUID
 from datetime import datetime, timezone
-from app.domain.executions.models import Execution, ExecutionStep
+from uuid import UUID
+
+from app.domain.executions.models import Execution
 from app.domain.executions.repository import ExecutionRepository
+
 
 class ExecutionService:
     def __init__(self, exec_repo: ExecutionRepository):
