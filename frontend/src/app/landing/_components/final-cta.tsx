@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export function FinalCta() {
   return (
@@ -20,15 +20,15 @@ export function FinalCta() {
       />
 
       <div className="relative max-w-3xl mx-auto px-6 py-32 md:py-44 text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          whileInView={{ opacity: 1, scale: 1 }}
+        <motion.span
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.6 }}
           transition={{ duration: 0.5 }}
-          className="mx-auto mb-8 w-12 h-12 rounded-2xl bg-[var(--l-orange)]/15 border border-[var(--l-orange)]/30 flex items-center justify-center"
+          className="inline-block text-xs uppercase tracking-[0.14em] text-[var(--l-orange-soft)] font-semibold mb-6"
         >
-          <ShieldCheck className="w-6 h-6 text-[var(--l-orange)]" />
-        </motion.div>
+          GovernAI
+        </motion.span>
 
         <motion.h2
           initial={{ opacity: 0, y: 24 }}

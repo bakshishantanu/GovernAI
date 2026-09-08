@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-
-const inter = Inter({ subsets: ["latin"] });
+import { RouteTransition } from "@/components/route-transition";
+import { kecal, interLanding, caveat } from "@/lib/landing-fonts";
 
 export const metadata: Metadata = {
   title: "GovernAI Enterprise",
@@ -17,13 +16,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      {/*
+        Fonts load here (root), not per-section, so the app shell and every
+        screen share the same Archivo Black / Inter / Caveat vocabulary as
+        the landing pages (D-038) without re-declaring them. The landing
+        route group still applies these classes itself too; harmless —
+        next/font dedupes by variable name, not by call site.
+      */}
+      <body className={`${kecal.variable} ${interLanding.variable} ${caveat.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
+          <RouteTransition />
           {children}
         </ThemeProvider>
       </body>

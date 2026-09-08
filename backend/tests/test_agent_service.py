@@ -141,6 +141,7 @@ async def test_create_agent_with_request_and_assigned_user():
     assigned_user = uuid4()
 
     created_agent = None
+
     async def capture_created(agent):
         nonlocal created_agent
         created_agent = agent
@@ -164,14 +165,18 @@ async def test_create_agent_with_request_and_assigned_user():
 
 
 async def test_activate_agent_fulfills_linked_request():
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     service, agent_repo, _ = _service()
     agent = _agent_with_passport(lifecycle_state="APPROVED")
     agent.request_id = uuid4()
     agent_repo.get_agent.return_value = agent
     agent_repo.session = MagicMock()
 
-    with patch("app.domain.agent_requests.service.AgentRequestService.fulfill_request", new_callable=AsyncMock) as mock_fulfill:
+    with patch(
+        "app.domain.agent_requests.service.AgentRequestService.fulfill_request",
+        new_callable=AsyncMock,
+    ) as mock_fulfill:
         activated = await service.activate_agent(agent.id)
         assert activated.status == "ACTIVE"
         mock_fulfill.assert_awaited_once_with(agent.request_id, agent.id)

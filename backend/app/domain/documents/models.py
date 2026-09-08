@@ -1,11 +1,16 @@
 from __future__ import annotations
+
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, text
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import DateTime, ForeignKey, Integer, String, text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.infrastructure.database import Base
+
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -14,8 +19,9 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[str] = mapped_column(Vector(), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    
-    document: Mapped["Document"] = relationship("Document", back_populates="chunks")
+
+    document: Mapped[Document] = relationship("Document", back_populates="chunks")
+
 
 class Document(Base):
     __tablename__ = "documents"
@@ -24,6 +30,8 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     access_scope: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
-    
-    chunks: Mapped[list["DocumentChunk"]] = relationship("DocumentChunk", back_populates="document")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+    chunks: Mapped[list[DocumentChunk]] = relationship("DocumentChunk", back_populates="document")

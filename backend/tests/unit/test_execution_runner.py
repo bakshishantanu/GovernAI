@@ -27,11 +27,12 @@ def ids():
 async def test_a_database_that_is_down_still_ends_the_run(ids):
     """Even opening the session is inside the guard. If it were not, the run
     would stay at RUNNING and its stream would never close."""
-    with patch.object(
-        execution_runner, "async_session_factory", side_effect=RuntimeError("no database")
-    ), patch.object(
-        execution_runner, "_mark_failed", new_callable=AsyncMock
-    ) as mark_failed:
+    with (
+        patch.object(
+            execution_runner, "async_session_factory", side_effect=RuntimeError("no database")
+        ),
+        patch.object(execution_runner, "_mark_failed", new_callable=AsyncMock) as mark_failed,
+    ):
         await execution_runner.run_execution(
             **ids,
             goal="anything",
@@ -51,9 +52,11 @@ async def test_a_failure_inside_the_run_is_recorded_not_raised(ids):
     session = AsyncMock()
     session.__aenter__.return_value = session
 
-    with patch.object(execution_runner, "async_session_factory", return_value=session), \
-         patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools, \
-         patch.object(execution_runner, "_mark_failed", new_callable=AsyncMock) as mark_failed:
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "_mark_failed", new_callable=AsyncMock) as mark_failed,
+    ):
         load_tools.side_effect = RuntimeError("skill registry exploded")
 
         await execution_runner.run_execution(
@@ -87,14 +90,16 @@ async def test_hitting_the_step_limit_is_a_failure_not_a_success(ids):
     session.__aenter__.return_value = session
     exec_service = AsyncMock()
 
-    with patch.object(execution_runner, "async_session_factory", return_value=session), \
-         patch.object(execution_runner, "ExecutionService", return_value=exec_service), \
-         patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools, \
-         patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run, \
-         patch.object(execution_runner, "SkillRegistry"), \
-         patch.object(execution_runner, "PolicyEngine"), \
-         patch.object(execution_runner, "BudgetGuard"), \
-         patch.object(execution_runner, "KillSwitchService"):
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=exec_service),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "BudgetGuard"),
+        patch.object(execution_runner, "KillSwitchService"),
+    ):
         load_tools.return_value = []
         run.return_value = {"final_answer": None, "stopped_reason": "max_steps_reached"}
 
@@ -116,14 +121,16 @@ async def test_a_completed_run_is_marked_complete_with_its_answer(ids):
     session.__aenter__.return_value = session
     exec_service = AsyncMock()
 
-    with patch.object(execution_runner, "async_session_factory", return_value=session), \
-         patch.object(execution_runner, "ExecutionService", return_value=exec_service), \
-         patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools, \
-         patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run, \
-         patch.object(execution_runner, "SkillRegistry"), \
-         patch.object(execution_runner, "PolicyEngine"), \
-         patch.object(execution_runner, "BudgetGuard"), \
-         patch.object(execution_runner, "KillSwitchService"):
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=exec_service),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "BudgetGuard"),
+        patch.object(execution_runner, "KillSwitchService"),
+    ):
         load_tools.return_value = []
         run.return_value = {"final_answer": "42", "stopped_reason": "completed"}
 
@@ -146,13 +153,15 @@ async def test_the_run_is_budget_guarded(ids):
     session = AsyncMock()
     session.__aenter__.return_value = session
 
-    with patch.object(execution_runner, "async_session_factory", return_value=session), \
-         patch.object(execution_runner, "ExecutionService", return_value=AsyncMock()), \
-         patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools, \
-         patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run, \
-         patch.object(execution_runner, "SkillRegistry"), \
-         patch.object(execution_runner, "PolicyEngine"), \
-         patch.object(execution_runner, "KillSwitchService"):
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=AsyncMock()),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "KillSwitchService"),
+    ):
         load_tools.return_value = []
         run.return_value = {"final_answer": "ok", "stopped_reason": "completed"}
 

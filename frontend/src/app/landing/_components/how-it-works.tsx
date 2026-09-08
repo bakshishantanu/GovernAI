@@ -21,7 +21,7 @@ const STEPS = [
     n: "01",
     icon: Blocks,
     title: "Assemble from skills",
-    body: "Builders pick from a curated registry — ticketing, doc search, SQL — instead of writing integrations from zero.",
+    body: "Builders pick from a curated registry (ticketing, doc search, SQL) instead of writing integrations from zero.",
   },
   {
     n: "02",
@@ -33,7 +33,7 @@ const STEPS = [
     n: "03",
     icon: GaugeCircle,
     title: "Every call, intercepted",
-    body: "The policy gate checks permission scope and budget on every single tool call — live, not after the fact.",
+    body: "The policy gate checks permission scope and budget on every single tool call, in real time, not after the fact.",
   },
   {
     n: "04",
@@ -172,13 +172,13 @@ function StepVisual({ step }: { step: number }) {
         <Icon className="w-7 h-7 text-[var(--l-orange-soft)]" />
         <div className="mt-6 space-y-2.5 text-sm font-mono">
           <div className="flex items-center gap-2.5 text-[var(--l-teal-soft)]">
-            <Check className="w-4 h-4" /> ticket:read — allowed
+            <Check className="w-4 h-4" /> ticket:read · allowed
           </div>
           <div className="flex items-center gap-2.5 text-[#e07a6b]">
-            <X className="w-4 h-4" /> db:write — blocked
+            <X className="w-4 h-4" /> db:write · blocked
           </div>
           <div className="flex items-center gap-2.5 text-[var(--l-teal-soft)]">
-            <Check className="w-4 h-4" /> docs:search — allowed
+            <Check className="w-4 h-4" /> docs:search · allowed
           </div>
         </div>
       </div>

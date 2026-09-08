@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from uuid import UUID
+
 from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.domain.executions.models import Execution, ExecutionStep
+
 
 class ExecutionRepository:
     def __init__(self, session: AsyncSession):
@@ -20,12 +24,13 @@ class ExecutionRepository:
         return result.scalar_one_or_none()
 
     async def list_executions_for_org(
-        self, 
+        self,
         org_id: UUID,
         builder_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
     ) -> list[Execution]:
         from app.domain.agents.models import Agent
+
         stmt = (
             select(Execution)
             .options(selectinload(Execution.steps))
@@ -36,7 +41,7 @@ class ExecutionRepository:
             stmt = stmt.where(Agent.owner_id == builder_id)
         if assigned_user_id:
             stmt = stmt.where(Agent.assigned_user_id == assigned_user_id)
-            
+
         stmt = stmt.order_by(Execution.started_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

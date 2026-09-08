@@ -18,7 +18,7 @@ export function Passport() {
             Meet the Agent Passport
           </span>
           <h2 className="landing-display mt-4 text-4xl md:text-5xl text-[var(--l-charcoal)] leading-[1.02] tracking-tight">
-            Governance is generated at creation — not configured afterward.
+            Governance is generated at creation, not configured afterward.
           </h2>
           <p className="mt-5 text-[var(--l-charcoal)]/65 leading-relaxed max-w-md">
             The instant a builder assembles an agent from skills, GovernAI issues it

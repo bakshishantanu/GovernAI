@@ -1,22 +1,33 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
+
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.agents.repository import AgentRepository
 from app.domain.permissions.repository import PermissionRepository
 from app.domain.skills.repository import SkillRepository
 
+
 class ComplianceError(Exception):
     pass
+
 
 class InvalidStateTransitionError(Exception):
     pass
 
+
 class SkillNotFoundError(Exception):
     pass
 
+
 class AgentService:
-    def __init__(self, agent_repo: AgentRepository, perm_repo: PermissionRepository, skill_repo: SkillRepository):
+    def __init__(
+        self,
+        agent_repo: AgentRepository,
+        perm_repo: PermissionRepository,
+        skill_repo: SkillRepository,
+    ):
         self.agent_repo = agent_repo
         self.perm_repo = perm_repo
         self.skill_repo = skill_repo
@@ -44,7 +55,7 @@ class AgentService:
             request_id=request_id,
             name=name,
             description=description,
-            status="DRAFT"
+            status="DRAFT",
         )
         await self.agent_repo.create_agent(agent)
 
@@ -56,7 +67,7 @@ class AgentService:
             agent_id=agent.id,
             agent=agent,
             compliance_status="PENDING",
-            lifecycle_state="DRAFT"
+            lifecycle_state="DRAFT",
         )
         await self.agent_repo.create_passport(passport)
         await self.agent_repo.flush()
@@ -83,7 +94,8 @@ class AgentService:
             agent.passport.compliance_status = "FAILED"
             raise ComplianceError("Agent must have an owner")
 
-        # In a full implementation, we'd check if requested permissions are a subset of bound skills here.
+        # In a full implementation, we'd check here that the requested permissions
+        # are a subset of what the bound skills require.
 
         agent.passport.compliance_status = "PASSED"
         agent.passport.compliance_checked_at = datetime.now(timezone.utc)
@@ -104,6 +116,7 @@ class AgentService:
             from app.domain.agent_requests.repository import AgentRequestRepository
             from app.domain.agent_requests.service import AgentRequestService
             from app.infrastructure.event_bus import event_bus
+
             request_repo = AgentRequestRepository(self.agent_repo.session)
             request_service = AgentRequestService(request_repo, event_bus=event_bus)
             await request_service.fulfill_request(agent.request_id, agent.id)

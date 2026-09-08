@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any
@@ -45,7 +46,7 @@ async def govern_tool(
             agent_id=agent_id,
             tool_name=tool.name,
             tool_args=arguments,
-            required_permission=getattr(tool, "required_permission", "")
+            required_permission=getattr(tool, "required_permission", ""),
         )
 
         if not decision.allowed:
@@ -55,9 +56,7 @@ async def govern_tool(
             )
             return result
 
-        result = await asyncio.wait_for(
-            tool.execute(**arguments), timeout=timeout_seconds
-        )
+        result = await asyncio.wait_for(tool.execute(**arguments), timeout=timeout_seconds)
     except asyncio.TimeoutError:
         return {
             "error": "timeout",
@@ -78,7 +77,9 @@ async def govern_tool(
         logger.exception(
             "AUDIT WRITE FAILED after a successful tool call — "
             "agent=%s execution=%s tool=%s. The action happened but is unlogged.",
-            agent_id, execution_id, tool.name,
+            agent_id,
+            execution_id,
+            tool.name,
         )
 
     return result

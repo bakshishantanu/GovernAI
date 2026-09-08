@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from sqlalchemy import cast, select
 from sqlalchemy.dialects.postgresql import JSONB, array
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.domain.documents.models import Document, DocumentChunk
+
 
 class DocumentRepository:
     def __init__(self, session: AsyncSession):
@@ -16,7 +20,9 @@ class DocumentRepository:
 
     async def get_document(self, document_id: UUID) -> Document | None:
         result = await self.session.execute(
-            select(Document).where(Document.id == document_id).options(selectinload(Document.chunks))
+            select(Document)
+            .where(Document.id == document_id)
+            .options(selectinload(Document.chunks))
         )
         return result.scalar_one_or_none()
 

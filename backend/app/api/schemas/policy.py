@@ -1,10 +1,13 @@
 from __future__ import annotations
-from typing import Literal, Optional, Any
-from uuid import UUID
+
 from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict
 
 RuleType = Literal["PERMISSION_CHECK", "DENY_LIST", "RATE_LIMIT", "CUSTOM", "sql_blocklist"]
+
 
 class PolicyRuleCreate(BaseModel):
     name: str
@@ -13,6 +16,7 @@ class PolicyRuleCreate(BaseModel):
     priority: int
     enabled: bool = True
 
+
 class PolicyRuleResponse(PolicyRuleCreate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -20,11 +24,13 @@ class PolicyRuleResponse(PolicyRuleCreate):
     created_at: datetime
     updated_at: datetime
 
+
 class PolicyCreate(BaseModel):
     name: str
     description: str
     enabled: bool = True
     rules: list[PolicyRuleCreate] = []
+
 
 class PolicyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -32,6 +38,6 @@ class PolicyResponse(BaseModel):
     name: str
     description: str
     enabled: bool
-    rules: Optional[list[PolicyRuleResponse]] = None
+    rules: list[PolicyRuleResponse] | None = None
     created_at: datetime
     updated_at: datetime

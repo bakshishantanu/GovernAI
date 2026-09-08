@@ -58,7 +58,10 @@ async def test_chat_parses_tool_calls():
                         "tool_calls": [
                             {
                                 "id": "call_1",
-                                "function": {"name": "read_ticket", "arguments": '{"ticket_id": 42}'},
+                                "function": {
+                                    "name": "read_ticket",
+                                    "arguments": '{"ticket_id": 42}',
+                                },
                             }
                         ],
                     },

@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import uuid
-from uuid import UUID
 from datetime import datetime, timezone
-from app.domain.executions.models import Execution, ExecutionStep
+from uuid import UUID
+
+from app.domain.executions.models import Execution
 from app.domain.executions.repository import ExecutionRepository
+
 
 class ExecutionService:
     def __init__(self, exec_repo: ExecutionRepository):
@@ -16,14 +19,16 @@ class ExecutionService:
             org_id=org_id,
             goal=goal,
             status="PENDING",
-            started_at=datetime.now(timezone.utc)
+            started_at=datetime.now(timezone.utc),
         )
         return await self.exec_repo.create_execution(execution)
 
     async def get_execution(self, execution_id: UUID) -> Execution | None:
         return await self.exec_repo.get_execution(execution_id)
 
-    async def list_executions_for_org(self, org_id: UUID, builder_id: UUID | None = None, assigned_user_id: UUID | None = None) -> list[Execution]:
+    async def list_executions_for_org(
+        self, org_id: UUID, builder_id: UUID | None = None, assigned_user_id: UUID | None = None
+    ) -> list[Execution]:
         return await self.exec_repo.list_executions_for_org(org_id, builder_id, assigned_user_id)
 
     async def list_executions_for_agent(self, agent_id: UUID) -> list[Execution]:
@@ -33,10 +38,14 @@ class ExecutionService:
         await self.exec_repo.complete_execution(execution_id=execution_id, status="RUNNING")
 
     async def complete(self, execution_id: UUID, result: str | None) -> None:
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="COMPLETED", result=result)
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id, status="COMPLETED", result=result
+        )
 
     async def fail(self, execution_id: UUID, error: str) -> None:
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="FAILED", error=error)
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id, status="FAILED", error=error
+        )
 
     async def cancel(self, execution_id: UUID, org_id: UUID) -> Execution:
         execution = await self.exec_repo.get_execution(execution_id)
@@ -44,5 +53,9 @@ class ExecutionService:
             raise ValueError("Execution not found")
         if execution.status in ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED"):
             raise ValueError(f"Cannot cancel execution in state {execution.status}")
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="CANCELLED", error="Manually terminated by user (Kill Switch)")
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id,
+            status="CANCELLED",
+            error="Manually terminated by user (Kill Switch)",
+        )
         return await self.exec_repo.get_execution(execution_id)

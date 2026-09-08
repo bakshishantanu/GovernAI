@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.domain.skills.models import SkillModel, ToolModel
+from sqlalchemy.orm import selectinload
+
+from app.domain.skills.models import SkillModel
+
 
 class SkillRepository:
     def __init__(self, session: AsyncSession):
@@ -18,9 +21,8 @@ class SkillRepository:
         return result.scalar_one_or_none()
 
     async def list_skills(self) -> list[SkillModel]:
-        stmt = (
-            select(SkillModel)
-            .options(selectinload(SkillModel.tools), selectinload(SkillModel.permissions))
+        stmt = select(SkillModel).options(
+            selectinload(SkillModel.tools), selectinload(SkillModel.permissions)
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

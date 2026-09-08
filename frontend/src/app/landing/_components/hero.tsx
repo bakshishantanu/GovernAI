@@ -13,7 +13,7 @@ export function Hero() {
 
   const blobY = useTransform(scrollYProgress, [0, 1], [0, 160]);
   const cardY = useTransform(scrollYProgress, [0, 1], [0, 120]);
-  const cardRotate = useTransform(scrollYProgress, [0, 1], [-8, -2]);
+  const cardRotate = useTransform(scrollYProgress, [0, 1], [-6, -3]);
   const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
   const contentY = useTransform(scrollYProgress, [0, 1], [0, 60]);
 
@@ -70,7 +70,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.35 }}
             className="mt-7 max-w-md text-lg text-[var(--l-ink)]/70 leading-relaxed"
           >
-            GovernAI assembles internal AI agents from reusable skills — and
+            GovernAI assembles internal AI agents from reusable skills, then
             gives every one an identity, a permission scope, and a live
             spending budget the moment it&apos;s born.
           </motion.p>
@@ -100,12 +100,12 @@ export function Hero() {
         {/* tilted passport-card visual, echoing the tilted book covers */}
         <motion.div
           style={{ y: cardY, rotate: cardRotate }}
-          initial={{ opacity: 0, x: 30, rotate: -14 }}
+          initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
           className="relative hidden md:block"
         >
-          <div className="rounded-[28px] bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-6 shadow-2xl shadow-black/30 border border-white/10 rotate-[-6deg]">
+          <div className="rounded-[28px] bg-[var(--l-navy-deep)] text-[var(--l-cream)] p-6 shadow-2xl shadow-black/30 border border-white/10">
             <div className="flex items-center justify-between text-[var(--l-cream)]">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-[var(--l-orange-soft)]">
                 <ShieldCheck className="w-3.5 h-3.5" />

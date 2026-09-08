@@ -1,27 +1,30 @@
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
+
 import pytest
 from fastapi import HTTPException
-from app.api.v1.agent_requests import (
-    create_request,
-    list_requests,
-    get_request,
-    claim_request,
-    cancel_request,
-)
+
 from app.api.schemas.agent_requests import AgentRequestCreate
 from app.api.schemas.auth import CurrentUser
+from app.api.v1.agent_requests import (
+    cancel_request,
+    claim_request,
+    create_request,
+    get_request,
+    list_requests,
+)
 from app.domain.agent_requests.models import AgentRequest
 from app.domain.agent_requests.service import (
     AgentRequestService,
     RequestAlreadyClaimedError,
-    RequestNotFoundError,
 )
+
 
 @pytest.fixture
 def org_id():
     return uuid.uuid4()
+
 
 @pytest.fixture
 def user_client(org_id):
@@ -31,6 +34,7 @@ def user_client(org_id):
         role="user",
     )
 
+
 @pytest.fixture
 def builder_client(org_id):
     return CurrentUser(
@@ -39,6 +43,7 @@ def builder_client(org_id):
         role="agent_builder",
     )
 
+
 @pytest.fixture
 def admin_client(org_id):
     return CurrentUser(
@@ -46,6 +51,7 @@ def admin_client(org_id):
         org_id=org_id,
         role="admin",
     )
+
 
 @pytest.mark.asyncio
 async def test_create_request_endpoint(user_client):
@@ -80,6 +86,7 @@ async def test_create_request_endpoint(user_client):
         requested_skills=["ticketing"],
     )
 
+
 @pytest.mark.asyncio
 async def test_list_requests_scopes_to_user(user_client):
     service = AsyncMock(spec=AgentRequestService)
@@ -95,6 +102,7 @@ async def test_list_requests_scopes_to_user(user_client):
         builder_id=None,
         status=None,
     )
+
 
 @pytest.mark.asyncio
 async def test_get_request_detail_forbidden_for_different_user(org_id):
@@ -119,6 +127,7 @@ async def test_get_request_detail_forbidden_for_different_user(org_id):
         await get_request(request_id=uuid.uuid4(), service=service, user=other_user)
 
     assert exc.value.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_claim_request_success(builder_client):
@@ -154,6 +163,7 @@ async def test_claim_request_success(builder_client):
     assert res.status == "CLAIMED"
     assert res.builder_id == builder_client.id
 
+
 @pytest.mark.asyncio
 async def test_claim_request_conflict(builder_client):
     req_id = uuid.uuid4()
@@ -176,6 +186,7 @@ async def test_claim_request_conflict(builder_client):
         await claim_request(request_id=req_id, service=service, user=builder_client)
 
     assert exc.value.status_code == 409
+
 
 @pytest.mark.asyncio
 async def test_cancel_request_by_owner(user_client):

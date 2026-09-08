@@ -19,9 +19,10 @@ Two deliberate shortcuts, both flagged for follow-up:
 from __future__ import annotations
 
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Awaitable, Callable, Protocol
+from typing import Protocol
 from uuid import UUID
 
 #: Org-wide default cap in USD when nothing more specific is configured.
@@ -117,6 +118,4 @@ class BudgetGuard:
                 # The denial below still stands.
                 pass
 
-        return BudgetDecision(
-            allowed=False, spend_usd=spend, cap_usd=cap, reason=reason
-        )
+        return BudgetDecision(allowed=False, spend_usd=spend, cap_usd=cap, reason=reason)

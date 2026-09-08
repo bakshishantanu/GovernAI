@@ -1,26 +1,29 @@
 from __future__ import annotations
+
 from uuid import UUID
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.domain.agents.models  # noqa: F401  (used via a fully-qualified reference)
 from app.api.deps import (
-    get_db,
     get_agent_service,
+    get_db,
     get_execution_service,
     get_llm_service,
 )
-from app.api.sse import SSE_HEADERS, format_sse, stream as sse_stream
-from app.domain.auth.middleware import get_current_user
+from app.api.execution_runner import run_execution
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.execution import ExecutionCreate, ExecutionResponse
+from app.api.sse import SSE_HEADERS, format_sse
+from app.api.sse import stream as sse_stream
 from app.domain.agents.service import AgentService
+from app.domain.auth.middleware import get_current_user
 from app.domain.executions.service import ExecutionService
-from app.runtime.llm.service import LLMService
-from app.api.execution_runner import run_execution
 from app.infrastructure.event_bus import Event
-import app.domain.agents.models
+from app.runtime.llm.service import LLMService
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
@@ -56,7 +59,7 @@ async def create_and_run_execution(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found in your organization",
         )
-        
+
     if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
     elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
@@ -107,7 +110,7 @@ async def list_executions(
     """
     builder_id = current_user.id if current_user.role == "agent_builder" else None
     assigned_user_id = current_user.id if current_user.role == "user" else None
-    
+
     executions = await exec_service.list_executions_for_org(
         current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
     )
@@ -131,7 +134,9 @@ async def get_execution_detail(
         )
 
     # Re-fetch agent to verify ownership
-    agent = await exec_service.exec_repo.session.get(app.domain.agents.models.Agent, execution.agent_id)
+    agent = await exec_service.exec_repo.session.get(
+        app.domain.agents.models.Agent, execution.agent_id
+    )
     if agent:
         if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this execution")

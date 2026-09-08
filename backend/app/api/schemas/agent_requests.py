@@ -1,11 +1,14 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class AgentRequestCreate(BaseModel):
     title: str = Field(..., max_length=255)
     description: str
     requested_skills: list[str] = Field(default_factory=list)
+
 
 class AgentRequestResponse(BaseModel):
     id: UUID

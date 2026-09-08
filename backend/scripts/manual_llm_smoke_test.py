@@ -27,7 +27,9 @@ async def _check(name: str, provider) -> None:
     except Exception as exc:
         print(f"[{name}] FAILED: {exc}")
         return
-    print(f"[{name}] OK - model={response.model} content={response.content!r} usage={response.usage}")
+    print(
+        f"[{name}] OK - model={response.model} content={response.content!r} usage={response.usage}"
+    )
 
 
 async def main() -> None:

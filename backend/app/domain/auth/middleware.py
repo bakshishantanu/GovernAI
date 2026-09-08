@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import os
+from uuid import UUID
+
 import jwt
 from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from app.api.schemas.auth import CurrentUser
 from app.config import settings
-from uuid import UUID
 
 security = HTTPBearer()
 
@@ -37,7 +40,10 @@ def get_supabase_jwt_secret() -> str:
         )
     return secret
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> CurrentUser:
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+) -> CurrentUser:
     """
     FastAPI dependency to validate the Supabase JWT and return the CurrentUser.
     """
@@ -71,20 +77,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             token,
             secret,
             algorithms=["HS256"],
-            options={"verify_aud": False}  # Adjust based on exact Supabase config
+            options={"verify_aud": False},  # Adjust based on exact Supabase config
         )
-        
+
         # Extract user identity from the subject claim
         user_id_str = payload.get("sub")
         if not user_id_str:
             raise HTTPException(status_code=401, detail="Invalid token: missing subject")
-        
+
         user_id = UUID(user_id_str)
 
         # Extract role and org_id from app_metadata (as specified in FRD)
         app_metadata = payload.get("app_metadata", {})
-        
-        # Default to "user" if not specified
+
+        # Default to the least-privileged role, and never trust an unrecognised
+        # one: silently downgrading is safer than silently promoting.
         role = app_metadata.get("role", "user")
         if role not in ["admin", "agent_builder", "user"]:
             role = "user"
@@ -98,11 +105,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         else:
             org_id = UUID("00000000-0000-0000-0000-000000000000")
 
-        return CurrentUser(
-            id=user_id,
-            org_id=org_id,
-            role=role
-        )
+        return CurrentUser(id=user_id, org_id=org_id, role=role)
 
     except HTTPException:
         raise
