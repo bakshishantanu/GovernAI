@@ -16,6 +16,7 @@ from app.domain.policies.models import Policy, PolicyRule
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
+
 async def seed_data():
     async with AsyncSessionLocal() as session:
         org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
@@ -28,7 +29,7 @@ async def seed_data():
             org_id=org_id,
             name="Default Governance Policy",
             description="Enforces baseline security and token controls.",
-            enabled=True
+            enabled=True,
         )
         session.add(policy)
 
@@ -39,7 +40,7 @@ async def seed_data():
             rule_type="PERMISSION_CHECK",
             config={},
             priority=100,
-            enabled=True
+            enabled=True,
         )
         session.add(policy_rule)
 
@@ -51,7 +52,7 @@ async def seed_data():
             owner_id=admin_id,
             name="Support Escalation Bot",
             description="Reads tickets and queries payroll to resolve customer disputes.",
-            status="ACTIVE"
+            status="ACTIVE",
         )
         session.add(agent)
 
@@ -61,7 +62,7 @@ async def seed_data():
             agent_id=agent.id,
             compliance_status="COMPLIANT",
             lifecycle_state="ACTIVE",
-            permissions=[]
+            permissions=[],
         )
         session.add(passport)
 
@@ -69,7 +70,9 @@ async def seed_data():
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:read"),
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:create"),
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:tickets"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:internal_payroll")
+            Permission(
+                id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:internal_payroll"
+            ),
         ]
         session.add_all(permissions)
 
@@ -79,36 +82,44 @@ async def seed_data():
 
         # 3. Documents
         doc_id_1 = uuid.uuid4()
-        session.add(Document(
-            id=doc_id_1,
-            org_id=org_id,
-            title="Refund Policy 2026",
-            source="manual",
-            access_scope=["public"]
-        ))
-        session.add(DocumentChunk(
-            id=uuid.uuid4(),
-            document_id=doc_id_1,
-            content="All refunds must be processed within 14 days of purchase. No exceptions.",
-            embedding=[0.0] * 768,
-            chunk_index=0
-        ))
+        session.add(
+            Document(
+                id=doc_id_1,
+                org_id=org_id,
+                title="Refund Policy 2026",
+                source="manual",
+                access_scope=["public"],
+            )
+        )
+        session.add(
+            DocumentChunk(
+                id=uuid.uuid4(),
+                document_id=doc_id_1,
+                content="All refunds must be processed within 14 days of purchase. No exceptions.",
+                embedding=[0.0] * 768,
+                chunk_index=0,
+            )
+        )
 
         doc_id_2 = uuid.uuid4()
-        session.add(Document(
-            id=doc_id_2,
-            org_id=org_id,
-            title="VIP Handling Guidelines",
-            source="manual",
-            access_scope=["internal"]
-        ))
-        session.add(DocumentChunk(
-            id=uuid.uuid4(),
-            document_id=doc_id_2,
-            content="VIP customers (tagged in Zendesk) receive automatic 10% concessions.",
-            embedding=[0.0] * 768,
-            chunk_index=0
-        ))
+        session.add(
+            Document(
+                id=doc_id_2,
+                org_id=org_id,
+                title="VIP Handling Guidelines",
+                source="manual",
+                access_scope=["internal"],
+            )
+        )
+        session.add(
+            DocumentChunk(
+                id=uuid.uuid4(),
+                document_id=doc_id_2,
+                content="VIP customers (tagged in Zendesk) receive automatic 10% concessions.",
+                embedding=[0.0] * 768,
+                chunk_index=0,
+            )
+        )
 
         # 4. Executions
         exec_id = uuid.uuid4()
@@ -118,55 +129,62 @@ async def seed_data():
             org_id=org_id,
             goal="Refund ticket TCK-1002.",
             status="COMPLETED",
-            result="Refund initiated."
+            result="Refund initiated.",
         )
         session.add(execution)
 
         # 5. Audit & Cost Events
-        session.add(AuditEvent(
-            id=uuid.uuid4(),
-            org_id=org_id,
-            actor_type="agent",
-            actor_id=agent.id,
-            agent_id=agent.id,
-            execution_id=exec_id,
-            action="tool_call",
-            tool="read_ticket",
-            policy_decision="ALLOW",
-            reason="All policies passed",
-            timestamp=datetime.now(timezone.utc)
-        ))
+        session.add(
+            AuditEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                actor_type="agent",
+                actor_id=agent.id,
+                agent_id=agent.id,
+                execution_id=exec_id,
+                action="tool_call",
+                tool="read_ticket",
+                policy_decision="ALLOW",
+                reason="All policies passed",
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
 
-        session.add(AuditEvent(
-            id=uuid.uuid4(),
-            org_id=org_id,
-            actor_type="agent",
-            actor_id=agent.id,
-            agent_id=agent.id,
-            execution_id=exec_id,
-            action="tool_call",
-            tool="delete_database",
-            policy_decision="DENY",
-            reason="Missing required permission",
-            timestamp=datetime.now(timezone.utc)
-        ))
+        session.add(
+            AuditEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                actor_type="agent",
+                actor_id=agent.id,
+                agent_id=agent.id,
+                execution_id=exec_id,
+                action="tool_call",
+                tool="delete_database",
+                policy_decision="DENY",
+                reason="Missing required permission",
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
 
-        session.add(CostEvent(
-            id=uuid.uuid4(),
-            org_id=org_id,
-            agent_id=agent.id,
-            execution_id=exec_id,
-            event_type="llm_inference",
-            model="gpt-4o",
-            prompt_tokens=150,
-            completion_tokens=50,
-            total_tokens=200,
-            cost_usd=0.0015,
-            timestamp=datetime.now(timezone.utc)
-        ))
+        session.add(
+            CostEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                agent_id=agent.id,
+                execution_id=exec_id,
+                event_type="llm_inference",
+                model="gpt-4o",
+                prompt_tokens=150,
+                completion_tokens=50,
+                total_tokens=200,
+                cost_usd=0.0015,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
 
         await session.commit()
         print("Demo seed data successfully generated!")
+
 
 if __name__ == "__main__":
     asyncio.run(seed_data())

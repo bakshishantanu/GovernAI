@@ -12,6 +12,7 @@ from app.domain.auth.middleware import get_current_user
 
 router = APIRouter(prefix="/audits", tags=["audits"])
 
+
 def get_audit_repo(db: AsyncSession = Depends(get_db)) -> AuditRepository:
     return AuditRepository(db)
 
@@ -20,7 +21,7 @@ def get_audit_repo(db: AsyncSession = Depends(get_db)) -> AuditRepository:
 async def list_audit_events(
     limit: int = Query(50, ge=1, le=200),
     current_user: CurrentUser = Depends(get_current_user),
-    repo: AuditRepository = Depends(get_audit_repo)
+    repo: AuditRepository = Depends(get_audit_repo),
 ):
     """
     List audit events (security logs) for the current user's organization.

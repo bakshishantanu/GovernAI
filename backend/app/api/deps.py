@@ -45,9 +45,13 @@ class MockFallbackProvider(LLMProvider):
 def get_llm_service() -> LLMService:
     providers: list[LLMProvider] = []
     if settings.GROQ_API_KEY:
-        providers.append(GroqProvider(api_key=settings.GROQ_API_KEY, model=settings.LLM_PRIMARY_MODEL))
+        providers.append(
+            GroqProvider(api_key=settings.GROQ_API_KEY, model=settings.LLM_PRIMARY_MODEL)
+        )
     if settings.GEMINI_API_KEY:
-        providers.append(GeminiProvider(api_key=settings.GEMINI_API_KEY, model=settings.LLM_FALLBACK_MODEL))
+        providers.append(
+            GeminiProvider(api_key=settings.GEMINI_API_KEY, model=settings.LLM_FALLBACK_MODEL)
+        )
     if not providers:
         providers.append(MockFallbackProvider())
     return LLMService(providers)
@@ -104,6 +108,8 @@ async def get_kill_switch_service(db: AsyncSession = Depends(get_db)) -> KillSwi
         audit_service=AuditService(audit_repo=AuditRepository(db), event_bus=event_bus),
         event_bus=event_bus,
     )
+
+
 async def get_budget_guard(db: AsyncSession = Depends(get_db)) -> BudgetGuard:
     """The live spend check the governance gate runs before every tool call.
 

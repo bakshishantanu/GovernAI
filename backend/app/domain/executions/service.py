@@ -19,7 +19,7 @@ class ExecutionService:
             org_id=org_id,
             goal=goal,
             status="PENDING",
-            started_at=datetime.now(timezone.utc)
+            started_at=datetime.now(timezone.utc),
         )
         return await self.exec_repo.create_execution(execution)
 
@@ -36,10 +36,14 @@ class ExecutionService:
         await self.exec_repo.complete_execution(execution_id=execution_id, status="RUNNING")
 
     async def complete(self, execution_id: UUID, result: str | None) -> None:
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="COMPLETED", result=result)
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id, status="COMPLETED", result=result
+        )
 
     async def fail(self, execution_id: UUID, error: str) -> None:
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="FAILED", error=error)
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id, status="FAILED", error=error
+        )
 
     async def cancel(self, execution_id: UUID, org_id: UUID) -> Execution:
         execution = await self.exec_repo.get_execution(execution_id)
@@ -47,5 +51,9 @@ class ExecutionService:
             raise ValueError("Execution not found")
         if execution.status in ("COMPLETED", "FAILED", "CANCELLED", "TERMINATED"):
             raise ValueError(f"Cannot cancel execution in state {execution.status}")
-        await self.exec_repo.complete_execution(execution_id=execution_id, status="CANCELLED", error="Manually terminated by user (Kill Switch)")
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id,
+            status="CANCELLED",
+            error="Manually terminated by user (Kill Switch)",
+        )
         return await self.exec_repo.get_execution(execution_id)

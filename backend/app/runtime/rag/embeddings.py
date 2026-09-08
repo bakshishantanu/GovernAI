@@ -13,8 +13,7 @@ class EmbeddingProvider(ABC):
     dimensions: int
 
     @abstractmethod
-    async def embed(self, text: str) -> list[float]:
-        ...
+    async def embed(self, text: str) -> list[float]: ...
 
 
 class GeminiEmbeddingProvider(EmbeddingProvider):

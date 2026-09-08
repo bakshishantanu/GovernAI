@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 EventType = Literal["LLM_CALL", "TOOL_CALL"]
 
+
 class CostEventResponse(BaseModel):
     id: UUID
     agent_id: UUID
@@ -23,6 +24,7 @@ class CostEventResponse(BaseModel):
     timestamp: datetime
     metadata: dict[str, Any] | None = None
 
+
 class CostSummaryResponse(BaseModel):
     total_cost_usd: float
     by_agent: dict[str, float]
@@ -31,6 +33,7 @@ class CostSummaryResponse(BaseModel):
 
 class AgentBudgetStatus(BaseModel):
     """One agent's spend inside the enforced window, against its own cap."""
+
     agent_id: UUID
     name: str
     spend_usd: float
@@ -48,6 +51,7 @@ class BudgetStatusResponse(BaseModel):
     (`domain/governance/budget.resolve_cap`) over the same rolling window, so
     this reports the real control rather than a second, cosmetic one.
     """
+
     cap_usd: float
     window_hours: int
     total_spend_usd: float

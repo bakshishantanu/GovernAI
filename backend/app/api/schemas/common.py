@@ -4,7 +4,8 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class ErrorDetail(BaseModel):
     type: str
@@ -13,10 +14,12 @@ class ErrorDetail(BaseModel):
     detail: str
     instance: str | None = None
 
+
 class Envelope(BaseModel, Generic[T]):
     data: T | None = None
     meta: dict | None = None
     errors: list[ErrorDetail] | None = None
+
 
 class PaginatedMeta(BaseModel):
     next_cursor: str | None = None
@@ -29,11 +32,14 @@ class PaginatedMeta(BaseModel):
     #: discarded it and the console could not show "showing 5 of 12".
     total: int | None = None
 
+
 class PaginatedResponse(Envelope[list[T]], Generic[T]):
     meta: PaginatedMeta
 
+
 class ErrorResponse(Envelope[None]):
     errors: list[ErrorDetail]
+
 
 class HealthResponse(BaseModel):
     status: str

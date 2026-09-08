@@ -8,12 +8,14 @@ from pydantic import BaseModel, ConfigDict
 
 RuleType = Literal["PERMISSION_CHECK", "DENY_LIST", "RATE_LIMIT", "CUSTOM", "sql_blocklist"]
 
+
 class PolicyRuleCreate(BaseModel):
     name: str
     rule_type: RuleType
     config: dict[str, Any]
     priority: int
     enabled: bool = True
+
 
 class PolicyRuleResponse(PolicyRuleCreate):
     model_config = ConfigDict(from_attributes=True)
@@ -22,11 +24,13 @@ class PolicyRuleResponse(PolicyRuleCreate):
     created_at: datetime
     updated_at: datetime
 
+
 class PolicyCreate(BaseModel):
     name: str
     description: str
     enabled: bool = True
     rules: list[PolicyRuleCreate] = []
+
 
 class PolicyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

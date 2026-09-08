@@ -40,7 +40,10 @@ def get_supabase_jwt_secret() -> str:
         )
     return secret
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> CurrentUser:
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+) -> CurrentUser:
     """
     FastAPI dependency to validate the Supabase JWT and return the CurrentUser.
     """
@@ -53,7 +56,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         return CurrentUser(
             id=UUID("11111111-1111-1111-1111-111111111111"),
             org_id=UUID("00000000-0000-0000-0000-000000000000"),
-            role="admin"
+            role="admin",
         )
 
     secret = get_supabase_jwt_secret()
@@ -66,7 +69,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             token,
             secret,
             algorithms=["HS256"],
-            options={"verify_aud": False}  # Adjust based on exact Supabase config
+            options={"verify_aud": False},  # Adjust based on exact Supabase config
         )
 
         # Extract user identity from the subject claim
@@ -93,11 +96,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         else:
             org_id = UUID("00000000-0000-0000-0000-000000000000")
 
-        return CurrentUser(
-            id=user_id,
-            org_id=org_id,
-            role=role
-        )
+        return CurrentUser(id=user_id, org_id=org_id, role=role)
 
     except HTTPException:
         raise

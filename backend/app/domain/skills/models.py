@@ -19,6 +19,7 @@ class ToolModel(Base):
 
     skill: Mapped[SkillModel] = relationship("SkillModel", back_populates="tools")
 
+
 class SkillPermission(Base):
     __tablename__ = "skill_permissions"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -26,6 +27,7 @@ class SkillPermission(Base):
     permission: Mapped[str] = mapped_column(String, nullable=False)
 
     skill: Mapped[SkillModel] = relationship("SkillModel", back_populates="permissions")
+
 
 class SkillModel(Base):
     __tablename__ = "skills"
@@ -37,4 +39,6 @@ class SkillModel(Base):
     trust_level: Mapped[str] = mapped_column(String, nullable=False)
 
     tools: Mapped[list[ToolModel]] = relationship("ToolModel", back_populates="skill")
-    permissions: Mapped[list[SkillPermission]] = relationship("SkillPermission", back_populates="skill")
+    permissions: Mapped[list[SkillPermission]] = relationship(
+        "SkillPermission", back_populates="skill"
+    )

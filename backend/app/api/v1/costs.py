@@ -61,9 +61,7 @@ def _to_response(event: CostEvent) -> CostEventResponse:
         agent_id=event.agent_id,
         execution_id=event.execution_id,
         execution_step_id=event.execution_step_id,
-        event_type=_EVENT_TYPE_ALIASES.get(
-            (event.event_type or "").lower(), "TOOL_CALL"
-        ),
+        event_type=_EVENT_TYPE_ALIASES.get((event.event_type or "").lower(), "TOOL_CALL"),
         model=event.model,
         provider=event.provider,
         prompt_tokens=event.prompt_tokens,
@@ -160,9 +158,7 @@ async def budget_status(
     since = datetime.now(timezone.utc) - BUDGET_WINDOW
     window_hours = int(BUDGET_WINDOW.total_seconds() // 3600)
 
-    agents = (
-        await db.execute(select(Agent).where(Agent.org_id == user.org_id))
-    ).scalars().all()
+    agents = (await db.execute(select(Agent).where(Agent.org_id == user.org_id))).scalars().all()
 
     spend_rows = await db.execute(
         select(CostEvent.agent_id, func.coalesce(func.sum(CostEvent.cost_usd), 0.0))

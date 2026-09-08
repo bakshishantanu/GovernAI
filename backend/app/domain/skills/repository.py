@@ -21,9 +21,8 @@ class SkillRepository:
         return result.scalar_one_or_none()
 
     async def list_skills(self) -> list[SkillModel]:
-        stmt = (
-            select(SkillModel)
-            .options(selectinload(SkillModel.tools), selectinload(SkillModel.permissions))
+        stmt = select(SkillModel).options(
+            selectinload(SkillModel.tools), selectinload(SkillModel.permissions)
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

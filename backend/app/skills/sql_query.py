@@ -100,7 +100,9 @@ class SqlQuerySkill(BaseSkill):
     ) -> None:
         self._permitted_tables = frozenset(permitted_tables)
         self._adapter = adapter or SqlDataAdapter(seed_sql=_DEFAULT_SEED_SQL)
-        self.required_permissions = [f"sql:read:{table}" for table in sorted(self._permitted_tables)]
+        self.required_permissions = [
+            f"sql:read:{table}" for table in sorted(self._permitted_tables)
+        ]
 
     def get_tools(self) -> list[BaseTool]:
         return [RunSqlQueryTool(self._adapter, self._permitted_tables)]

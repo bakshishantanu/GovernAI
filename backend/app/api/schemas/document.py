@@ -12,6 +12,7 @@ class DocumentUpload(BaseModel):
     source: str
     access_scope: list[str]
 
+
 class DocumentResponse(BaseModel):
     id: UUID
     org_id: UUID

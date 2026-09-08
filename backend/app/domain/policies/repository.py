@@ -25,11 +25,7 @@ class PolicyRepository:
         return list(result.scalars().all())
 
     async def get_policies_for_org(self, org_id: UUID) -> list[Policy]:
-        stmt = (
-            select(Policy)
-            .options(selectinload(Policy.rules))
-            .where(Policy.org_id == org_id)
-        )
+        stmt = select(Policy).options(selectinload(Policy.rules)).where(Policy.org_id == org_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

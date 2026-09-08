@@ -41,7 +41,9 @@ from app.runtime.rag.retrieval import _chunk_text, _seed_documents
 _DUMMY_ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
-async def _embed_with_retry(embeddings: GeminiEmbeddingProvider, text: str, attempts: int = 4) -> list[float]:
+async def _embed_with_retry(
+    embeddings: GeminiEmbeddingProvider, text: str, attempts: int = 4
+) -> list[float]:
     """The free-tier embeddings endpoint shares a per-minute request quota
     with every other Gemini call this project makes (chat included) - a 429
     here is transient, not a real failure, so back off and retry rather than

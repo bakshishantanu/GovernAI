@@ -10,6 +10,7 @@ AgentStatus = Literal["DRAFT", "ACTIVE", "SUSPENDED", "REVOKED"]
 LifecycleState = Literal["DRAFT", "APPROVED", "ACTIVE", "SUSPENDED", "REVOKED"]
 ComplianceStatus = Literal["PENDING", "PASSED", "FAILED"]
 
+
 class PassportResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -31,6 +32,7 @@ class PassportResponse(BaseModel):
         it goes through the same rule."""
         return [item.permission if hasattr(item, "permission") else item for item in value]
 
+
 class AgentSkillRef(BaseModel):
     """A skill attached to an agent, as the console needs to show it.
 
@@ -38,6 +40,7 @@ class AgentSkillRef(BaseModel):
     `skill_id`, and showing a raw slug where a human expects a skill name is
     the sort of thing that makes a governance console look unfinished.
     """
+
     id: str
     name: str
 
@@ -47,10 +50,12 @@ class AgentCreate(BaseModel):
     description: str
     skills: list[str]  # skill IDs
 
+
 class AgentUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     skills: list[str] | None = None
+
 
 class AgentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -68,6 +73,7 @@ class AgentResponse(BaseModel):
     skills: list[AgentSkillRef] = []
     created_at: datetime
     updated_at: datetime
+
 
 class AgentListResponse(BaseModel):
     items: list[AgentResponse]

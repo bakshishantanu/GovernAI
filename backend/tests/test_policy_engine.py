@@ -11,13 +11,16 @@ from app.domain.policies.models import Policy, PolicyRule
 def mock_agent_repo():
     return AsyncMock()
 
+
 @pytest.fixture
 def mock_perm_repo():
     return AsyncMock()
 
+
 @pytest.fixture
 def mock_policy_repo():
     return AsyncMock()
+
 
 @pytest.fixture
 def policy_engine(mock_agent_repo, mock_perm_repo, mock_policy_repo):
@@ -33,10 +36,7 @@ async def test_inactive_agent_blocked(policy_engine, mock_agent_repo):
 
     # Act
     decision = await policy_engine.evaluate(
-        agent_id=uuid.uuid4(),
-        tool_name="some_tool",
-        tool_args={},
-        required_permission="some:perm"
+        agent_id=uuid.uuid4(), tool_name="some_tool", tool_args={}, required_permission="some:perm"
     )
 
     # Assert
@@ -57,10 +57,7 @@ async def test_missing_permission_blocked(policy_engine, mock_agent_repo, mock_p
     mock_perm_repo.get_permissions_for_passport.return_value = [mock_perm]
 
     decision = await policy_engine.evaluate(
-        agent_id=uuid.uuid4(),
-        tool_name="sql_query",
-        tool_args={},
-        required_permission="db:read"
+        agent_id=uuid.uuid4(), tool_name="sql_query", tool_args={}, required_permission="db:read"
     )
 
     assert decision.allowed is False
@@ -68,7 +65,9 @@ async def test_missing_permission_blocked(policy_engine, mock_agent_repo, mock_p
 
 
 @pytest.mark.asyncio
-async def test_destructive_sql_policy_blocked(policy_engine, mock_agent_repo, mock_perm_repo, mock_policy_repo):
+async def test_destructive_sql_policy_blocked(
+    policy_engine, mock_agent_repo, mock_perm_repo, mock_policy_repo
+):
     # Setup: Agent is ACTIVE and HAS the permission
     mock_agent = MagicMock()
     mock_agent.passport.lifecycle_state = "ACTIVE"
@@ -79,7 +78,9 @@ async def test_destructive_sql_policy_blocked(policy_engine, mock_agent_repo, mo
     mock_perm_repo.get_permissions_for_passport.return_value = [mock_perm]
 
     # Setup: The database has a rule blocking "DROP"
-    rule = PolicyRule(rule_type="sql_blocklist", enabled=True, config={"keywords": ["DROP", "DELETE"]})
+    rule = PolicyRule(
+        rule_type="sql_blocklist", enabled=True, config={"keywords": ["DROP", "DELETE"]}
+    )
     policy = Policy(name="Safe SQL", enabled=True, rules=[rule])
     mock_policy_repo.get_active_policies_for_org.return_value = [policy]
 
@@ -88,7 +89,7 @@ async def test_destructive_sql_policy_blocked(policy_engine, mock_agent_repo, mo
         agent_id=uuid.uuid4(),
         tool_name="sql_query",
         tool_args={"query": "DROP TABLE users;"},
-        required_permission="db:read"
+        required_permission="db:read",
     )
 
     # Assert: Should be blocked by the policy engine!
@@ -97,7 +98,9 @@ async def test_destructive_sql_policy_blocked(policy_engine, mock_agent_repo, mo
 
 
 @pytest.mark.asyncio
-async def test_valid_action_allowed(policy_engine, mock_agent_repo, mock_perm_repo, mock_policy_repo):
+async def test_valid_action_allowed(
+    policy_engine, mock_agent_repo, mock_perm_repo, mock_policy_repo
+):
     # Setup: ACTIVE agent, HAS permission, NO blocked keywords in query
     mock_agent = MagicMock()
     mock_agent.passport.lifecycle_state = "ACTIVE"
@@ -116,7 +119,7 @@ async def test_valid_action_allowed(policy_engine, mock_agent_repo, mock_perm_re
         agent_id=uuid.uuid4(),
         tool_name="sql_query",
         tool_args={"query": "SELECT * FROM tickets;"},
-        required_permission="db:read"
+        required_permission="db:read",
     )
 
     # Assert: Should be allowed!

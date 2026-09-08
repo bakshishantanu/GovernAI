@@ -7,7 +7,9 @@ from app.skills.base import BaseSkill, BaseTool, TrustLevel
 
 class SearchDocumentsTool(BaseTool):
     name = "search_documents"
-    description = "Search internal documents for content relevant to a question. " + CITATION_INSTRUCTIONS
+    description = (
+        "Search internal documents for content relevant to a question. " + CITATION_INSTRUCTIONS
+    )
     parameters = {
         "type": "object",
         "properties": {"query": {"type": "string", "description": "The search query."}},
@@ -28,7 +30,9 @@ class SearchDocumentsTool(BaseTool):
             return {
                 "found": False,
                 "results": [],
-                "message": "No relevant documents were found for this query within your permitted scope.",
+                "message": (
+                    "No relevant documents were found for this query within your permitted scope."
+                ),
             }
         return {
             "found": True,
@@ -81,7 +85,8 @@ class DocumentSearchSkill(BaseSkill):
     name = "document_search"
     display_name = "Document Search"
     description = (
-        "Search internal documents and answer questions with citations, grounded only in retrieved content."
+        "Search internal documents and answer questions with citations, "
+        "grounded only in retrieved content."
     )
     version = "1.0.0"
     trust_level = TrustLevel.VERIFIED
@@ -93,7 +98,9 @@ class DocumentSearchSkill(BaseSkill):
     ) -> None:
         self._permitted_scopes = frozenset(permitted_scopes)
         self._adapter = adapter or DocumentSearchAdapter()
-        self.required_permissions = [f"docs:search:{scope}" for scope in sorted(self._permitted_scopes)]
+        self.required_permissions = [
+            f"docs:search:{scope}" for scope in sorted(self._permitted_scopes)
+        ]
 
     def get_tools(self) -> list[BaseTool]:
         return [

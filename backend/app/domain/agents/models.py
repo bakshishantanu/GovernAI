@@ -21,22 +21,32 @@ if TYPE_CHECKING:  # imported for the string annotations below only.
 
 class AgentSkill(Base):
     __tablename__ = "agent_skills"
-    agent_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agents.id"), primary_key=True)
+    agent_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("agents.id"), primary_key=True
+    )
     skill_id: Mapped[str] = mapped_column(String, ForeignKey("skills.id"), primary_key=True)
+
 
 class AgentPassport(Base):
     __tablename__ = "agent_passports"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     agent_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agents.id"))
     compliance_status: Mapped[str] = mapped_column(String, nullable=False)
-    compliance_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    compliance_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     lifecycle_state: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
     budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     agent: Mapped[Agent] = relationship("Agent", back_populates="passport")
     permissions: Mapped[list[Permission]] = relationship("Permission", back_populates="passport")
+
 
 class Agent(Base):
     __tablename__ = "agents"
@@ -46,7 +56,13 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
 
-    passport: Mapped[AgentPassport] = relationship("AgentPassport", back_populates="agent", uselist=False)
+    passport: Mapped[AgentPassport] = relationship(
+        "AgentPassport", back_populates="agent", uselist=False
+    )

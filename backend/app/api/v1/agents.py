@@ -47,9 +47,7 @@ async def _skills_for(db: AsyncSession, agent_ids: list[UUID]) -> dict[UUID, lis
 
     by_agent: dict[UUID, list[AgentSkillRef]] = {}
     for agent_id, skill_id, display_name in rows.all():
-        by_agent.setdefault(agent_id, []).append(
-            AgentSkillRef(id=skill_id, name=display_name)
-        )
+        by_agent.setdefault(agent_id, []).append(AgentSkillRef(id=skill_id, name=display_name))
     return by_agent
 
 
@@ -57,6 +55,7 @@ def _with_skills(agent, skills_by_agent: dict[UUID, list[AgentSkillRef]]) -> Age
     response = AgentResponse.model_validate(agent)
     response.skills = skills_by_agent.get(agent.id, [])
     return response
+
 
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
@@ -97,7 +96,7 @@ async def list_agents(
     skills = await _skills_for(db, [a.id for a in agents])
     return PaginatedResponse(
         data=[_with_skills(a, skills) for a in agents],
-        meta={"has_more": offset + limit < count, "total": count}
+        meta={"has_more": offset + limit < count, "total": count},
     )
 
 

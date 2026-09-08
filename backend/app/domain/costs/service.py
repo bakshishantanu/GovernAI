@@ -12,6 +12,7 @@ PRICING_TIERS = {
     "gpt-3.5-turbo": {"prompt": 0.50 / 1_000_000, "completion": 1.50 / 1_000_000},
 }
 
+
 class CostService:
     def __init__(self, cost_repo: CostRepository, event_bus: EventBus):
         self.cost_repo = cost_repo
@@ -24,7 +25,7 @@ class CostService:
         execution_id: UUID,
         model: str,
         prompt_tokens: int,
-        completion_tokens: int
+        completion_tokens: int,
     ):
         pricing = PRICING_TIERS.get(model, {"prompt": 0, "completion": 0})
         cost_usd = (prompt_tokens * pricing["prompt"]) + (completion_tokens * pricing["completion"])
@@ -42,11 +43,12 @@ class CostService:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             cost_usd=cost_usd,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         await self.cost_repo.record_cost(event)
-        await self.event_bus.publish(Event.create("cost.llm.incurred", {
-            "execution_id": str(execution_id),
-            "cost_usd": cost_usd,
-            "tokens": total_tokens
-        }))
+        await self.event_bus.publish(
+            Event.create(
+                "cost.llm.incurred",
+                {"execution_id": str(execution_id), "cost_usd": cost_usd, "tokens": total_tokens},
+            )
+        )

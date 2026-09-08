@@ -19,12 +19,12 @@ class AgentRepository:
         )
 
     async def get_agent(self, agent_id: UUID) -> Agent | None:
-        result = await self.session.execute(
-            self._with_relations().where(Agent.id == agent_id)
-        )
+        result = await self.session.execute(self._with_relations().where(Agent.id == agent_id))
         return result.scalar_one_or_none()
 
-    async def list_agents_by_org(self, org_id: UUID, limit: int = 50, offset: int = 0) -> list[Agent]:
+    async def list_agents_by_org(
+        self, org_id: UUID, limit: int = 50, offset: int = 0
+    ) -> list[Agent]:
         result = await self.session.execute(
             self._with_relations()
             .where(Agent.org_id == org_id)

@@ -21,10 +21,12 @@ class AuditService:
             agent_id=agent_id,
             action="agent_created",
             policy_decision="ALLOW",
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         await self.audit_repo.record_event(event)
-        await self.event_bus.publish(Event.create("audit.agent.created", {"agent_id": str(agent_id), "org_id": str(org_id)}))
+        await self.event_bus.publish(
+            Event.create("audit.agent.created", {"agent_id": str(agent_id), "org_id": str(org_id)})
+        )
 
     async def log_agent_suspended(self, org_id: UUID, actor_id: UUID, agent_id: UUID, reason: str):
         event = AuditEvent(
@@ -36,12 +38,16 @@ class AuditService:
             action="agent_suspended",
             policy_decision="ALLOW",
             reason=reason,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         await self.audit_repo.record_event(event)
-        await self.event_bus.publish(Event.create("audit.agent.suspended", {"agent_id": str(agent_id), "reason": reason}))
+        await self.event_bus.publish(
+            Event.create("audit.agent.suspended", {"agent_id": str(agent_id), "reason": reason})
+        )
 
-    async def log_agent_reactivated(self, org_id: UUID, actor_id: UUID, agent_id: UUID, reason: str):
+    async def log_agent_reactivated(
+        self, org_id: UUID, actor_id: UUID, agent_id: UUID, reason: str
+    ):
         event = AuditEvent(
             id=uuid.uuid4(),
             org_id=org_id,
@@ -51,13 +57,25 @@ class AuditService:
             action="agent_reactivated",
             policy_decision="ALLOW",
             reason=reason,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         await self.audit_repo.record_event(event)
-        await self.event_bus.publish(Event.create("audit.agent.reactivated", {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason}))
+        await self.event_bus.publish(
+            Event.create(
+                "audit.agent.reactivated",
+                {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason},
+            )
+        )
 
-
-    async def log_tool_call(self, org_id: UUID, agent_id: UUID, execution_id: UUID, tool: str, allowed: bool, reason: str = ""):
+    async def log_tool_call(
+        self,
+        org_id: UUID,
+        agent_id: UUID,
+        execution_id: UUID,
+        tool: str,
+        allowed: bool,
+        reason: str = "",
+    ):
         event = AuditEvent(
             id=uuid.uuid4(),
             org_id=org_id,
@@ -69,13 +87,11 @@ class AuditService:
             tool=tool,
             policy_decision="ALLOW" if allowed else "DENY",
             reason=reason,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
         await self.audit_repo.record_event(event)
 
         topic = "audit.tool.allowed" if allowed else "audit.tool.denied"
-        await self.event_bus.publish(Event.create(topic, {
-            "execution_id": str(execution_id),
-            "tool": tool,
-            "reason": reason
-        }))
+        await self.event_bus.publish(
+            Event.create(topic, {"execution_id": str(execution_id), "tool": tool, "reason": reason})
+        )

@@ -13,7 +13,9 @@ class PermissionRepository:
         self.session = session
 
     async def get_permissions_for_passport(self, passport_id: UUID) -> list[Permission]:
-        result = await self.session.execute(select(Permission).where(Permission.passport_id == passport_id))
+        result = await self.session.execute(
+            select(Permission).where(Permission.passport_id == passport_id)
+        )
         return list(result.scalars().all())
 
     async def create_permission(self, permission: Permission) -> Permission:

@@ -14,23 +14,20 @@ class PolicyDecision:
         self.allowed = allowed
         self.reason = reason
 
+
 class PolicyEngine:
     def __init__(
         self,
         agent_repo: AgentRepository,
         perm_repo: PermissionRepository,
-        policy_repo: PolicyRepository
+        policy_repo: PolicyRepository,
     ):
         self.agent_repo = agent_repo
         self.perm_repo = perm_repo
         self.policy_repo = policy_repo
 
     async def evaluate(
-        self,
-        agent_id: UUID,
-        tool_name: str,
-        tool_args: dict[str, Any],
-        required_permission: str
+        self, agent_id: UUID, tool_name: str, tool_args: dict[str, Any], required_permission: str
     ) -> PolicyDecision:
         try:
             # 1. Fetch Agent and Passport
@@ -40,14 +37,18 @@ class PolicyEngine:
 
             # 2. Check Lifecycle state (must be ACTIVE)
             if agent.passport.lifecycle_state != "ACTIVE":
-                return PolicyDecision(False, f"Agent is not ACTIVE (current state: {agent.passport.lifecycle_state})")
+                return PolicyDecision(
+                    False, f"Agent is not ACTIVE (current state: {agent.passport.lifecycle_state})"
+                )
 
             # 3. Check Permissions
             permissions = await self.perm_repo.get_permissions_for_passport(agent.passport.id)
             perm_strings = [p.permission for p in permissions]
 
             if required_permission and required_permission not in perm_strings:
-                return PolicyDecision(False, f"Missing required permission: '{required_permission}'")
+                return PolicyDecision(
+                    False, f"Missing required permission: '{required_permission}'"
+                )
 
             # 4. DYNAMIC DATABASE POLICIES
             # Fetch all active policies configured by the Org Admin in the database
@@ -65,7 +66,11 @@ class PolicyEngine:
                         for keyword in blocked_keywords:
                             # Use regex to find exact word matches (case insensitive)
                             if re.search(rf"\b{keyword}\b", query, re.IGNORECASE):
-                                return PolicyDecision(False, f"Policy '{policy.name}': Disallowed keyword '{keyword}' detected.")
+                                return PolicyDecision(
+                                    False,
+                                    f"Policy '{policy.name}': "
+                                    f"Disallowed keyword '{keyword}' detected.",
+                                )
 
                     # You can easily add more rule_types here in the future!
 

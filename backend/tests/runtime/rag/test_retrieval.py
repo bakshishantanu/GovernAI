@@ -3,7 +3,9 @@ from app.runtime.rag.retrieval import DocumentSearchAdapter, _chunk_text
 
 async def test_search_returns_the_most_relevant_document_first():
     adapter = DocumentSearchAdapter()
-    results = await adapter.search("policy engine deny rules", permitted_scopes=frozenset({"public"}))
+    results = await adapter.search(
+        "policy engine deny rules", permitted_scopes=frozenset({"public"})
+    )
     assert results
     assert results[0].document_id == "DOC-2"
     assert results[0].document_title == "Policy Engine Overview"
@@ -14,13 +16,17 @@ async def test_search_never_surfaces_out_of_scope_content_even_when_highly_relev
     prefiltering were broken (post-filtered instead), this exact query
     would leak it despite the agent lacking hr_confidential scope."""
     adapter = DocumentSearchAdapter()
-    results = await adapter.search("engineering salary bands", permitted_scopes=frozenset({"public"}))
+    results = await adapter.search(
+        "engineering salary bands", permitted_scopes=frozenset({"public"})
+    )
     assert all(r.document_id != "DOC-4" for r in results)
 
 
 async def test_search_finds_confidential_doc_when_scope_is_granted():
     adapter = DocumentSearchAdapter()
-    results = await adapter.search("engineering salary bands", permitted_scopes=frozenset({"hr_confidential"}))
+    results = await adapter.search(
+        "engineering salary bands", permitted_scopes=frozenset({"hr_confidential"})
+    )
     assert any(r.document_id == "DOC-4" for r in results)
 
 
@@ -32,7 +38,9 @@ async def test_search_with_no_permitted_scopes_returns_nothing():
 
 async def test_search_returns_empty_for_query_with_no_term_overlap():
     adapter = DocumentSearchAdapter()
-    results = await adapter.search("banana spaceship guitar", permitted_scopes=frozenset({"public"}))
+    results = await adapter.search(
+        "banana spaceship guitar", permitted_scopes=frozenset({"public"})
+    )
     assert results == []
 
 

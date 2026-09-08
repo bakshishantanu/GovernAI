@@ -24,7 +24,9 @@ class PgVectorDocumentSearchAdapter:
         self._embeddings = embedding_provider
         self._min_relevance_score = min_relevance_score
 
-    async def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]:
+    async def search(
+        self, query: str, permitted_scopes: frozenset[str], top_n: int = 3
+    ) -> list[SearchResult]:
         query_embedding = await self._embeddings.embed(query)
         chunks = await self._repo.search_chunks_by_scope(
             embedding=query_embedding, permitted_scopes=sorted(permitted_scopes), limit=top_n

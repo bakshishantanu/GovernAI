@@ -66,9 +66,7 @@ async def run_execution(
         async with async_session_factory() as session:
             exec_service = ExecutionService(exec_repo=ExecutionRepository(session))
             agent_repo = AgentRepository(session)
-            audit_service = AuditService(
-                audit_repo=AuditRepository(session), event_bus=event_bus
-            )
+            audit_service = AuditService(audit_repo=AuditRepository(session), event_bus=event_bus)
             cost_repo = CostRepository(session)
 
             kill_switch = KillSwitchService(
@@ -119,9 +117,7 @@ async def run_execution(
                 goal=goal,
                 system_prompt=system_prompt,
                 max_steps=max_steps,
-                budget_guard=BudgetGuard(
-                    spend_reader=cost_repo, on_breach=suspend_on_breach
-                ),
+                budget_guard=BudgetGuard(spend_reader=cost_repo, on_breach=suspend_on_breach),
             )
 
             if result.get("stopped_reason") == "max_steps_reached":

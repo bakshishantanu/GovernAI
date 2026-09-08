@@ -18,11 +18,13 @@ class BaseTool(ABC):
     description: str
     parameters: dict
     required_permission: str = ""
-    """JSON Schema for this tool's arguments, e.g. {"type": "object", "properties": {...}, "required": [...]}"""
+    """JSON Schema for this tool's arguments.
+
+    e.g. {"type": "object", "properties": {...}, "required": [...]}
+    """
 
     @abstractmethod
-    async def execute(self, **kwargs: Any) -> Any:
-        ...
+    async def execute(self, **kwargs: Any) -> Any: ...
 
     def to_openai_tool(self) -> dict:
         """Convert to the OpenAI/Groq function-calling tool format."""
@@ -47,5 +49,4 @@ class BaseSkill(ABC):
     trust_level: TrustLevel
 
     @abstractmethod
-    def get_tools(self) -> list[BaseTool]:
-        ...
+    def get_tools(self) -> list[BaseTool]: ...

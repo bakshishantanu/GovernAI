@@ -8,11 +8,13 @@ from pydantic import BaseModel, ConfigDict
 
 ExecutionStatus = Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "TERMINATED", "CANCELLED"]
 
+
 class ExecutionCreate(BaseModel):
     agent_id: UUID
     goal: str
     system_prompt: str | None = None
     max_steps: int = 10
+
 
 class ExecutionStepResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -26,6 +28,7 @@ class ExecutionStepResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
 
 class ExecutionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

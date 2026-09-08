@@ -20,7 +20,9 @@ class DocumentRepository:
 
     async def get_document(self, document_id: UUID) -> Document | None:
         result = await self.session.execute(
-            select(Document).where(Document.id == document_id).options(selectinload(Document.chunks))
+            select(Document)
+            .where(Document.id == document_id)
+            .options(selectinload(Document.chunks))
         )
         return result.scalar_one_or_none()
 

@@ -16,7 +16,9 @@ class AuditRepository:
         self.session.add(event)
         return event
 
-    async def get_events_for_org(self, org_id: UUID, limit: int = 50, cursor: UUID | None = None) -> list[AuditEvent]:
+    async def get_events_for_org(
+        self, org_id: UUID, limit: int = 50, cursor: UUID | None = None
+    ) -> list[AuditEvent]:
         query = (
             select(AuditEvent)
             .where(AuditEvent.org_id == org_id)
@@ -32,6 +34,7 @@ class AuditRepository:
             if cursor_row:
                 cursor_ts, cursor_id = cursor_row
                 from sqlalchemy import tuple_
+
                 query = query.where(
                     tuple_(AuditEvent.timestamp, AuditEvent.id) < tuple_(cursor_ts, cursor_id)
                 )

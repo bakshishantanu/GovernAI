@@ -35,11 +35,8 @@ EXPECTED_PATHS = {
 
 
 def api_paths() -> set[str]:
-    return {
-        path
-        for path in app.openapi()["paths"].keys()
-        if path.startswith("/api/v1")
-    }
+    return {path for path in app.openapi()["paths"].keys() if path.startswith("/api/v1")}
+
 
 def test_no_path_segment_is_repeated():
     """`/api/v1/skills/skills/` is the exact failure this catches."""
@@ -48,9 +45,11 @@ def test_no_path_segment_is_repeated():
         duplicated = [s for s in set(segments) if segments.count(s) > 1]
         assert not duplicated, f"{path} repeats {duplicated}"
 
+
 def test_every_expected_route_is_mounted_where_the_frontend_expects_it():
     missing = EXPECTED_PATHS - api_paths()
     assert not missing, f"routes missing or moved: {sorted(missing)}"
+
 
 def test_every_api_route_lives_under_the_version_prefix():
     for path in app.openapi()["paths"].keys():
@@ -70,9 +69,7 @@ def test_a_static_segment_never_sits_where_an_id_is_expected():
         for index, segment in enumerate(segments):
             prefix = "/".join(segments[:index])
             key = (prefix, index)
-            id_holders.setdefault(key, set()).add(
-                "PARAM" if segment.startswith("{") else segment
-            )
+            id_holders.setdefault(key, set()).add("PARAM" if segment.startswith("{") else segment)
 
     for (prefix, index), variants in id_holders.items():
         if "PARAM" in variants and len(variants) > 1:

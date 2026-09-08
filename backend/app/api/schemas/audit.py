@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 ActorType = Literal["USER", "AGENT", "SYSTEM", "user", "agent", "system"]
 PolicyDecision = Literal["ALLOWED", "DENIED", "N/A", "ALLOW", "DENY"]
 
+
 class AuditEventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -33,6 +34,7 @@ class AuditEventResponse(BaseModel):
     #: (SQLAlchemy's internal `MetaData()` registry) instead of the real
     #: value, and the whole list failed pydantic validation.
     metadata: dict[str, Any] | None = Field(default=None, validation_alias="metadata_json")
+
 
 class AuditQueryParams(BaseModel):
     agent_id: UUID | None = None

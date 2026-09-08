@@ -50,6 +50,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 class UnhandledErrorMiddleware(BaseHTTPMiddleware):
     """Turn an unhandled exception into a JSON 500 *inside* the CORS layer.
 
@@ -115,6 +116,7 @@ app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
 app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
+
 
 @app.get("/health")
 async def health():

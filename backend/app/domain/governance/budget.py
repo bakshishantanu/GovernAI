@@ -118,6 +118,4 @@ class BudgetGuard:
                 # The denial below still stands.
                 pass
 
-        return BudgetDecision(
-            allowed=False, spend_usd=spend, cap_usd=cap, reason=reason
-        )
+        return BudgetDecision(allowed=False, spend_usd=spend, cap_usd=cap, reason=reason)

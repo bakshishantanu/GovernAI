@@ -75,9 +75,7 @@ async def stream(
     try:
         while True:
             try:
-                event = await asyncio.wait_for(
-                    subscription.__anext__(), timeout=HEARTBEAT_SECONDS
-                )
+                event = await asyncio.wait_for(subscription.__anext__(), timeout=HEARTBEAT_SECONDS)
             except asyncio.TimeoutError:
                 if on_heartbeat is None:
                     yield format_comment()

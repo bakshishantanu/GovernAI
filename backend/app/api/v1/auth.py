@@ -54,9 +54,7 @@ async def settings_overview(
     """
     org = await db.get(Organization, user.org_id)
 
-    agent_count = await db.scalar(
-        select(func.count(Agent.id)).where(Agent.org_id == user.org_id)
-    )
+    agent_count = await db.scalar(select(func.count(Agent.id)).where(Agent.org_id == user.org_id))
     policy_count = await db.scalar(
         select(func.count(Policy.id)).where(Policy.org_id == user.org_id)
     )

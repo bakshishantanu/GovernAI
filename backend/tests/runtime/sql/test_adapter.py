@@ -42,7 +42,9 @@ def test_empty_result_is_a_valid_success(adapter):
 
 def test_execute_connection_rejects_writes_at_db_level(adapter):
     with pytest.raises(PermissionError, match="read-only"):
-        adapter.execute("INSERT INTO tickets (id, subject, status, requester) VALUES ('X', 'x', 'open', 'x')")
+        adapter.execute(
+            "INSERT INTO tickets (id, subject, status, requester) VALUES ('X', 'x', 'open', 'x')"
+        )
 
     # prove the write genuinely did not happen
     result = adapter.execute("SELECT COUNT(*) AS count FROM tickets")

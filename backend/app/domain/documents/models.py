@@ -22,6 +22,7 @@ class DocumentChunk(Base):
 
     document: Mapped[Document] = relationship("Document", back_populates="chunks")
 
+
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -29,6 +30,8 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     access_scope: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
 
     chunks: Mapped[list[DocumentChunk]] = relationship("DocumentChunk", back_populates="document")

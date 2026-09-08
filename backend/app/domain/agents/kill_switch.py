@@ -8,7 +8,13 @@ from app.infrastructure.event_bus import Event, EventBus
 
 
 class KillSwitchService:
-    def __init__(self, session: AsyncSession, agent_repo: AgentRepository, audit_service: AuditService, event_bus: EventBus):
+    def __init__(
+        self,
+        session: AsyncSession,
+        agent_repo: AgentRepository,
+        audit_service: AuditService,
+        event_bus: EventBus,
+    ):
         self.session = session
         self.agent_repo = agent_repo
         self.audit_service = audit_service
@@ -24,14 +30,13 @@ class KillSwitchService:
             agent.passport.lifecycle_state = "SUSPENDED"
 
         await self.audit_service.log_agent_suspended(
-            org_id=org_id,
-            actor_id=actor_id,
-            agent_id=agent_id,
-            reason=reason
+            org_id=org_id, actor_id=actor_id, agent_id=agent_id, reason=reason
         )
 
         await self.session.commit()
-        await self.event_bus.publish(Event.create("agent.suspended", {"agent_id": str(agent_id), "reason": reason}))
+        await self.event_bus.publish(
+            Event.create("agent.suspended", {"agent_id": str(agent_id), "reason": reason})
+        )
 
     async def reactivate_agent(self, agent_id: UUID, actor_id: UUID, org_id: UUID, reason: str):
         agent = await self.agent_repo.get_agent(agent_id)
@@ -46,11 +51,10 @@ class KillSwitchService:
             agent.passport.lifecycle_state = "ACTIVE"
 
         await self.audit_service.log_agent_reactivated(
-            org_id=org_id,
-            actor_id=actor_id,
-            agent_id=agent_id,
-            reason=reason
+            org_id=org_id, actor_id=actor_id, agent_id=agent_id, reason=reason
         )
 
         await self.session.commit()
-        await self.event_bus.publish(Event.create("agent.reactivated", {"agent_id": str(agent_id), "reason": reason}))
+        await self.event_bus.publish(
+            Event.create("agent.reactivated", {"agent_id": str(agent_id), "reason": reason})
+        )

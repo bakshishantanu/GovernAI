@@ -59,7 +59,11 @@ class GeminiProvider(LLMProvider):
         parts = candidate.get("content", {}).get("parts", [])
         text = "".join(p["text"] for p in parts if "text" in p)
         tool_calls = [
-            ToolCall(id=f"call_{i}", name=p["functionCall"]["name"], arguments=p["functionCall"].get("args", {}))
+            ToolCall(
+                id=f"call_{i}",
+                name=p["functionCall"]["name"],
+                arguments=p["functionCall"].get("args", {}),
+            )
             for i, p in enumerate(parts)
             if "functionCall" in p
         ]

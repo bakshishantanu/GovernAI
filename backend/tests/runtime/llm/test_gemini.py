@@ -16,7 +16,11 @@ async def test_chat_parses_response_and_usage():
     client = _mock_client(
         {
             "candidates": [{"content": {"parts": [{"text": "hello"}]}, "finishReason": "STOP"}],
-            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15},
+            "usageMetadata": {
+                "promptTokenCount": 10,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 15,
+            },
         }
     )
     provider = GeminiProvider(api_key="test-key", client=client)
@@ -30,7 +34,9 @@ async def test_chat_parses_response_and_usage():
 
 
 async def test_chat_sends_api_key_header():
-    client = _mock_client({"candidates": [{"content": {"parts": [{"text": ""}]}}], "usageMetadata": {}})
+    client = _mock_client(
+        {"candidates": [{"content": {"parts": [{"text": ""}]}}], "usageMetadata": {}}
+    )
     provider = GeminiProvider(api_key="secret", client=client)
 
     await provider.chat([{"role": "user", "content": "hi"}])
@@ -40,7 +46,9 @@ async def test_chat_sends_api_key_header():
 
 
 async def test_system_message_becomes_system_instruction():
-    client = _mock_client({"candidates": [{"content": {"parts": [{"text": ""}]}}], "usageMetadata": {}})
+    client = _mock_client(
+        {"candidates": [{"content": {"parts": [{"text": ""}]}}], "usageMetadata": {}}
+    )
     provider = GeminiProvider(api_key="k", client=client)
 
     await provider.chat(
@@ -62,7 +70,14 @@ async def test_chat_parses_function_call():
             "candidates": [
                 {
                     "content": {
-                        "parts": [{"functionCall": {"name": "search_documents", "args": {"query": "policy"}}}]
+                        "parts": [
+                            {
+                                "functionCall": {
+                                    "name": "search_documents",
+                                    "args": {"query": "policy"},
+                                }
+                            }
+                        ]
                     },
                     "finishReason": "STOP",
                 }
