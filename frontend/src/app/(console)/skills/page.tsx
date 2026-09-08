@@ -91,7 +91,7 @@ export default function SkillsPage() {
       </div>
 
       {loading ? (
-        <div className="mt-10 flex gap-4">
+        <div className="mt-10 flex justify-center gap-4">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -106,7 +106,7 @@ export default function SkillsPage() {
       ) : (
         <div
           ref={trackRef}
-          className="mt-10 flex gap-0 overflow-x-auto px-2 py-10"
+          className="mt-10 flex justify-center gap-0 overflow-x-auto px-2 py-10"
           style={{ scrollSnapType: "x proximity" }}
         >
           {skills.map((skill, i) => (
