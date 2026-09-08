@@ -132,3 +132,46 @@ async def test_activate_agent_activates_approved_agent():
 
     assert activated.status == "ACTIVE"
     assert activated.passport.lifecycle_state == "ACTIVE"
+
+
+async def test_create_agent_with_request_and_assigned_user():
+    service, agent_repo, skill_repo = _service()
+    skill_repo.get_skill.return_value = {"id": "ticketing"}
+    req_id = uuid4()
+    assigned_user = uuid4()
+
+    created_agent = None
+    async def capture_created(agent):
+        nonlocal created_agent
+        created_agent = agent
+        return agent
+
+    agent_repo.create_agent.side_effect = capture_created
+    agent_repo.get_agent.side_effect = lambda id_: created_agent
+
+    result = await service.create_agent(
+        org_id=uuid4(),
+        owner_id=uuid4(),
+        name="Requested Agent",
+        description="Created from request",
+        skill_ids=["ticketing"],
+        request_id=req_id,
+        assigned_user_id=assigned_user,
+    )
+
+    assert result.request_id == req_id
+    assert result.assigned_user_id == assigned_user
+
+
+async def test_activate_agent_fulfills_linked_request():
+    from unittest.mock import patch, MagicMock
+    service, agent_repo, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="APPROVED")
+    agent.request_id = uuid4()
+    agent_repo.get_agent.return_value = agent
+    agent_repo.session = MagicMock()
+
+    with patch("app.domain.agent_requests.service.AgentRequestService.fulfill_request", new_callable=AsyncMock) as mock_fulfill:
+        activated = await service.activate_agent(agent.id)
+        assert activated.status == "ACTIVE"
+        mock_fulfill.assert_awaited_once_with(agent.request_id, agent.id)

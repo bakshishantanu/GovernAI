@@ -23,8 +23,8 @@ class ExecutionService:
     async def get_execution(self, execution_id: UUID) -> Execution | None:
         return await self.exec_repo.get_execution(execution_id)
 
-    async def list_executions_for_org(self, org_id: UUID) -> list[Execution]:
-        return await self.exec_repo.list_executions_for_org(org_id)
+    async def list_executions_for_org(self, org_id: UUID, builder_id: UUID | None = None, assigned_user_id: UUID | None = None) -> list[Execution]:
+        return await self.exec_repo.list_executions_for_org(org_id, builder_id, assigned_user_id)
 
     async def list_executions_for_agent(self, agent_id: UUID) -> list[Execution]:
         return await self.exec_repo.list_executions_for_agent(agent_id)

@@ -10,7 +10,7 @@ from app.infrastructure.event_bus import Event, event_bus
 @pytest.fixture(autouse=True)
 def fast_heartbeat(monkeypatch):
     """Keep the tests quick without changing the behaviour under test."""
-    monkeypatch.setattr(sse, "HEARTBEAT_SECONDS", 0.02)
+    monkeypatch.setattr(sse, "HEARTBEAT_SECONDS", 0.05)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +22,8 @@ def clean_bus():
 
 
 def parse(frame: str) -> tuple[str, dict]:
+    if frame.strip() == ": keep-alive":
+        return "keep-alive", {}
     lines = frame.strip().splitlines()
     event_type = lines[0].removeprefix("event: ")
     data = json.loads(lines[1].removeprefix("data: "))

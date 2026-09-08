@@ -21,7 +21,16 @@ class AgentService:
         self.perm_repo = perm_repo
         self.skill_repo = skill_repo
 
-    async def create_agent(self, org_id: UUID, owner_id: UUID, name: str, description: str, skill_ids: list[str] | None = None) -> Agent:
+    async def create_agent(
+        self,
+        org_id: UUID,
+        owner_id: UUID,
+        name: str,
+        description: str,
+        skill_ids: list[str] | None = None,
+        request_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
+    ) -> Agent:
         skill_ids = skill_ids or []
         for skill_id in skill_ids:
             if not await self.skill_repo.get_skill(skill_id):
@@ -31,6 +40,8 @@ class AgentService:
             id=uuid4(),
             org_id=org_id,
             owner_id=owner_id,
+            assigned_user_id=assigned_user_id,
+            request_id=request_id,
             name=name,
             description=description,
             status="DRAFT"
@@ -87,6 +98,16 @@ class AgentService:
             raise InvalidStateTransitionError("Only APPROVED agents can be activated")
         agent.status = "ACTIVE"
         agent.passport.lifecycle_state = "ACTIVE"
+
+        if agent.request_id:
+            # Inline import to avoid circular dependency
+            from app.domain.agent_requests.repository import AgentRequestRepository
+            from app.domain.agent_requests.service import AgentRequestService
+            from app.infrastructure.event_bus import event_bus
+            request_repo = AgentRequestRepository(self.agent_repo.session)
+            request_service = AgentRequestService(request_repo, event_bus=event_bus)
+            await request_service.fulfill_request(agent.request_id, agent.id)
+
         return agent
 
     async def suspend_agent(self, agent_id: UUID) -> Agent:

@@ -19,13 +19,25 @@ class ExecutionRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_executions_for_org(self, org_id: UUID) -> list[Execution]:
+    async def list_executions_for_org(
+        self, 
+        org_id: UUID,
+        builder_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
+    ) -> list[Execution]:
+        from app.domain.agents.models import Agent
         stmt = (
             select(Execution)
             .options(selectinload(Execution.steps))
+            .join(Agent, Execution.agent_id == Agent.id)
             .where(Execution.org_id == org_id)
-            .order_by(Execution.started_at.desc())
         )
+        if builder_id:
+            stmt = stmt.where(Agent.owner_id == builder_id)
+        if assigned_user_id:
+            stmt = stmt.where(Agent.assigned_user_id == assigned_user_id)
+            
+        stmt = stmt.order_by(Execution.started_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

@@ -1,7 +1,8 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useMemo } from "react"
-import { fetchApi } from "@/lib/api-client"
+import { useState, useEffect, useMemo } from "react";
+import { fetchApi } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import {
   Table,
   TableBody,
@@ -9,40 +10,60 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Shield, ShieldAlert, ShieldCheck, PlayCircle, Clock, Search, ChevronRight } from "lucide-react"
-import Link from "next/link"
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { 
+  ShieldAlert, 
+  ShieldCheck, 
+  Clock, 
+  Search, 
+  ChevronRight,
+  Bot,
+  Sparkles,
+  ClipboardList
+} from "lucide-react";
+import Link from "next/link";
 
 export function AgentList() {
-  const [agents, setAgents] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
+  const { role, isBuilder, isUser } = useAuth();
+  const [agents, setAgents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchAgents = async () => {
     try {
-      setLoading(true)
-      const data = await fetchApi("/agents/")
-      setAgents(Array.isArray(data) ? data : [])
+      setLoading(true);
+      setError(null);
+      const data = await fetchApi("/agents/");
+      setAgents(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || "Failed to load agents.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchAgents()
+    fetchAgents();
 
     const handleCreated = () => {
-      fetchAgents()
-    }
+      fetchAgents();
+    };
 
-    window.addEventListener("agent-created", handleCreated)
-    return () => window.removeEventListener("agent-created", handleCreated)
-  }, [])
+    const handleRoleChange = () => {
+      fetchAgents();
+    };
+
+    window.addEventListener("agent-created", handleCreated);
+    window.addEventListener("govern-ai-role-change", handleRoleChange);
+    return () => {
+      window.removeEventListener("agent-created", handleCreated);
+      window.removeEventListener("govern-ai-role-change", handleRoleChange);
+    };
+  }, [role]);
 
   const getStatusBadge = (status: string, lifecycle: string) => {
     if (status === "ACTIVE") {
@@ -54,37 +75,57 @@ export function AgentList() {
           </span>
           Active
         </Badge>
-      )
+      );
     }
     
+    if (status === "SUSPENDED") {
+      return (
+        <Badge className="bg-red-500/10 text-red-500 border-red-500/20">
+          Suspended
+        </Badge>
+      );
+    }
+
     if (lifecycle === "DRAFT") {
-      return <Badge variant="outline" className="text-muted-foreground border-border bg-muted/50"><Clock className="w-3 h-3 mr-1" /> Draft</Badge>
+      return (
+        <Badge variant="outline" className="text-muted-foreground border-border bg-muted/50">
+          <Clock className="w-3 h-3 mr-1" /> Draft
+        </Badge>
+      );
     }
     
     if (lifecycle === "APPROVED") {
-      return <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20"><ShieldCheck className="w-3 h-3 mr-1" /> Approved</Badge>
+      return (
+        <Badge className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/20">
+          <ShieldCheck className="w-3 h-3 mr-1" /> Approved
+        </Badge>
+      );
     }
 
-    return <Badge variant="outline">{status}</Badge>
-  }
+    return <Badge variant="outline">{status}</Badge>;
+  };
 
   const formatDate = (dateString: string) => {
-    const d = new Date(dateString)
-    return new Intl.DateTimeFormat('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
-    }).format(d)
-  }
+    try {
+      const d = new Date(dateString);
+      return new Intl.DateTimeFormat("en-US", { 
+        month: "short", 
+        day: "numeric", 
+        year: "numeric" 
+      }).format(d);
+    } catch {
+      return dateString;
+    }
+  };
 
   const filteredAgents = useMemo(() => {
-    if (!searchQuery) return agents
-    const lowerQuery = searchQuery.toLowerCase()
+    if (!searchQuery) return agents;
+    const lowerQuery = searchQuery.toLowerCase();
     return agents.filter(a => 
       a.name?.toLowerCase().includes(lowerQuery) || 
       a.description?.toLowerCase().includes(lowerQuery)
-    )
-  }, [agents, searchQuery])
+    );
+  }, [agents, searchQuery]);
 
   if (loading) {
     return (
@@ -118,7 +159,7 @@ export function AgentList() {
           </Table>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -127,9 +168,11 @@ export function AgentList() {
         <ShieldAlert className="w-8 h-8 text-red-500 mx-auto mb-2" />
         <p className="text-red-500 font-medium">Failed to load agents</p>
         <p className="text-muted-foreground text-sm mt-1">{error}</p>
-        <button onClick={fetchAgents} className="mt-4 text-sm text-blue-500 hover:text-blue-400 underline">Try again</button>
+        <Button variant="outline" onClick={fetchAgents} className="mt-4">
+          Try again
+        </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -141,25 +184,50 @@ export function AgentList() {
           placeholder="Search agents by name... (⌘K)" 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 bg-background border-input focus-visible:ring-ring transition-all duration-200 shadow-sm" 
+          className="pl-9 bg-background border-input focus-visible:ring-ring transition-all duration-200 shadow-xs" 
         />
       </div>
 
       {filteredAgents.length === 0 ? (
         <div className="border border-dashed border-border rounded-xl p-12 text-center flex flex-col items-center justify-center bg-muted/10">
           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Search className="h-6 w-6 text-muted-foreground" />
+            <Bot className="h-6 w-6 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium text-foreground mb-1">No agents found</h3>
-          <p className="text-muted-foreground max-w-sm mb-6">
+          <h3 className="text-lg font-medium text-foreground mb-1">
+            {searchQuery ? "No matching agents" : isUser ? "No assigned agents yet" : isBuilder ? "No agents built yet" : "No agents registered"}
+          </h3>
+          <p className="text-muted-foreground max-w-sm mb-6 text-sm">
             {agents.length === 0 
-              ? "You haven't registered any AI agents in GovernAI yet. Create your first agent to begin governance tracking."
+              ? isUser
+                ? "You haven't been assigned any AI agents yet. Submit an agent request to have a builder configure one for your workflow."
+                : isBuilder
+                ? "You haven't created any agents yet. Claim an incoming request from the queue or build a self-initiated agent."
+                : "You haven't registered any AI agents in GovernAI yet. Create your first agent to begin governance tracking."
               : `No agents match your search for "${searchQuery}".`
             }
           </p>
+          {agents.length === 0 && (
+            <div>
+              {isUser ? (
+                <Link href="/request-agent">
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Request an Agent
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/requests">
+                  <Button variant="outline">
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    View Requests Queue
+                  </Button>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="border border-border rounded-lg overflow-hidden bg-background shadow-sm">
+        <div className="border border-border rounded-lg overflow-hidden bg-background shadow-xs">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="border-border hover:bg-muted/50">
@@ -177,9 +245,16 @@ export function AgentList() {
                     <Link href={`/agents/${agent.id}`} className="absolute inset-0 z-10">
                       <span className="sr-only">View Agent</span>
                     </Link>
-                    <span className="group-hover:text-blue-500 transition-colors">
-                      {agent.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="group-hover:text-blue-500 transition-colors font-semibold">
+                        {agent.name}
+                      </span>
+                      {agent.request_id && (
+                        <Badge variant="outline" className="text-[10px] text-blue-500 border-blue-500/20 bg-blue-500/5">
+                          From Request
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(agent.status, agent.passport?.lifecycle_state)}
@@ -200,5 +275,5 @@ export function AgentList() {
         </div>
       )}
     </div>
-  )
+  );
 }

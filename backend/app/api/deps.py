@@ -20,22 +20,34 @@ from app.domain.executions.service import ExecutionService
 from app.runtime.llm.service import LLMService
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
-from app.runtime.llm.base import LLMProvider, LLMResponse
+from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.governance.budget import BudgetGuard
 from app.infrastructure.event_bus import event_bus
+from app.domain.agent_requests.repository import AgentRequestRepository
+from app.domain.agent_requests.service import AgentRequestService
 
 
 class MockFallbackProvider(LLMProvider):
     name = "mock"
 
-    async def chat(self, messages: list[dict], **kwargs) -> LLMResponse:
+    async def chat(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        **kwargs,
+    ) -> LLMResponse:
         last_msg = messages[-1]["content"] if messages else ""
         return LLMResponse(
             content=f"Execution simulated successfully for prompt: '{last_msg}'",
-            tool_calls=[],
             model="mock-simulator",
+            provider=self.name,
+            usage=TokenUsage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            tool_calls=[],
         )
 
 
@@ -60,6 +72,10 @@ async def get_agent_service(db: AsyncSession = Depends(get_db)) -> AgentService:
 async def get_execution_service(db: AsyncSession = Depends(get_db)) -> ExecutionService:
     exec_repo = ExecutionRepository(db)
     return ExecutionService(exec_repo=exec_repo)
+
+async def get_agent_request_service(db: AsyncSession = Depends(get_db)) -> AgentRequestService:
+    repo = AgentRequestRepository(db)
+    return AgentRequestService(request_repo=repo, event_bus=event_bus)
 
 
 async def get_policy_engine(db: AsyncSession = Depends(get_db)) -> PolicyEngine:

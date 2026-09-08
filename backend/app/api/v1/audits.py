@@ -26,5 +26,12 @@ async def list_audit_events(
     """
     # Fetch all events (repository already orders by timestamp desc)
     # If the database gets large, we should pass 'limit' down to the repository.
-    events = await repo.get_events_for_org(current_user.org_id)
+    builder_id = current_user.id if current_user.role == "agent_builder" else None
+    assigned_user_id = current_user.id if current_user.role == "user" else None
+    
+    events = await repo.get_events_for_org(
+        current_user.org_id, 
+        builder_id=builder_id, 
+        assigned_user_id=assigned_user_id
+    )
     return Envelope(data=events[:limit])

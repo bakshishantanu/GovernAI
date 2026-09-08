@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { fetchApi } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,7 +21,6 @@ export function CreateAgentButton() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
 
   const [formData, setFormData] = useState({
     name: "",

@@ -3,7 +3,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel
 
-Role = Literal["admin", "member"]
+Role = Literal["admin", "agent_builder", "user"]
 
 class CurrentUser(BaseModel):
     id: UUID

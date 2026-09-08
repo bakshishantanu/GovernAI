@@ -42,7 +42,7 @@ export async function signup(formData: FormData) {
     options: {
       data: {
         full_name: fullName || "Team Member",
-        role: "member",
+        role: "user",
       },
     },
   });

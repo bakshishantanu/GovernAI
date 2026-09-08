@@ -4,8 +4,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
-from app.domain.auth.rbac import require_admin
+from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.policy import PolicyResponse, PolicyCreate, PolicyRuleCreate, PolicyRuleResponse
@@ -20,7 +19,7 @@ def get_policy_repo(db: AsyncSession = Depends(get_db)) -> PolicyRepository:
 
 @router.get("/", response_model=Envelope[list[PolicyResponse]])
 async def list_policies(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_builder_or_admin),
     repo: PolicyRepository = Depends(get_policy_repo)
 ):
     """
@@ -69,7 +68,7 @@ async def create_policy(
 @router.get("/{policy_id}", response_model=Envelope[PolicyResponse])
 async def get_policy(
     policy_id: uuid.UUID,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_builder_or_admin),
     repo: PolicyRepository = Depends(get_policy_repo),
 ):
     """One policy and its rules."""
@@ -130,7 +129,7 @@ async def delete_policy(
 @router.get("/{policy_id}/rules", response_model=Envelope[list[PolicyRuleResponse]])
 async def list_rules(
     policy_id: uuid.UUID,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_builder_or_admin),
     repo: PolicyRepository = Depends(get_policy_repo),
 ):
     policy = await repo.get_policy(policy_id, current_user.org_id)

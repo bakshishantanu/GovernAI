@@ -13,7 +13,16 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${session.access_token}`)
   } else {
     // Fallback for local development when Supabase isn't configured
-    headers.set('Authorization', `Bearer dummy-token`)
+    let devToken = 'dummy-token'
+    if (typeof window !== 'undefined') {
+      const activeRole = localStorage.getItem('govern_ai_role')
+      if (activeRole === 'agent_builder') {
+        devToken = 'dummy-token-builder'
+      } else if (activeRole === 'user') {
+        devToken = 'dummy-token-user'
+      }
+    }
+    headers.set('Authorization', `Bearer ${devToken}`)
   }
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -28,12 +37,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       if (err.detail) {
         errorMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore JSON parse errors for non-JSON error responses
     }
     throw new Error(errorMsg)
   }
 
   const payload = await res.json()
-  return payload.data // FastAPI returns { data: ... } Envelope
+  return payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload
 }

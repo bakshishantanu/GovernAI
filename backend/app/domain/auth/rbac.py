@@ -49,3 +49,12 @@ def _forbidden_message(allowed_roles: Iterable[str]) -> str:
 #: Admit administrators only. Use on anything that changes governance itself —
 #: activating an agent, editing policy, or stopping a run.
 require_admin = require_role("admin")
+
+#: Admit agent builders.
+require_builder = require_role("agent_builder")
+
+#: Admit regular users.
+require_user = require_role("user")
+
+#: Admit builders or administrators.
+require_builder_or_admin = require_role("agent_builder", "admin")

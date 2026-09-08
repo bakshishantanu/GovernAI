@@ -44,13 +44,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
     token = credentials.credentials
 
     # --- LOCAL DEV BYPASS (inert unless AUTH_ALLOW_DEV_TOKEN is set) ---
-    if token == DEV_TOKEN:
+    if token in (DEV_TOKEN, "dummy-token-admin", "dummy-token-builder", "dummy-token-user"):
         if not dev_token_allowed():
             raise HTTPException(status_code=401, detail="Invalid token")
+        dev_role = "admin"
+        user_id = UUID("11111111-1111-1111-1111-111111111111")
+        if token == "dummy-token-builder":
+            dev_role = "agent_builder"
+            user_id = UUID("22222222-2222-2222-2222-222222222222")
+        elif token == "dummy-token-user":
+            dev_role = "user"
+            user_id = UUID("33333333-3333-3333-3333-333333333333")
         return CurrentUser(
-            id=UUID("11111111-1111-1111-1111-111111111111"),
+            id=user_id,
             org_id=UUID("00000000-0000-0000-0000-000000000000"),
-            role="admin"
+            role=dev_role,  # type: ignore[arg-type]
         )
 
     secret = get_supabase_jwt_secret()
@@ -76,10 +84,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         # Extract role and org_id from app_metadata (as specified in FRD)
         app_metadata = payload.get("app_metadata", {})
         
-        # Default to "member" if not specified
-        role = app_metadata.get("role", "member")
-        if role not in ["admin", "member"]:
-            role = "member"
+        # Default to "user" if not specified
+        role = app_metadata.get("role", "user")
+        if role not in ["admin", "agent_builder", "user"]:
+            role = "user"
 
         # Default org_id for MVP (single tenant)
         org_id_str = app_metadata.get("org_id")

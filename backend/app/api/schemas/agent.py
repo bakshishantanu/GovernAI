@@ -23,6 +23,8 @@ class AgentCreate(BaseModel):
     name: str
     description: str
     skills: list[str]  # skill IDs
+    request_id: Optional[UUID] = None
+    assigned_user_id: Optional[UUID] = None
 
 class AgentUpdate(BaseModel):
     name: Optional[str] = None
@@ -34,6 +36,8 @@ class AgentResponse(BaseModel):
     id: UUID
     org_id: UUID
     owner_id: UUID
+    assigned_user_id: Optional[UUID] = None
+    request_id: Optional[UUID] = None
     name: str
     description: str
     status: AgentStatus

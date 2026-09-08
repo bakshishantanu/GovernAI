@@ -20,6 +20,7 @@ from app.domain.executions.service import ExecutionService
 from app.runtime.llm.service import LLMService
 from app.api.execution_runner import run_execution
 from app.infrastructure.event_bus import Event
+import app.domain.agents.models
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
@@ -55,6 +56,11 @@ async def create_and_run_execution(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found in your organization",
         )
+        
+    if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
+    elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
 
     if not agent.passport or agent.passport.lifecycle_state != "ACTIVE":
         state = agent.passport.lifecycle_state if agent.passport else "UNKNOWN"
@@ -97,8 +103,14 @@ async def list_executions(
 ):
     """
     List all execution runs for the current user's organization (newest first).
+    Role-scoped filtering applies based on the user's role.
     """
-    executions = await exec_service.list_executions_for_org(current_user.org_id)
+    builder_id = current_user.id if current_user.role == "agent_builder" else None
+    assigned_user_id = current_user.id if current_user.role == "user" else None
+    
+    executions = await exec_service.list_executions_for_org(
+        current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
+    )
     return Envelope(data=executions)
 
 
@@ -117,6 +129,15 @@ async def get_execution_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Execution not found",
         )
+
+    # Re-fetch agent to verify ownership
+    agent = await exec_service.exec_repo.session.get(app.domain.agents.models.Agent, execution.agent_id)
+    if agent:
+        if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
+        elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
+
     return Envelope(data=execution)
 
 

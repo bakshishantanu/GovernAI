@@ -48,14 +48,18 @@ class EventBus:
     def __init__(self) -> None:
         self._subscribers: list[asyncio.Queue[Event]] = []
 
-    async def publish(self, event: Event) -> None:
-        """Send an event to all current subscribers."""
+    def publish_nowait(self, event: Event) -> None:
+        """Send an event to all current subscribers synchronously."""
         for queue in self._subscribers:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 # Drop events for slow consumers rather than blocking publishers
                 pass
+
+    async def publish(self, event: Event) -> None:
+        """Send an event to all current subscribers."""
+        self.publish_nowait(event)
 
     def subscribe(self, maxsize: int = 256) -> "Subscription":
         """Create a new subscription. Use as an async iterator."""

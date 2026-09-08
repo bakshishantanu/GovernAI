@@ -20,6 +20,7 @@ from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope, PaginatedResponse
 from app.api.schemas.cost import CostEventResponse, CostSummaryResponse
 from app.domain.auth.middleware import get_current_user
+from app.domain.auth.rbac import require_builder_or_admin
 from app.domain.costs.models import CostEvent
 from app.domain.costs.repository import CostRepository
 
@@ -68,7 +69,7 @@ def _to_response(event: CostEvent) -> CostEventResponse:
 
 @router.get("/", response_model=PaginatedResponse[CostEventResponse])
 async def list_costs(
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_builder_or_admin),
     agent_id: UUID | None = Query(None, description="Narrow to one agent"),
     execution_id: UUID | None = Query(None, description="Narrow to one run"),
     limit: int = Query(50, ge=1, le=200),
@@ -76,12 +77,15 @@ async def list_costs(
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Individual cost events, newest first, scoped to the caller's org."""
+    builder_id = user.id if user.role == "agent_builder" else None
+    
     events = await repo.list_costs(
         org_id=user.org_id,
         agent_id=agent_id,
         execution_id=execution_id,
         limit=limit,
         offset=offset,
+        builder_id=builder_id,
     )
     return PaginatedResponse(
         data=[_to_response(e) for e in events],
@@ -91,7 +95,7 @@ async def list_costs(
 
 @router.get("/summary", response_model=Envelope[CostSummaryResponse])
 async def cost_summary(
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_builder_or_admin),
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Total spend for the organisation, broken down by agent and by model.
@@ -99,7 +103,8 @@ async def cost_summary(
     The grouping is done by the database; this only pivots the already-small
     grouped result into the shape the dashboard reads.
     """
-    rows = await repo.get_costs_summary(user.org_id)
+    builder_id = user.id if user.role == "agent_builder" else None
+    rows = await repo.get_costs_summary(user.org_id, builder_id=builder_id)
 
     total = 0.0
     by_agent: dict[str, float] = {}

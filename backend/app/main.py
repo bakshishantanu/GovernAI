@@ -12,6 +12,7 @@ from app.api.v1.policies import router as policies_router
 from app.api.v1.audits import router as audits_router
 from app.api.v1.costs import router as costs_router
 from app.api.v1.executions import router as executions_router
+from app.api.v1.agent_requests import router as agent_requests_router
 
 # Import every domain's ORM models so SQLAlchemy's mapper registry knows
 # about all tables at startup, regardless of which routers are wired up.
@@ -24,6 +25,7 @@ import app.domain.audit.models  # noqa: F401
 import app.domain.auth.models  # noqa: F401
 import app.domain.costs.models  # noqa: F401
 import app.domain.documents.models  # noqa: F401
+import app.domain.agent_requests.models  # noqa: F401
 import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401
@@ -61,6 +63,7 @@ app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
 app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
+app.include_router(agent_requests_router, prefix="/api/v1/agent-requests", tags=["Agent Requests"])
 
 @app.get("/health")
 async def health():
