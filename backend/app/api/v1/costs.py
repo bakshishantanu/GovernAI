@@ -85,16 +85,22 @@ async def list_costs(
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Individual cost events, newest first, scoped to the caller's org."""
+    # One extra row, not a separate COUNT query: if it comes back, there is
+    # a next page. CostRepository has no count method, and PaginatedMeta
+    # needs `has_more` — this was previously omitted entirely, which made
+    # every response fail validation before any data reached the caller.
     events = await repo.list_costs(
         org_id=user.org_id,
         agent_id=agent_id,
         execution_id=execution_id,
-        limit=limit,
+        limit=limit + 1,
         offset=offset,
     )
+    has_more = len(events) > limit
+    events = events[:limit]
     return PaginatedResponse(
         data=[_to_response(e) for e in events],
-        meta={"count": len(events), "limit": limit, "offset": offset},
+        meta={"has_more": has_more},
     )
 
 
