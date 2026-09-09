@@ -6,13 +6,12 @@ from fastapi import HTTPException
 
 from app.api.schemas.auth import CurrentUser
 from app.domain.agents.models import Agent, AgentPassport
-from app.domain.auth.rbac import require_admin, require_builder_or_admin
+from app.domain.auth.rbac import require_admin
 from app.api.v1.agents import (
     get_agent,
     kill_agent,
     activate_agent,
 )
-from app.api.v1.policies import list_policies
 from app.api.v1.costs import cost_summary
 
 @pytest.fixture
