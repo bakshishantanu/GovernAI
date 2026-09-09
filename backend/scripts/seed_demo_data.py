@@ -2,29 +2,23 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
-<<<<<<< HEAD
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import select
-from app.domain.auth.models import Organization, Profile
-from app.domain.agents.models import Agent, AgentPassport, AgentSkill
-from app.domain.agent_requests.models import AgentRequest
-from app.domain.skills.models import SkillModel, ToolModel, SkillPermission
-from app.domain.policies.models import Policy, PolicyRule
-from app.domain.executions.models import Execution
-=======
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.domain.agent_requests.models import AgentRequest
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
->>>>>>> origin/main
 from app.domain.audit.models import AuditEvent
+from app.domain.auth.models import Organization, Profile
 from app.domain.costs.models import CostEvent
 from app.domain.documents.models import Document, DocumentChunk
 from app.domain.executions.models import Execution
 from app.domain.permissions.models import Permission
 from app.domain.policies.models import Policy, PolicyRule
+from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
+engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
