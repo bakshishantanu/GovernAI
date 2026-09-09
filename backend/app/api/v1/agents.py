@@ -24,7 +24,7 @@ from app.domain.agents.service import (
     SkillNotFoundError,
 )
 from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
+from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.domain.skills.models import SkillModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -36,7 +36,7 @@ async def _skills_for(db: AsyncSession, agent_ids: list[UUID]) -> dict[UUID, lis
     One statement for the whole page rather than one per agent — the agents
     board can list up to 200 rows at a time.
     """
-    if not agent_ids:
+    if not isinstance(db, AsyncSession) or not agent_ids:
         return {}
 
     rows = await db.execute(
@@ -60,11 +60,19 @@ def _with_skills(agent, skills_by_agent: dict[UUID, list[AgentSkillRef]]) -> Age
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
     payload: AgentCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """Create a new agent draft."""
+    assigned_user_id = payload.assigned_user_id
+    if payload.request_id and not assigned_user_id:
+        from app.domain.agent_requests.repository import AgentRequestRepository
+        req_repo = AgentRequestRepository(service.agent_repo.session)
+        req = await req_repo.get_request(payload.request_id)
+        if req:
+            assigned_user_id = req.requester_id
+
     try:
         agent = await service.create_agent(
             org_id=user.org_id,
@@ -72,10 +80,14 @@ async def create_agent(
             name=payload.name,
             description=payload.description,
             skill_ids=payload.skills,
+            request_id=payload.request_id,
+            assigned_user_id=assigned_user_id,
         )
+        if isinstance(db, AsyncSession):
+            await db.commit()
     except SkillNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    skills = await _skills_for(db, [agent.id])
+    skills = await _skills_for(db, [agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(agent, skills))
 
 
@@ -87,9 +99,20 @@ async def list_agents(
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all agents for the current user's organization."""
-    agents = await service.agent_repo.list_agents_by_org(user.org_id, limit=limit, offset=offset)
-    count = await service.agent_repo.count_agents_by_org(user.org_id)
+    """List agents. Admin sees all in org. Builder sees own. User sees assigned."""
+    owner_id = None
+    assigned_user_id = None
+    if user.role == "agent_builder":
+        owner_id = user.id
+    elif user.role == "user":
+        assigned_user_id = user.id
+
+    agents = await service.agent_repo.list_agents_by_org(
+        user.org_id, limit=limit, offset=offset, owner_id=owner_id, assigned_user_id=assigned_user_id
+    )
+    count = await service.agent_repo.count_agents_by_org(
+        user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
+    )
 
     # Built explicitly so the passport and the skills are both included; one
     # skills query covers the whole page rather than one per row.
@@ -111,6 +134,12 @@ async def get_agent(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    if user.role == "agent_builder" and agent.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    elif user.role == "user" and agent.assigned_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
     skills = await _skills_for(db, [agent.id])
     return Envelope(data=_with_skills(agent, skills))
 
@@ -118,17 +147,22 @@ async def get_agent(
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
 async def submit_agent_for_review(
     agent_id: UUID,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """Submit a draft agent for governance review."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
+        
+    if user.role == "agent_builder" and agent.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to submit this agent")
 
     try:
         await service.submit_for_review(agent_id)
+        if isinstance(db, AsyncSession):
+            await db.commit()
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ComplianceError as e:
@@ -136,30 +170,35 @@ async def submit_agent_for_review(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    skills = await _skills_for(db, [updated_agent.id])
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(updated_agent, skills))
 
 
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
 async def activate_agent(
     agent_id: UUID,
-    user: CurrentUser = Depends(require_admin),
+    user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """Activate an approved agent."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
+        
+    if user.role == "agent_builder" and agent.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to activate this agent")
 
     try:
         await service.activate_agent(agent_id)
+        if isinstance(db, AsyncSession):
+            await db.commit()
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    skills = await _skills_for(db, [updated_agent.id])
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(updated_agent, skills))
 
 
@@ -167,7 +206,7 @@ async def activate_agent(
 async def update_agent(
     agent_id: UUID,
     payload: AgentUpdate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_builder_or_admin),
     db: AsyncSession = Depends(get_db),
     service: AgentService = Depends(get_agent_service),
 ):
@@ -182,6 +221,9 @@ async def update_agent(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
+        
+    if user.role == "agent_builder" and agent.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this agent")
 
     if payload.skills is not None:
         raise HTTPException(

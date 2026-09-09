@@ -25,9 +25,11 @@ class CostRepository:
         )
         return list(result.scalars().all())
 
-    async def get_costs_summary(self, org_id: UUID) -> list[dict]:
+    async def get_costs_summary(self, org_id: UUID, builder_id: UUID | None = None) -> list[dict]:
+        from app.domain.agents.models import Agent
+        
         # Returns totals grouped by agent, model, and execution
-        result = await self.session.execute(
+        query = (
             select(
                 CostEvent.agent_id,
                 CostEvent.model,
@@ -35,7 +37,13 @@ class CostRepository:
                 func.sum(CostEvent.cost_usd).label("total_cost_usd"),
             )
             .where(CostEvent.org_id == org_id)
-            .group_by(CostEvent.agent_id, CostEvent.model, CostEvent.execution_id)
+        )
+        
+        if builder_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(Agent.owner_id == builder_id)
+            
+        result = await self.session.execute(
+            query.group_by(CostEvent.agent_id, CostEvent.model, CostEvent.execution_id)
         )
         rows = result.all()
         return [
@@ -55,17 +63,23 @@ class CostRepository:
         execution_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
+        builder_id: UUID | None = None,
     ) -> list[CostEvent]:
         """Cost events for one org, newest first, optionally narrowed.
 
         Always scoped by org_id so a caller cannot read another tenant's spend
         by guessing an agent id.
         """
+        from app.domain.agents.models import Agent
+        
         query = select(CostEvent).where(CostEvent.org_id == org_id)
         if agent_id is not None:
             query = query.where(CostEvent.agent_id == agent_id)
         if execution_id is not None:
             query = query.where(CostEvent.execution_id == execution_id)
+            
+        if builder_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(Agent.owner_id == builder_id)
 
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)

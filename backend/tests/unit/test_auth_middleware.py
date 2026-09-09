@@ -55,7 +55,7 @@ async def test_valid_token(configured_secret):
 
 @pytest.mark.asyncio
 async def test_missing_sub_rejects(configured_secret):
-    payload = {"app_metadata": {"role": "member"}}
+    payload = {"app_metadata": {"role": "user"}}
     token = jwt.encode(payload, configured_secret, algorithm="HS256")
 
     with pytest.raises(HTTPException) as exc:

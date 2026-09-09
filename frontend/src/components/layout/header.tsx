@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { logout } from "@/app/auth/actions";
-import { LogOut, User, Bell } from "lucide-react";
+import { LogOut, User, Bell, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/lib/auth-context";
+import { UserRole } from "@/lib/types";
 import { fetchApi } from "@/lib/api-client";
 
 /**
@@ -27,6 +29,7 @@ import { fetchApi } from "@/lib/api-client";
  * real information is never held hostage by a decorative transition.
  */
 export function Header() {
+  const { role, userName, switchRole } = useAuth();
   const [orgName, setOrgName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,17 +46,66 @@ export function Header() {
     };
   }, []);
 
+  const getRoleBadge = (r: UserRole) => {
+    switch (r) {
+      case "admin":
+        return "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
+      case "agent_builder":
+        return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
+      case "user":
+        return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
+    }
+  };
+
+  const getRoleLabel = (r: UserRole) => {
+    switch (r) {
+      case "admin":
+        return "Admin";
+      case "agent_builder":
+        return "Agent Builder";
+      case "user":
+        return "User";
+    }
+  };
+
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-[var(--l-line)] bg-[var(--l-cream)]/90 px-6 backdrop-blur-md">
-      <motion.span
-        key={orgName ?? "loading"}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.25 }}
-        className="rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
-      >
-        {orgName ?? "Loading organisation…"}
-      </motion.span>
+      <div className="flex items-center gap-3">
+        <motion.span
+          key={orgName ?? "loading"}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          className="rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
+        >
+          {orgName ?? "Loading organisation…"}
+        </motion.span>
+
+        {/* Role Simulator / Quick Switcher */}
+        <div className="hidden sm:flex items-center bg-[var(--l-cream-deep)] rounded-lg p-0.5 border border-[var(--l-line)] text-xs">
+          <span className="text-[11px] font-medium text-[var(--l-charcoal)]/70 px-2 flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-[var(--l-charcoal)]/60" />
+            Role:
+          </span>
+          {(["admin", "agent_builder", "user"] as UserRole[]).map((r) => {
+            const isActive = role === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => switchRole(r)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                  isActive
+                    ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-semibold"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                {getRoleLabel(r)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="flex items-center gap-1.5">
         <ThemeToggle />
@@ -64,8 +116,16 @@ export function Header() {
 
         <div className="mx-2 h-4 w-px bg-[var(--l-line)]" />
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[var(--l-charcoal)]/70">
-          <User className="h-4 w-4" />
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-end">
+            <span className="text-sm font-medium text-[var(--l-ink)]">{userName}</span>
+            <span className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border rounded ${getRoleBadge(role)}`}>
+              {getRoleLabel(role)}
+            </span>
+          </div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[var(--l-charcoal)]/70">
+            <User className="h-4 w-4" />
+          </div>
         </div>
 
         <form action={logout}>

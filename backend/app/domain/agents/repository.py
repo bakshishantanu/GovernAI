@@ -23,21 +23,37 @@ class AgentRepository:
         return result.scalar_one_or_none()
 
     async def list_agents_by_org(
-        self, org_id: UUID, limit: int = 50, offset: int = 0
+        self, 
+        org_id: UUID, 
+        limit: int = 50, 
+        offset: int = 0,
+        owner_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
     ) -> list[Agent]:
+        query = self._with_relations().where(Agent.org_id == org_id)
+        if owner_id:
+            query = query.where(Agent.owner_id == owner_id)
+        if assigned_user_id:
+            query = query.where(Agent.assigned_user_id == assigned_user_id)
+
         result = await self.session.execute(
-            self._with_relations()
-            .where(Agent.org_id == org_id)
-            .order_by(Agent.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            query.order_by(Agent.created_at.desc()).offset(offset).limit(limit)
         )
         return list(result.scalars().all())
 
-    async def count_agents_by_org(self, org_id: UUID) -> int:
-        result = await self.session.execute(
-            select(func.count(Agent.id)).where(Agent.org_id == org_id)
-        )
+    async def count_agents_by_org(
+        self, 
+        org_id: UUID,
+        owner_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
+    ) -> int:
+        query = select(func.count(Agent.id)).where(Agent.org_id == org_id)
+        if owner_id:
+            query = query.where(Agent.owner_id == owner_id)
+        if assigned_user_id:
+            query = query.where(Agent.assigned_user_id == assigned_user_id)
+            
+        result = await self.session.execute(query)
         return result.scalar_one()
 
     async def create_agent(self, agent: Agent) -> Agent:

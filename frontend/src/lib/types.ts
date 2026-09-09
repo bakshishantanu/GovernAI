@@ -1,0 +1,57 @@
+export type UserRole = "admin" | "agent_builder" | "user";
+
+export type AgentRequestStatus = "PENDING" | "CLAIMED" | "FULFILLED" | "CANCELLED";
+
+export interface AgentRequest {
+  id: string;
+  org_id: string;
+  requester_id: string;
+  builder_id: string | null;
+  agent_id: string | null;
+  title: string;
+  description: string;
+  requested_skills: string[];
+  status: AgentRequestStatus;
+  created_at: string;
+  updated_at: string;
+  claimed_at: string | null;
+  fulfilled_at: string | null;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  display_name?: string;
+  description: string;
+  version?: string;
+  trust_level?: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  owner_id: string;
+  assigned_user_id?: string | null;
+  request_id?: string | null;
+  status: string;
+  created_at: string;
+  passport?: {
+    lifecycle_state?: string;
+    compliance_status?: string;
+    compliance_checked_at?: string;
+    permissions?: string[];
+  };
+  skills?: Array<{ id?: string; name?: string } | string>;
+}
+
+export interface Execution {
+  id: string;
+  agent_id: string;
+  status: string;
+  triggered_by?: string;
+  created_at: string;
+  completed_at?: string | null;
+  prompt?: string;
+  result?: Record<string, unknown> | string | null;
+}

@@ -33,8 +33,20 @@ const SUPABASE_CONFIGURED = Boolean(
  * dev fallback. This is deterministic (no network call, no SDK involved)
  * and changes nothing once real NEXT_PUBLIC_SUPABASE_* values are set.
  */
+function getDevToken(): string {
+  if (typeof window !== 'undefined') {
+    const activeRole = localStorage.getItem('govern_ai_role')
+    if (activeRole === 'agent_builder') {
+      return 'dummy-token-builder'
+    } else if (activeRole === 'user') {
+      return 'dummy-token-user'
+    }
+  }
+  return 'dummy-token'
+}
+
 export async function getAuthHeader(): Promise<string> {
-  if (!SUPABASE_CONFIGURED) return 'Bearer dummy-token'
+  if (!SUPABASE_CONFIGURED) return `Bearer ${getDevToken()}`
 
   try {
     const supabase = createClient()
@@ -45,13 +57,14 @@ export async function getAuthHeader(): Promise<string> {
   } catch {
     // falls through to the dev fallback below
   }
-  return 'Bearer dummy-token'
+  return `Bearer ${getDevToken()}`
 }
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
   headers.set('Authorization', await getAuthHeader())
+
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -65,12 +78,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       if (err.detail) {
         errorMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore JSON parse errors for non-JSON error responses
     }
     throw new Error(errorMsg)
   }
 
   const payload = await res.json()
-  return payload.data // FastAPI returns { data: ... } Envelope
+  return payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload
 }

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { PassportCard } from "./_components/passport-card";
 import { NewAgentTile } from "./_components/new-agent-tile";
 import { CreateAgentModal } from "./_components/create-agent-modal";
@@ -26,6 +29,7 @@ const STATE_FOR_FILTER: Record<Exclude<RosterFilter, "All">, string> = {
  * for a real compliance check (create-agent-modal.tsx).
  */
 export default function AgentsPage() {
+  const { role, isUser } = useAuth();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [budget, setBudget] = useState<BudgetStatus | null>(null);
   const [query, setQuery] = useState("");
@@ -43,7 +47,7 @@ export default function AgentsPage() {
 
   useEffect(() => {
     refetch();
-  }, []);
+  }, [role]);
 
   const loading = agents === null;
   const budgetByAgent = useMemo(
@@ -71,21 +75,55 @@ export default function AgentsPage() {
     return list;
   }, [agents, filter, query]);
 
+  const getPageTitle = () => {
+    switch (role) {
+      case "agent_builder":
+        return "My Builds";
+      case "user":
+        return "My Agents";
+      case "admin":
+      default:
+        return "All Agents";
+    }
+  };
+
+  const getPageDescription = () => {
+    switch (role) {
+      case "agent_builder":
+        return "Manage AI agents you have developed, configured skills for, and submitted for compliance review.";
+      case "user":
+        return "AI agents deployed and assigned to you for automated workflows and task execution.";
+      case "admin":
+      default:
+        return "Every agent carries a passport — a stamped record of what it may do, and who let it.";
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <h1 className="landing-display text-3xl text-[var(--l-ink)]">Agents</h1>
+          <h1 className="landing-display text-3xl text-[var(--l-ink)]">{getPageTitle()}</h1>
           <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-            Every agent carries a <strong className="text-[var(--l-ink)]">passport</strong> — a
-            stamped record of what it may do, and who let it.
+            {getPageDescription()}
           </p>
         </motion.div>
-        <RosterControls query={query} onQuery={setQuery} filter={filter} onFilter={setFilter} counts={counts} />
+        <div className="flex items-center gap-3">
+          {isUser && (
+            <Link
+              href="/request-agent"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--l-orange)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            >
+              <Sparkles className="h-4 w-4" />
+              Request an Agent
+            </Link>
+          )}
+          <RosterControls query={query} onQuery={setQuery} filter={filter} onFilter={setFilter} counts={counts} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {filter === "All" && !query.trim() && (
+        {!isUser && filter === "All" && !query.trim() && (
           <NewAgentTile onClick={() => setModalOpen(true)} index={0} />
         )}
 
@@ -101,13 +139,15 @@ export default function AgentsPage() {
           <div className="col-span-full py-16 text-center">
             <p className="landing-display text-lg text-[var(--l-ink)]">No passports match</p>
             <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-              Try a different search or filter — or issue a new one.
+              {isUser ? "You have no assigned agents yet. Submit a request to have an agent built." : "Try a different search or filter — or issue a new one."}
             </p>
           </div>
         )}
       </div>
 
-      <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={refetch} />
+      {!isUser && (
+        <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={refetch} />
+      )}
     </div>
   );
 }

@@ -19,10 +19,12 @@ import app.domain.audit.models  # noqa: F401
 import app.domain.auth.models  # noqa: F401
 import app.domain.costs.models  # noqa: F401
 import app.domain.documents.models  # noqa: F401
+import app.domain.agent_requests.models  # noqa: F401
 import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401
 import app.domain.skills.models  # noqa: F401
+from app.api.v1.agent_requests import router as agent_requests_router
 from app.api.v1.agents import router as agents_router
 from app.api.v1.audits import router as audits_router
 from app.api.v1.auth import router as auth_router
@@ -116,6 +118,7 @@ app.include_router(policies_router, prefix="/api/v1", tags=["Policies"])
 app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
+app.include_router(agent_requests_router, prefix="/api/v1/agent-requests", tags=["Agent Requests"])
 
 
 @app.get("/health")

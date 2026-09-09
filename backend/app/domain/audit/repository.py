@@ -15,15 +15,30 @@ class AuditRepository:
     async def record_event(self, event: AuditEvent) -> AuditEvent:
         self.session.add(event)
         return event
-
     async def get_events_for_org(
-        self, org_id: UUID, limit: int = 50, cursor: UUID | None = None
+        self, 
+        org_id: UUID, 
+        limit: int = 50, 
+        cursor: UUID | None = None,
+        builder_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
     ) -> list[AuditEvent]:
-        query = (
-            select(AuditEvent)
-            .where(AuditEvent.org_id == org_id)
-            .order_by(AuditEvent.timestamp.desc(), AuditEvent.id.desc())
-        )
+        from app.domain.agents.models import Agent
+        from sqlalchemy import or_
+        
+        query = select(AuditEvent).where(AuditEvent.org_id == org_id)
+        
+        if builder_id or assigned_user_id:
+            query = query.outerjoin(Agent, AuditEvent.agent_id == Agent.id)
+            user_id = builder_id or assigned_user_id
+            conditions = [AuditEvent.actor_id == user_id]
+            if builder_id:
+                conditions.append(Agent.owner_id == builder_id)
+            if assigned_user_id:
+                conditions.append(Agent.assigned_user_id == assigned_user_id)
+            query = query.where(or_(*conditions))
+            
+        query = query.order_by(AuditEvent.timestamp.desc(), AuditEvent.id.desc())
 
         if cursor:
             # Composite cursor: (timestamp, id) so rows sharing a timestamp are never skipped
