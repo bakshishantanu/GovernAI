@@ -1,8 +1,8 @@
 from app.skills.ticketing import (
     CreateTicketReplyTool,
+    MockTicketingAdapter,
     ReadTicketTool,
     SearchTicketsTool,
-    TicketingAdapter,
     TicketingSkill,
 )
 
@@ -18,7 +18,7 @@ def test_skill_declares_correct_metadata_and_permissions():
 
 
 async def test_read_ticket_found():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = ReadTicketTool(adapter)
 
     result = await tool.execute(ticket_id="TCK-1001")
@@ -28,7 +28,7 @@ async def test_read_ticket_found():
 
 
 async def test_read_ticket_not_found():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = ReadTicketTool(adapter)
 
     result = await tool.execute(ticket_id="TCK-9999")
@@ -37,7 +37,7 @@ async def test_read_ticket_not_found():
 
 
 async def test_search_tickets_matches_subject_and_body():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = SearchTicketsTool(adapter)
 
     result = await tool.execute(query="password")
@@ -47,7 +47,7 @@ async def test_search_tickets_matches_subject_and_body():
 
 
 async def test_search_tickets_no_match_returns_empty_list():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = SearchTicketsTool(adapter)
 
     result = await tool.execute(query="nonexistent-keyword-xyz")
@@ -56,17 +56,18 @@ async def test_search_tickets_no_match_returns_empty_list():
 
 
 async def test_create_ticket_reply_success():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = CreateTicketReplyTool(adapter)
 
     result = await tool.execute(ticket_id="TCK-1001", reply="Try clearing your browser cache.")
 
     assert result == {"success": True, "ticket_id": "TCK-1001", "reply_count": 1}
-    assert adapter.get("TCK-1001").replies == ["Try clearing your browser cache."]
+    ticket = await adapter.get("TCK-1001")
+    assert ticket.replies == ["Try clearing your browser cache."]
 
 
 async def test_create_ticket_reply_on_missing_ticket_reports_error_not_exception():
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     tool = CreateTicketReplyTool(adapter)
 
     result = await tool.execute(ticket_id="TCK-9999", reply="hello")
@@ -77,7 +78,7 @@ async def test_create_ticket_reply_on_missing_ticket_reports_error_not_exception
 async def test_shared_adapter_state_is_visible_across_tools():
     """The three tools must operate on the same underlying data when given the
     same adapter instance - a reply added via one tool is visible to another."""
-    adapter = TicketingAdapter()
+    adapter = MockTicketingAdapter()
     skill = TicketingSkill(adapter=adapter)
     reply_tool, read_tool = None, None
     for tool in skill.get_tools():

@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.domain.documents.repository import DocumentRepository
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
 from app.domain.skills.repository import SkillRepository
@@ -12,7 +13,7 @@ from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.sql_query import SqlQuerySkill
-from app.skills.ticketing import TicketingSkill
+from app.skills.ticketing import JiraTicketingAdapter, TicketingSkill
 
 
 class SkillRegistry:
@@ -33,12 +34,23 @@ class SkillRegistry:
                 repo=DocumentRepository(session), embedding_provider=embedding_provider
             )
 
+        # Real Jira when configured (see .env.example); falls back to
+        # TicketingSkill's own in-memory mock otherwise, e.g. in tests.
+        jira_adapter = None
+        if settings.JIRA_BASE_URL:
+            jira_adapter = JiraTicketingAdapter(
+                base_url=settings.JIRA_BASE_URL,
+                email=settings.JIRA_EMAIL,
+                api_token=settings.JIRA_API_TOKEN,
+                project_key=settings.JIRA_PROJECT_KEY,
+            )
+
         # In a real app, this scans all classes inheriting from BaseSkill.
         # For now, we manually register the MVP skills (FRD-05).
         self._instances = {
             skill.name: skill
             for skill in (
-                TicketingSkill(),
+                TicketingSkill(adapter=jira_adapter),
                 SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
             )

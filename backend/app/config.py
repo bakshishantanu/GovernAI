@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     LLM_PRIMARY_MODEL: str = "openai/gpt-oss-20b"
     LLM_FALLBACK_MODEL: str = "gemini-2.5-flash"
 
+    # --- Ticketing skill: Jira ---
+    # Left blank, the Ticketing skill falls back to its in-memory mock
+    # adapter (see SkillRegistry) so local dev/tests never need real
+    # Jira credentials.
+    JIRA_BASE_URL: str = ""
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_PROJECT_KEY: str = ""
+
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
 
