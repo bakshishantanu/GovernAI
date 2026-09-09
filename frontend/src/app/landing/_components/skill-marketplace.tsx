@@ -223,7 +223,7 @@ export function SkillMarketplace() {
       <div
         ref={trackRef}
         onScroll={updateEdges}
-        className="landing-hide-scrollbar mt-12 flex gap-5 overflow-x-auto px-6 pb-2 snap-x snap-mandatory"
+        className="landing-hide-scrollbar mt-12 flex gap-5 overflow-x-auto px-6 pt-6 pb-6 snap-x snap-mandatory"
       >
         {SKILLS.map((s, i) => {
           const Icon = s.icon;
