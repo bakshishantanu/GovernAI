@@ -50,7 +50,7 @@ async def get_current_user(
     token = credentials.credentials
 
     # --- LOCAL DEV BYPASS (inert unless AUTH_ALLOW_DEV_TOKEN is set) ---
-    if token in (DEV_TOKEN, "dummy-token-admin", "dummy-token-builder", "dummy-token-user"):
+    if token in (DEV_TOKEN, "dummy-token-admin", "dummy-token-builder"):
         if not dev_token_allowed():
             raise HTTPException(status_code=401, detail="Invalid token")
         dev_role = "admin"
@@ -58,9 +58,6 @@ async def get_current_user(
         if token == "dummy-token-builder":
             dev_role = "agent_builder"
             user_id = UUID("22222222-2222-2222-2222-222222222222")
-        elif token == "dummy-token-user":
-            dev_role = "user"
-            user_id = UUID("33333333-3333-3333-3333-333333333333")
         return CurrentUser(
             id=user_id,
             org_id=UUID("00000000-0000-0000-0000-000000000000"),
@@ -90,10 +87,13 @@ async def get_current_user(
         # Extract role and org_id from app_metadata (as specified in FRD)
         app_metadata = payload.get("app_metadata", {})
         
-        # Default to "user" if not specified
-        role = app_metadata.get("role", "user")
-        if role not in ["admin", "agent_builder", "user"]:
-            role = "user"
+        # Default to "agent_builder" if not specified
+        role = app_metadata.get("role", "agent_builder")
+        # Migrate legacy "user" role to "agent_builder" and reject unknown roles
+        if role == "user":
+            role = "agent_builder"
+        elif role not in ("admin", "agent_builder"):
+            role = "agent_builder"
 
         # Default org_id for MVP (single tenant)
         org_id_str = app_metadata.get("org_id")

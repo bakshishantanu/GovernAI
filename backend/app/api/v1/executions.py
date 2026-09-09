@@ -59,9 +59,7 @@ async def create_and_run_execution(
             detail="Agent not found in your organization",
         )
         
-    if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
-    elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+    if current_user.role == "agent_builder" and agent.owner_id != current_user.id and agent.assigned_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
 
     if not agent.passport or agent.passport.lifecycle_state != "ACTIVE":
@@ -108,7 +106,7 @@ async def list_executions(
     Role-scoped filtering applies based on the user's role.
     """
     builder_id = current_user.id if current_user.role == "agent_builder" else None
-    assigned_user_id = current_user.id if current_user.role == "user" else None
+    assigned_user_id = current_user.id if current_user.role == "agent_builder" else None
     
     executions = await exec_service.list_executions_for_org(
         current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
@@ -135,9 +133,7 @@ async def get_execution_detail(
     # Re-fetch agent to verify ownership
     agent = await exec_service.exec_repo.session.get(app.domain.agents.models.Agent, execution.agent_id)
     if agent:
-        if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
-        elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+        if current_user.role == "agent_builder" and agent.owner_id != current_user.id and agent.assigned_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this execution")
 
     return Envelope(data=execution)

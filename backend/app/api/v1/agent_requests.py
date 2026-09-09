@@ -11,7 +11,7 @@ from app.domain.agent_requests.service import (
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.agent_requests import AgentRequestCreate, AgentRequestResponse
 from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_builder_or_admin, require_role
+from app.domain.auth.rbac import require_builder_or_admin
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ router = APIRouter()
 async def create_request(
     request: AgentRequestCreate,
     service: AgentRequestService = Depends(get_agent_request_service),
-    user: CurrentUser = Depends(require_role("user", "admin")),
+    user: CurrentUser = Depends(require_builder_or_admin),
 ):
     """Create a new agent request."""
     return await service.create_request(
@@ -40,13 +40,7 @@ async def list_requests(
 ):
     """List agent requests with optional filters."""
     # simple listing with filters
-    # User can only see their own requests (enforced if user role)
-    if user.role == "user":
-        requester_id = user.id
-    
-    # Builder can see all PENDING, or their own CLAIMED/FULFILLED
-    # This could be more complex but we stick to basic query params for now
-    
+    # Builder can see all requests in the organization
     return await service.request_repo.list_requests(
         org_id=user.org_id,
         requester_id=requester_id,
@@ -65,9 +59,6 @@ async def get_request(
     """Get a specific request."""
     req = await service.request_repo.get_request(request_id)
     if not req or req.org_id != user.org_id:
-        raise HTTPException(status_code=404, detail="Request not found")
-        
-    if user.role == "user" and req.requester_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found")
         
     return req
@@ -98,14 +89,14 @@ async def claim_request(
 async def cancel_request(
     request_id: UUID,
     service: AgentRequestService = Depends(get_agent_request_service),
-    user: CurrentUser = Depends(require_role("user", "admin")),
+    user: CurrentUser = Depends(require_builder_or_admin),
 ):
     """Cancel a request."""
     req = await service.request_repo.get_request(request_id)
     if not req or req.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Request not found")
         
-    if user.role == "user" and req.requester_id != user.id:
+    if user.role == "agent_builder" and req.requester_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found")
         
     try:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,9 +36,13 @@ class ExecutionRepository:
             .join(Agent, Execution.agent_id == Agent.id)
             .where(Execution.org_id == org_id)
         )
-        if builder_id:
+        if builder_id and assigned_user_id:
+            stmt = stmt.where(
+                or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
+            )
+        elif builder_id:
             stmt = stmt.where(Agent.owner_id == builder_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             stmt = stmt.where(Agent.assigned_user_id == assigned_user_id)
             
         stmt = stmt.order_by(Execution.started_at.desc())

@@ -55,7 +55,7 @@ async def test_valid_token(configured_secret):
 
 @pytest.mark.asyncio
 async def test_missing_sub_rejects(configured_secret):
-    payload = {"app_metadata": {"role": "user"}}
+    payload = {"app_metadata": {"role": "agent_builder"}}
     token = jwt.encode(payload, configured_secret, algorithm="HS256")
 
     with pytest.raises(HTTPException) as exc:
@@ -63,6 +63,31 @@ async def test_missing_sub_rejects(configured_secret):
 
     assert exc.value.status_code == 401
     assert "missing subject" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_legacy_user_role_mapped_to_agent_builder(configured_secret):
+    user_id = str(uuid4())
+    org_id = str(uuid4())
+    payload = {"sub": user_id, "app_metadata": {"role": "user", "org_id": org_id}}
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.role == "agent_builder"
+
+
+@pytest.mark.asyncio
+async def test_default_role_is_agent_builder(configured_secret):
+    user_id = str(uuid4())
+    payload = {"sub": user_id}
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.role == "agent_builder"
 
 
 @pytest.mark.asyncio

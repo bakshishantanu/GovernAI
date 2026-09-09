@@ -30,11 +30,12 @@ class AuditRepository:
         
         if builder_id or assigned_user_id:
             query = query.outerjoin(Agent, AuditEvent.agent_id == Agent.id)
-            user_id = builder_id or assigned_user_id
-            conditions = [AuditEvent.actor_id == user_id]
+            conditions = []
             if builder_id:
+                conditions.append(AuditEvent.actor_id == builder_id)
                 conditions.append(Agent.owner_id == builder_id)
             if assigned_user_id:
+                conditions.append(AuditEvent.actor_id == assigned_user_id)
                 conditions.append(Agent.assigned_user_id == assigned_user_id)
             query = query.where(or_(*conditions))
             
