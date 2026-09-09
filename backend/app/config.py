@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     JIRA_EMAIL: str = ""
     JIRA_API_TOKEN: str = ""
     JIRA_PROJECT_KEY: str = ""
+    # Shared secret Jira Automation sends back as a header, checked by the
+    # webhook receiver below so the endpoint can't be triggered by anyone
+    # who happens to find its URL.
+    JIRA_WEBHOOK_SECRET: str = ""
 
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
