@@ -32,6 +32,7 @@ from app.api.v1.costs import router as costs_router
 from app.api.v1.executions import router as executions_router
 from app.api.v1.policies import router as policies_router
 from app.api.v1.skills import router as skills_router
+from app.api.v1.webhooks import router as webhooks_router
 from app.config import settings
 
 logger = structlog.get_logger()
@@ -119,6 +120,7 @@ app.include_router(audits_router, prefix="/api/v1", tags=["Audits"])
 app.include_router(executions_router, prefix="/api/v1", tags=["Executions"])
 app.include_router(costs_router, prefix="/api/v1", tags=["Costs"])
 app.include_router(agent_requests_router, prefix="/api/v1/agent-requests", tags=["Agent Requests"])
+app.include_router(webhooks_router, prefix="/api/v1", tags=["Webhooks"])
 
 
 @app.get("/health")

@@ -83,3 +83,18 @@ class AgentRepository:
             select(AgentSkill.skill_id).where(AgentSkill.agent_id == agent_id)
         )
         return list(result.scalars().all())
+
+    async def list_active_agents_with_skill(self, skill_id: str) -> list[Agent]:
+        """Every ACTIVE agent, across every org, with the given skill bound.
+
+        Used by event-driven triggers (e.g. the Jira webhook) that have no
+        org context of their own to scope by -- unlike a normal HTTP request,
+        which always knows its org from the caller's JWT.
+        """
+        result = await self.session.execute(
+            self._with_relations()
+            .join(AgentSkill, AgentSkill.agent_id == Agent.id)
+            .join(AgentPassport, AgentPassport.agent_id == Agent.id)
+            .where(AgentSkill.skill_id == skill_id, AgentPassport.lifecycle_state == "ACTIVE")
+        )
+        return list(result.scalars().unique().all())
