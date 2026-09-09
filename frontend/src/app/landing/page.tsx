@@ -8,7 +8,7 @@ import { SkillMarketplace } from "./_components/skill-marketplace";
 import { Marquee } from "./_components/marquee";
 import { HowItWorks } from "./_components/how-it-works";
 import { CostGovernance } from "./_components/cost-governance";
-import { FeatureGrid } from "./_components/feature-grid";
+import { FeatureGrid, BillingDemoStrip } from "./_components/feature-grid";
 import { Personas } from "./_components/personas";
 import { FinalCta } from "./_components/final-cta";
 
@@ -32,6 +32,7 @@ export default function LandingPage() {
         <HowItWorks />
         <CostGovernance />
         <FeatureGrid />
+        <BillingDemoStrip />
         <Personas />
         <FinalCta />
       </main>
