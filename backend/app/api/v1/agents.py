@@ -173,7 +173,25 @@ async def submit_agent_for_review(
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ComplianceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Commit the FAILED verdict before reporting it. The service writes
+        # compliance_status and compliance_checked_at on the way out; without a
+        # commit here the session is discarded and the passport would still read
+        # PENDING, so the console could never show that a check had been run and
+        # refused.
+        if isinstance(db, AsyncSession):
+            await db.commit()
+
+        # Every violation, not just the first: FRD-02 requires the builder be
+        # shown what is wrong, and an agent told only "no" cannot be fixed by
+        # whoever built it. `message` keeps the response readable to any client
+        # that only reads `detail.message`.
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "This agent does not pass the compliance check.",
+                "violations": [{"rule": v.rule, "message": v.message} for v in e.violations],
+            },
+        )
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)

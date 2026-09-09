@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.permissions.models import Permission
+from app.domain.permissions.models import ForbiddenPermissionPair, Permission
 
 
 class PermissionRepository:
@@ -21,3 +21,14 @@ class PermissionRepository:
     async def create_permission(self, permission: Permission) -> Permission:
         self.session.add(permission)
         return permission
+
+    async def list_forbidden_pairs(self) -> list[tuple[str, str, str]]:
+        """Enabled forbidden pairs, as (permission_a, permission_b, reason).
+
+        Disabled rows are filtered here rather than inside the compliance
+        check, so that check stays a pure function over the data it is handed.
+        """
+        result = await self.session.execute(
+            select(ForbiddenPermissionPair).where(ForbiddenPermissionPair.enabled.is_(True))
+        )
+        return [(r.permission_a, r.permission_b, r.reason) for r in result.scalars().all()]
