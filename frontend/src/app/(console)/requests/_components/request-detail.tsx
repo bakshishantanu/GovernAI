@@ -3,8 +3,8 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, Hammer } from "lucide-react";
-import { fetchApi } from "@/lib/api-client";
+import { AlertCircle, ArrowLeft, ArrowRight, Hammer, RotateCw } from "lucide-react";
+import { ApiError, fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useLive } from "@/lib/use-live";
 import { timeAgo } from "@/lib/time-ago";
@@ -17,7 +17,13 @@ import { BuildAgentDialog } from "./build-agent-dialog";
  *
  * The backend returns 404 both when a request does not exist and when it is
  * not yours to see — deliberately, so probing ids reveals nothing. This page
- * repeats that: one "not found", never "exists but not for you".
+ * repeats that: one "not found", never "exists but not for you". A malformed
+ * id never reaches the lookup at all (FastAPI rejects it as 422), and is shown
+ * the same way, for the same reason.
+ *
+ * A failure that is *not* one of those two is not a missing request, and must
+ * not be dressed up as one: the API being unreachable is a different problem
+ * with a different way out, and saying "no such request" there is simply false.
  */
 export function RequestDetail({ id }: { id: string }) {
   const { isBuilder, isAdmin, isUser } = useAuth();
@@ -25,14 +31,18 @@ export function RequestDetail({ id }: { id: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [buildOpen, setBuildOpen] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const data = (await fetchApi(`/agent-requests/${id}`)) as AgentRequest;
       setMissing(false);
+      setLoadError(null);
       return data;
     } catch (err) {
-      setMissing(true);
+      const gone = err instanceof ApiError && (err.status === 404 || err.status === 422);
+      setMissing(gone);
+      setLoadError(gone ? null : err instanceof Error ? err.message : "Could not reach the API.");
       throw err;
     }
   }, [id]);
@@ -47,14 +57,42 @@ export function RequestDetail({ id }: { id: string }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       setActionError(
-        /already claimed/i.test(message)
-          ? "Someone else claimed this first."
+        err instanceof ApiError && err.status === 409
+          ? "Someone else claimed this first — this page has been refreshed."
           : message || "That did not go through. Nothing was changed."
       );
     } finally {
       setBusy(false);
       refresh();
     }
+  }
+
+  if (loadError && !request) {
+    return (
+      <div className="mx-auto max-w-2xl py-20 text-center">
+        <p className="landing-display text-2xl text-[var(--l-ink)]">This did not load</p>
+        <p className="mx-auto mt-2 max-w-[48ch] text-sm text-[var(--l-charcoal)]/60">
+          {loadError} The request may well be fine — nothing has been changed.
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => refresh()}
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--l-orange)] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--l-orange-deep)]"
+          >
+            <RotateCw className="h-3.5 w-3.5" />
+            Try again
+          </button>
+          <Link
+            href="/requests"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-[var(--l-line)] px-4 py-2 text-[13px] font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-ink)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to requests
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (missing && !request) {

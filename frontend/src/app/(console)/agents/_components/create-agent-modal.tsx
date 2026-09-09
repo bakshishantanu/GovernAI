@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bot, FileSearch, Database, Ticket, ShieldCheck, ShieldX } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fetchApi } from "@/lib/api-client";
+import { ApiError, fetchApi, type ApiViolation } from "@/lib/api-client";
 
 const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
@@ -38,6 +38,7 @@ export function CreateAgentModal({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [stage, setStage] = useState<Stage>("form");
   const [violation, setViolation] = useState("");
+  const [violations, setViolations] = useState<ApiViolation[]>([]);
   const [createdName, setCreatedName] = useState("");
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export function CreateAgentModal({
       setSelected(new Set());
       setStage("form");
       setViolation("");
+      setViolations([]);
     }
   }, [open]);
 
@@ -87,11 +89,13 @@ export function CreateAgentModal({
         onCreated();
       } catch (err) {
         setViolation(err instanceof Error ? err.message : "Compliance check failed.");
+        setViolations(err instanceof ApiError ? err.violations : []);
         setStage("violation");
         onCreated(); // it still exists, in DRAFT — the roster should show it
       }
     } catch (err) {
       setViolation(err instanceof Error ? err.message : "Could not create the agent.");
+      setViolations([]);
       setStage("violation");
     }
   }
@@ -130,6 +134,7 @@ export function CreateAgentModal({
                 ok={false}
                 title={createdName}
                 message={violation}
+                violations={violations}
                 onClose={onClose}
               />
             ) : (
@@ -264,11 +269,14 @@ function ResultPane({
   ok,
   title,
   message,
+  violations = [],
   onClose,
 }: {
   ok: boolean;
   title: string;
   message: string;
+  /** Every rule that was broken, not just the first — FRD-02. */
+  violations?: ApiViolation[];
   onClose: () => void;
 }) {
   return (
@@ -296,6 +304,18 @@ function ResultPane({
         </p>
       </div>
       <p className="max-w-xs text-sm leading-relaxed text-[var(--l-charcoal)]/70">{message}</p>
+      {violations.length > 0 && (
+        <ul className="w-full space-y-1.5 text-left">
+          {violations.map((v) => (
+            <li
+              key={v.rule + v.message}
+              className="rounded-xl border-2 border-[var(--l-orange-deep)]/40 bg-[var(--l-orange-soft)]/25 px-3.5 py-2.5 text-[13px] leading-snug text-[var(--l-ink)]"
+            >
+              {v.message}
+            </li>
+          ))}
+        </ul>
+      )}
       <button
         onClick={onClose}
         className="mt-1 rounded-full border-2 border-[var(--l-ink)] px-5 py-2 text-sm font-semibold text-[var(--l-ink)] transition-colors hover:bg-[var(--l-ink)] hover:text-[var(--l-cream)]"

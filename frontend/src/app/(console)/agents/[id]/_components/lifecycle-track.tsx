@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { ShieldCheck, PlayCircle, Skull, RotateCcw, Loader2 } from "lucide-react";
-import { fetchApi } from "@/lib/api-client";
+import { ApiError, fetchApi, type ApiViolation } from "@/lib/api-client";
 import type { Agent } from "../../_components/agent-types";
 
 const STAGES = ["DRAFT", "APPROVED", "ACTIVE"] as const;
@@ -29,6 +29,7 @@ export function LifecycleTrack({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [violations, setViolations] = useState<ApiViolation[]>([]);
   const state = agent.passport.lifecycle_state;
   const stageIndex = STAGES.indexOf(state as (typeof STAGES)[number]);
   const broken = state === "SUSPENDED" || state === "REVOKED";
@@ -36,11 +37,15 @@ export function LifecycleTrack({
   async function run(action: Action, endpoint: string, method: "PATCH" | "POST") {
     setBusy(true);
     setError("");
+    setViolations([]);
     try {
       const updated = await fetchApi(endpoint, { method });
       onChanged(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Could not ${action} this agent.`);
+      // A refused submission comes back with every broken rule. Showing only
+      // the headline would leave the builder guessing at what to change.
+      setViolations(err instanceof ApiError ? err.violations : []);
     } finally {
       setBusy(false);
     }
@@ -129,6 +134,19 @@ export function LifecycleTrack({
         >
           {error}
         </motion.p>
+      )}
+
+      {violations.length > 0 && (
+        <ul className="mt-2 space-y-1.5">
+          {violations.map((v) => (
+            <li
+              key={v.rule + v.message}
+              className="rounded-xl border-2 border-[var(--l-orange-deep)]/40 bg-[var(--l-orange-soft)]/25 px-3.5 py-2 text-[12.5px] leading-snug text-[var(--l-ink)]"
+            >
+              {v.message}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

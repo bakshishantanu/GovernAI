@@ -3,8 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowRight, Hammer, RotateCw, Search } from "lucide-react";
-import { fetchApi } from "@/lib/api-client";
+import { AlertCircle, ArrowRight, Hammer, RotateCw, Search, X } from "lucide-react";
+import { ApiError, fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useLive } from "@/lib/use-live";
 import { timeAgo } from "@/lib/time-ago";
@@ -81,9 +81,10 @@ export function RequestsQueue() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       // 409 is the real, expected outcome of two builders reaching for the
-      // same request. Say what happened rather than showing a raw error.
+      // same request. Matched on the status rather than the wording of the
+      // message, which the backend is free to reword.
       setActionError(
-        /already claimed/i.test(message)
+        err instanceof ApiError && err.status === 409
           ? "Someone else claimed that one first — the queue has been refreshed."
           : message || "That did not go through. Nothing was changed."
       );
@@ -176,12 +177,10 @@ export function RequestsQueue() {
       ) : visible.length === 0 ? (
         <EmptyState
           filter={filter}
-          searching={query.trim().length > 0}
+          query={query.trim()}
           isUser={isUser}
-          onClear={() => {
-            setQuery("");
-            setFilter("ALL");
-          }}
+          onClearSearch={() => setQuery("")}
+          onClearFilter={() => setFilter("ALL")}
         />
       ) : (
         <ul className="space-y-2">
@@ -288,56 +287,88 @@ export function RequestsQueue() {
 }
 
 /**
- * Empty is not one state. "Nothing exists yet", "nothing matches this filter"
- * and "nothing matches this search" need different words and different exits.
+ * Empty is not one state, it is three, and they are not interchangeable.
+ *
+ * "Nothing exists yet" is a fact about the organisation and the way out is to
+ * create something. "Nothing matches this filter" is a fact about one control
+ * and the way out is to clear that control. "Nothing matches this search" is a
+ * fact about a different control, and clearing the *filter* would not help.
+ * Collapsing them into one "nothing matches" hands the reader a dead end and
+ * makes them guess which of their own actions caused it.
+ *
+ * Search is checked before the filter because it is the narrower and more
+ * recent action: when both are on, the typed words are almost always the reason
+ * the list is empty, and clearing them is the smaller step back.
  */
 function EmptyState({
   filter,
-  searching,
+  query,
   isUser,
-  onClear,
+  onClearSearch,
+  onClearFilter,
 }: {
   filter: Filter;
-  searching: boolean;
+  query: string;
   isUser: boolean;
-  onClear: () => void;
+  onClearSearch: () => void;
+  onClearFilter: () => void;
 }) {
-  const filtered = filter !== "ALL" || searching;
+  const filterLabel = filter === "ALL" ? "" : REQUEST_STATUS[filter].label.toLowerCase();
+
+  const { title, body, action } = query
+    ? {
+        title: "Nothing matches that search",
+        body: `No request mentions “${query}” in its title, its detail or its skills.`,
+        action: (
+          <button
+            type="button"
+            onClick={onClearSearch}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--l-line)] px-4 py-2 text-[13px] font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-ink)]"
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear the search
+          </button>
+        ),
+      }
+    : filter !== "ALL"
+      ? {
+          title: `Nothing is ${filterLabel}`,
+          body: "There are other requests here — just none at this stage.",
+          action: (
+            <button
+              type="button"
+              onClick={onClearFilter}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--l-line)] px-4 py-2 text-[13px] font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-ink)]"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              Show every stage
+            </button>
+          ),
+        }
+      : isUser
+        ? {
+            title: "You have not asked for anything yet",
+            body: "Describe a job and a builder will put an agent together for you.",
+            action: (
+              <Link
+                href="/request-agent"
+                className="mt-4 inline-flex h-10 items-center rounded-full bg-[var(--l-orange)] px-5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--l-orange-deep)]"
+              >
+                Ask for an agent
+              </Link>
+            ),
+          }
+        : {
+            title: "The queue is clear",
+            body: "Nothing is waiting. New requests appear here as people send them.",
+            action: null,
+          };
 
   return (
     <div className="rounded-2xl border-2 border-dashed border-[var(--l-line)] bg-[var(--l-cream)] px-6 py-14 text-center">
-      <p className="landing-display text-lg text-[var(--l-ink)]">
-        {filtered
-          ? "Nothing matches"
-          : isUser
-            ? "You have not asked for anything yet"
-            : "The queue is clear"}
-      </p>
-      <p className="mx-auto mt-1 max-w-[52ch] text-sm text-[var(--l-charcoal)]/60">
-        {filtered
-          ? "No request fits that filter or search."
-          : isUser
-            ? "Describe a job and a builder will put an agent together for you."
-            : "Nothing is waiting. New requests appear here as people send them."}
-      </p>
-
-      {filtered ? (
-        <button
-          type="button"
-          onClick={onClear}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full border-2 border-[var(--l-line)] px-4 py-2 text-[13px] font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-ink)]"
-        >
-          <RotateCw className="h-3.5 w-3.5" />
-          Show everything
-        </button>
-      ) : isUser ? (
-        <Link
-          href="/request-agent"
-          className="mt-4 inline-flex h-10 items-center rounded-full bg-[var(--l-orange)] px-5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--l-orange-deep)]"
-        >
-          Ask for an agent
-        </Link>
-      ) : null}
+      <p className="landing-display text-lg text-[var(--l-ink)]">{title}</p>
+      <p className="mx-auto mt-1 max-w-[52ch] text-sm text-[var(--l-charcoal)]/60">{body}</p>
+      {action}
     </div>
   );
 }

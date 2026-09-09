@@ -71,6 +71,32 @@ export async function getAuthHeader(): Promise<string> {
   return `Bearer ${devToken()}`
 }
 
+/** One broken compliance rule, as the backend reports it (FRD-02/FRD-03). */
+export type ApiViolation = { rule: string; message: string }
+
+/**
+ * A failed request, with the parts of the response a caller can actually act on.
+ *
+ * `status` matters because callers must distinguish "this does not exist" from
+ * "the server could not be reached" — a screen that says "no such request"
+ * because the API was briefly down is lying to the person reading it.
+ *
+ * `violations` carries FastAPI's structured `detail` for the compliance check,
+ * which returns every broken rule rather than only the first, so a builder can
+ * fix an agent in one pass instead of one attempt per problem.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly violations: ApiViolation[]
+
+  constructor(message: string, status: number, violations: ApiViolation[] = []) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.violations = violations
+  }
+}
+
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
@@ -83,15 +109,22 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
 
   if (!res.ok) {
     let errorMsg = 'An error occurred while communicating with the server.'
+    let violations: ApiViolation[] = []
     try {
       const err = await res.json()
-      if (err.detail) {
-        errorMsg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
+      const detail = err?.detail
+      if (typeof detail === 'string') {
+        errorMsg = detail
+      } else if (detail && typeof detail === 'object') {
+        // A structured refusal: `message` is the sentence meant for a person,
+        // so prefer it over stringifying the whole object at them.
+        if (typeof detail.message === 'string') errorMsg = detail.message
+        if (Array.isArray(detail.violations)) violations = detail.violations
       }
     } catch (_e) {
       // Ignore JSON parse errors for non-JSON error responses
     }
-    throw new Error(errorMsg)
+    throw new ApiError(errorMsg, res.status, violations)
   }
 
   const payload = await res.json()
