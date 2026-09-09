@@ -99,12 +99,11 @@ async def list_agents(
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """List agents. Admin sees all in org. Builder sees own. User sees assigned."""
+    """List agents. Admin sees all in org. Builder sees own + assigned."""
     owner_id = None
     assigned_user_id = None
     if user.role == "agent_builder":
         owner_id = user.id
-    elif user.role == "user":
         assigned_user_id = user.id
 
     agents = await service.agent_repo.list_agents_by_org(
@@ -135,9 +134,7 @@ async def get_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.role == "agent_builder" and agent.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    elif user.role == "user" and agent.assigned_user_id != user.id:
+    if user.role == "agent_builder" and agent.owner_id != user.id and agent.assigned_user_id != user.id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     skills = await _skills_for(db, [agent.id])

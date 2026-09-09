@@ -28,7 +28,7 @@ def user_client(org_id):
     return CurrentUser(
         id=uuid.uuid4(),
         org_id=org_id,
-        role="user",
+        role="agent_builder",
     )
 
 @pytest.fixture
@@ -81,32 +81,55 @@ async def test_create_request_endpoint(user_client):
     )
 
 @pytest.mark.asyncio
-async def test_list_requests_scopes_to_user(user_client):
+async def test_list_requests_for_builder(builder_client):
     service = AsyncMock(spec=AgentRequestService)
     service.request_repo = AsyncMock()
     service.request_repo.list_requests.return_value = []
 
-    await list_requests(service=service, user=user_client)
+    await list_requests(service=service, user=builder_client)
 
-    # Asserts that requester_id is forced to user.id for user role
+    # Asserts that requester_id is NOT forced for builder (builder sees all in org)
     service.request_repo.list_requests.assert_awaited_once_with(
-        org_id=user_client.org_id,
-        requester_id=user_client.id,
+        org_id=builder_client.org_id,
+        requester_id=None,
         builder_id=None,
         status=None,
     )
 
 @pytest.mark.asyncio
-async def test_get_request_detail_forbidden_for_different_user(org_id):
+async def test_get_request_detail_allowed_for_builder_in_same_org(org_id):
     owner_id = uuid.uuid4()
-    other_user = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="user")
+    builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
+
+    service = AsyncMock(spec=AgentRequestService)
+    service.request_repo = AsyncMock()
+    mock_req = AgentRequest(
+        id=uuid.uuid4(),
+        org_id=org_id,
+        requester_id=owner_id,
+        title="Shared Request",
+        description="Public in org",
+        requested_skills=[],
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    service.request_repo.get_request.return_value = mock_req
+
+    res = await get_request(request_id=mock_req.id, service=service, user=builder)
+    assert res.id == mock_req.id
+
+@pytest.mark.asyncio
+async def test_get_request_detail_forbidden_for_different_org(org_id):
+    different_org_id = uuid.uuid4()
+    builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
 
     service = AsyncMock(spec=AgentRequestService)
     service.request_repo = AsyncMock()
     service.request_repo.get_request.return_value = AgentRequest(
         id=uuid.uuid4(),
-        org_id=org_id,
-        requester_id=owner_id,
+        org_id=different_org_id,
+        requester_id=uuid.uuid4(),
         title="Secret Request",
         description="Private",
         requested_skills=[],
@@ -116,7 +139,7 @@ async def test_get_request_detail_forbidden_for_different_user(org_id):
     )
 
     with pytest.raises(HTTPException) as exc:
-        await get_request(request_id=uuid.uuid4(), service=service, user=other_user)
+        await get_request(request_id=uuid.uuid4(), service=service, user=builder)
 
     assert exc.value.status_code == 404
 
@@ -207,3 +230,28 @@ async def test_cancel_request_by_owner(user_client):
 
     res = await cancel_request(request_id=req_id, service=service, user=user_client)
     assert res.status == "CANCELLED"
+
+
+@pytest.mark.asyncio
+async def test_cancel_request_forbidden_for_different_builder(org_id):
+    other_builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
+    owner_id = uuid.uuid4()
+    req_id = uuid.uuid4()
+    service = AsyncMock(spec=AgentRequestService)
+    service.request_repo = AsyncMock()
+    service.request_repo.get_request.return_value = AgentRequest(
+        id=req_id,
+        org_id=org_id,
+        requester_id=owner_id,
+        title="To cancel",
+        description="...",
+        requested_skills=[],
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await cancel_request(request_id=req_id, service=service, user=other_builder)
+
+    assert exc.value.status_code == 404

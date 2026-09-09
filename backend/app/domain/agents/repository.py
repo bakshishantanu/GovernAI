@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,9 +31,13 @@ class AgentRepository:
         assigned_user_id: UUID | None = None,
     ) -> list[Agent]:
         query = self._with_relations().where(Agent.org_id == org_id)
-        if owner_id:
+        if owner_id and assigned_user_id:
+            query = query.where(
+                or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
+            )
+        elif owner_id:
             query = query.where(Agent.owner_id == owner_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         result = await self.session.execute(
@@ -48,9 +52,13 @@ class AgentRepository:
         assigned_user_id: UUID | None = None,
     ) -> int:
         query = select(func.count(Agent.id)).where(Agent.org_id == org_id)
-        if owner_id:
+        if owner_id and assigned_user_id:
+            query = query.where(
+                or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
+            )
+        elif owner_id:
             query = query.where(Agent.owner_id == owner_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             query = query.where(Agent.assigned_user_id == assigned_user_id)
             
         result = await self.session.execute(query)

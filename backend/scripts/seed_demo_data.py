@@ -27,9 +27,9 @@ async def seed_data():
         org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
         admin_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
         builder_id = uuid.UUID("22222222-2222-2222-2222-222222222222")
-        user_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
+        builder2_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
 
-        # 0. Organization & Profiles (3 roles: admin, agent_builder, user)
+        # 0. Organization & Profiles (2 roles: admin, agent_builder)
         res = await session.execute(select(Organization).where(Organization.id == org_id))
         org = res.scalar_one_or_none()
         if not org:
@@ -39,7 +39,7 @@ async def seed_data():
         profiles_data = [
             (admin_id, "admin"),
             (builder_id, "agent_builder"),
-            (user_id, "user"),
+            (builder2_id, "agent_builder"),
         ]
         for pid, role in profiles_data:
             p_res = await session.execute(select(Profile).where(Profile.id == pid))
@@ -87,12 +87,12 @@ async def seed_data():
         session.add(policy_rule)
 
         # 2. Agent Requests
-        # Request 1: PENDING (User requested, awaiting builder claim)
+        # Request 1: PENDING (Builder2 requested, awaiting builder claim)
         req_pending_id = uuid.uuid4()
         session.add(AgentRequest(
             id=req_pending_id,
             org_id=org_id,
-            requester_id=user_id,
+            requester_id=builder2_id,
             builder_id=None,
             agent_id=None,
             title="Customer IT Onboarding Agent",
@@ -107,7 +107,7 @@ async def seed_data():
         session.add(AgentRequest(
             id=req_claimed_id,
             org_id=org_id,
-            requester_id=user_id,
+            requester_id=builder2_id,
             builder_id=builder_id,
             agent_id=None,
             title="Sales Analytics & Reporting Bot",
@@ -126,7 +126,7 @@ async def seed_data():
         req_fulfilled = AgentRequest(
             id=req_fulfilled_id,
             org_id=org_id,
-            requester_id=user_id,
+            requester_id=builder2_id,
             builder_id=builder_id,
             agent_id=None,
             title="Customer Support Escalation Assistant",
@@ -145,7 +145,7 @@ async def seed_data():
             id=agent_id,
             org_id=org_id,
             owner_id=builder_id,
-            assigned_user_id=user_id,
+            assigned_user_id=builder2_id,
             request_id=req_fulfilled_id,
             name="Support Escalation Bot",
             description="Reads tickets and queries payroll to resolve customer disputes.",
@@ -311,7 +311,7 @@ async def seed_data():
         )
 
         await session.commit()
-        print("Demo seed data for Three-Role Model successfully generated!")
+        print("Demo seed data for Two-Role Model successfully generated!")
 
 
 if __name__ == "__main__":
