@@ -1,25 +1,61 @@
 from __future__ import annotations
-from typing import List
+
 from uuid import UUID
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from app.api.schemas.agent import AgentResponse, AgentCreate, AgentUpdate, PassportResponse
-from app.api.schemas.common import Envelope, PaginatedResponse
-from app.api.schemas.auth import CurrentUser
-from app.domain.auth.middleware import get_current_user
-from app.domain.auth.rbac import require_admin
-from app.domain.agents.kill_switch import KillSwitchService
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.deps import get_agent_service, get_db, get_kill_switch_service
+from app.api.schemas.agent import (
+    AgentCreate,
+    AgentResponse,
+    AgentSkillRef,
+    AgentUpdate,
+)
+from app.api.schemas.auth import CurrentUser
+from app.api.schemas.common import Envelope, PaginatedResponse
+from app.domain.agents.kill_switch import KillSwitchService
+from app.domain.agents.models import AgentSkill
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
     InvalidStateTransitionError,
     SkillNotFoundError,
 )
-
+from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
+from app.domain.skills.models import SkillModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+async def _skills_for(db: AsyncSession, agent_ids: list[UUID]) -> dict[UUID, list[AgentSkillRef]]:
+    """Skill refs for several agents in one query, keyed by agent id.
+
+    One statement for the whole page rather than one per agent — the agents
+    board can list up to 200 rows at a time.
+    """
+    if not isinstance(db, AsyncSession) or not agent_ids:
+        return {}
+
+    rows = await db.execute(
+        select(AgentSkill.agent_id, SkillModel.id, SkillModel.display_name)
+        .join(SkillModel, SkillModel.id == AgentSkill.skill_id)
+        .where(AgentSkill.agent_id.in_(agent_ids))
+    )
+
+    by_agent: dict[UUID, list[AgentSkillRef]] = {}
+    for agent_id, skill_id, display_name in rows.all():
+        by_agent.setdefault(agent_id, []).append(AgentSkillRef(id=skill_id, name=display_name))
+    return by_agent
+
+
+def _with_skills(agent, skills_by_agent: dict[UUID, list[AgentSkillRef]]) -> AgentResponse:
+    response = AgentResponse.model_validate(agent)
+    response.skills = skills_by_agent.get(agent.id, [])
+    return response
+
 
 @router.post("/", response_model=Envelope[AgentResponse])
 async def create_agent(
@@ -51,7 +87,8 @@ async def create_agent(
             await db.commit()
     except SkillNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return Envelope(data=AgentResponse.model_validate(agent))
+    skills = await _skills_for(db, [agent.id]) if isinstance(db, AsyncSession) else {}
+    return Envelope(data=_with_skills(agent, skills))
 
 
 @router.get("/", response_model=PaginatedResponse[AgentResponse])
@@ -59,7 +96,8 @@ async def list_agents(
     user: CurrentUser = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """List agents. Admin sees all in org. Builder sees own. User sees assigned."""
     owner_id = None
@@ -75,10 +113,13 @@ async def list_agents(
     count = await service.agent_repo.count_agents_by_org(
         user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
     )
-    
+
+    # Built explicitly so the passport and the skills are both included; one
+    # skills query covers the whole page rather than one per row.
+    skills = await _skills_for(db, [a.id for a in agents])
     return PaginatedResponse(
-        data=[AgentResponse.model_validate(a) for a in agents],
-        meta={"has_more": offset + limit < count, "total": count}
+        data=[_with_skills(a, skills) for a in agents],
+        meta={"has_more": offset + limit < count, "total": count},
     )
 
 
@@ -86,19 +127,21 @@ async def list_agents(
 async def get_agent(
     agent_id: UUID,
     user: CurrentUser = Depends(get_current_user),
-    service: AgentService = Depends(get_agent_service)
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get specific agent details."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
+
     if user.role == "agent_builder" and agent.owner_id != user.id:
         raise HTTPException(status_code=404, detail="Agent not found")
     elif user.role == "user" and agent.assigned_user_id != user.id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    return Envelope(data=AgentResponse.model_validate(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_with_skills(agent, skills))
 
 
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
@@ -127,7 +170,8 @@ async def submit_agent_for_review(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(updated_agent))
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
+    return Envelope(data=_with_skills(updated_agent, skills))
 
 
 @router.patch("/{agent_id}/activate", response_model=Envelope[AgentResponse])
@@ -154,7 +198,8 @@ async def activate_agent(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(updated_agent))
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
+    return Envelope(data=_with_skills(updated_agent, skills))
 
 
 @router.patch("/{agent_id}", response_model=Envelope[AgentResponse])
@@ -197,7 +242,8 @@ async def update_agent(
 
     await db.commit()
     refreshed = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(refreshed))
+    skills = await _skills_for(db, [refreshed.id])
+    return Envelope(data=_with_skills(refreshed, skills))
 
 
 @router.post("/{agent_id}/kill", response_model=Envelope[AgentResponse])
@@ -207,6 +253,7 @@ async def kill_agent(
     user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service),
     kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Stop an agent immediately (FRD-12).
 
@@ -222,7 +269,8 @@ async def kill_agent(
         raise HTTPException(status_code=404, detail=str(exc))
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_with_skills(agent, skills))
 
 
 @router.post("/{agent_id}/reactivate", response_model=Envelope[AgentResponse])
@@ -232,6 +280,7 @@ async def reactivate_agent(
     user: CurrentUser = Depends(require_admin),
     service: AgentService = Depends(get_agent_service),
     kill_switch: KillSwitchService = Depends(get_kill_switch_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Bring a suspended agent back. Never automatic — FRD-12 requires a person."""
     try:
@@ -244,4 +293,5 @@ async def reactivate_agent(
         raise HTTPException(status_code=code, detail=detail)
 
     agent = await service.agent_repo.get_agent(agent_id)
-    return Envelope(data=AgentResponse.model_validate(agent))
+    skills = await _skills_for(db, [agent.id])
+    return Envelope(data=_with_skills(agent, skills))

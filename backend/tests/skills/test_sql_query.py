@@ -56,7 +56,9 @@ async def test_correct_computed_answer_for_permitted_question(skill):
 
 async def test_empty_result_reported_as_success_not_denial(skill):
     tool = skill.get_tools()[0]
-    result = await tool.execute(question="find ticket X", sql="SELECT * FROM tickets WHERE id = 'NOPE'")
+    result = await tool.execute(
+        question="find ticket X", sql="SELECT * FROM tickets WHERE id = 'NOPE'"
+    )
     assert result["success"] is True
     assert result["row_count"] == 0
     assert result["rows"] == []
@@ -70,12 +72,16 @@ class _NeverCallAdapter:
     query never reaches the database (tasks.md T015)."""
 
     def execute(self, sql):
-        raise AssertionError(f"adapter.execute() should never be called for a denied query, got: {sql}")
+        raise AssertionError(
+            f"adapter.execute() should never be called for a denied query, got: {sql}"
+        )
 
 
 async def test_write_query_is_denied_and_never_reaches_the_adapter():
     tool = RunSqlQueryTool(_NeverCallAdapter(), frozenset({"tickets"}))
-    result = await tool.execute(question="close everything", sql="UPDATE tickets SET status = 'closed'")
+    result = await tool.execute(
+        question="close everything", sql="UPDATE tickets SET status = 'closed'"
+    )
     assert result["success"] is False
     assert result["error"] == "denied"
     assert "read-only" in result["reason"].lower() or "select" in result["reason"].lower()

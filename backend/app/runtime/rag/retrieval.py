@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import math
 import re
 from collections import Counter
@@ -65,7 +66,9 @@ class DocumentRetriever(Protocol):
     depends on this, not on either implementation, so the retrieval backend
     is swappable (see registry.py)."""
 
-    async def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]: ...
+    async def search(
+        self, query: str, permitted_scopes: frozenset[str], top_n: int = 3
+    ) -> list[SearchResult]: ...
     async def get_document(self, document_id: str) -> Document | None: ...
     async def get_document_text(self, document_id: str) -> str | None: ...
 
@@ -88,7 +91,9 @@ class _TfidfIndex:
         for tokens in chunk_tokens.values():
             for term in set(tokens):
                 doc_freq[term] += 1
-        return {term: math.log((1 + n_chunks) / (1 + count)) + 1 for term, count in doc_freq.items()}
+        return {
+            term: math.log((1 + n_chunks) / (1 + count)) + 1 for term, count in doc_freq.items()
+        }
 
     def _vector(self, tokens: list[str]) -> dict[str, float]:
         tf = Counter(tokens)
@@ -127,7 +132,9 @@ class DocumentSearchAdapter:
 
         self._chunks: dict[str, DocumentChunk] = {}
         for doc, text in docs_with_text:
-            for idx, chunk_text in enumerate(_chunk_text(text, chunk_size_words, chunk_overlap_words)):
+            for idx, chunk_text in enumerate(
+                _chunk_text(text, chunk_size_words, chunk_overlap_words)
+            ):
                 chunk = DocumentChunk(
                     document_id=doc.id, document_title=doc.title, chunk_index=idx, text=chunk_text
                 )
@@ -141,7 +148,9 @@ class DocumentSearchAdapter:
     async def get_document_text(self, document_id: str) -> str | None:
         return self._document_texts.get(document_id)
 
-    async def search(self, query: str, permitted_scopes: frozenset[str], top_n: int = 3) -> list[SearchResult]:
+    async def search(
+        self, query: str, permitted_scopes: frozenset[str], top_n: int = 3
+    ) -> list[SearchResult]:
         query_tokens = _tokenize(query)
         if not query_tokens:
             return []
@@ -175,35 +184,43 @@ class DocumentSearchAdapter:
 def _seed_documents() -> list[tuple[Document, str]]:
     return [
         (
-            Document(id="DOC-1", title="GovernAI Onboarding Guide", access_scope=frozenset({"public"})),
-            "GovernAI lets builders assemble AI agents from reusable skills. Every agent automatically "
-            "receives an identity, a scoped permission set, and a live cost budget the moment it is "
-            "created. Governance is generated at creation time, not configured afterward.",
-        ),
-        (
-            Document(id="DOC-2", title="Policy Engine Overview", access_scope=frozenset({"public"})),
-            "The Policy Engine evaluates every tool call an agent makes. It checks the agent's Passport, "
-            "confirms the requested permission is granted, and applies any enabled policy rules such as "
-            "deny lists and rate limits. If the Policy Engine fails for any reason, the call is denied - "
-            "the system never fails open.",
-        ),
-        (
-            Document(id="DOC-3", title="Cost Tracking FAQ", access_scope=frozenset({"public"})),
-            "Every LLM call records prompt tokens, completion tokens, and a calculated cost in US dollars "
-            "from a configurable pricing table. When an agent's accumulated cost meets its budget cap, "
-            "the agent is automatically paused and the event is logged.",
+            Document(
+                id="DOC-1", title="GovernAI Onboarding Guide", access_scope=frozenset({"public"})
+            ),
+            "GovernAI lets builders assemble AI agents from reusable skills. Every agent "
+            "automatically receives an identity, a scoped permission set, and a live cost budget "
+            "the moment it is created. Governance is generated at creation time, not configured "
+            "afterward.",
         ),
         (
             Document(
-                id="DOC-4", title="Internal Salary Bands", access_scope=frozenset({"hr_confidential"})
+                id="DOC-2", title="Policy Engine Overview", access_scope=frozenset({"public"})
             ),
-            "Engineering levels range from L3 to L7. L3 base salary starts at 12 lakh per annum, rising "
-            "to 45 lakh at L7. This document is confidential and restricted to HR personnel only.",
+            "The Policy Engine evaluates every tool call an agent makes. It checks the agent's "
+            "Passport, confirms the requested permission is granted, and applies any enabled "
+            "policy rules such as deny lists and rate limits. If the Policy Engine fails for any "
+            "reason, the call is denied - the system never fails open.",
+        ),
+        (
+            Document(id="DOC-3", title="Cost Tracking FAQ", access_scope=frozenset({"public"})),
+            "Every LLM call records prompt tokens, completion tokens, and a calculated cost in US "
+            "dollars from a configurable pricing table. When an agent's accumulated cost meets its "
+            "budget cap, the agent is automatically paused and the event is logged.",
+        ),
+        (
+            Document(
+                id="DOC-4",
+                title="Internal Salary Bands",
+                access_scope=frozenset({"hr_confidential"}),
+            ),
+            "Engineering levels range from L3 to L7. L3 base salary starts at 12 lakh per annum, "
+            "rising to 45 lakh at L7. This document is confidential and restricted to HR personnel "
+            "only.",
         ),
         (
             Document(id="DOC-5", title="Kill Switch Runbook", access_scope=frozenset({"public"})),
-            "Clicking Kill on the dashboard sets the agent's status to SUSPENDED in a single transaction. "
-            "The next governance check for any running execution will then deny the call and the "
-            "execution terminates gracefully within one tool-call cycle.",
+            "Clicking Kill on the dashboard sets the agent's status to SUSPENDED in a single "
+            "transaction. The next governance check for any running execution will then deny the "
+            "call and the execution terminates gracefully within one tool-call cycle.",
         ),
     ]

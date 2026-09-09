@@ -1,20 +1,20 @@
 from __future__ import annotations
+
 import json
 import operator
 from typing import Annotated, TypedDict
+from uuid import UUID
 
 from langgraph.graph import END, StateGraph
 
-from app.runtime.llm.base import ToolCall
-from app.runtime.llm.service import LLMService
-from app.skills.base import BaseTool
-from uuid import UUID
-from app.domain.policies.engine import PolicyEngine
 from app.domain.audit.service import AuditService
 from app.domain.costs.service import CostService
 from app.domain.governance.budget import BudgetGuard
 from app.domain.governance.middleware import govern_tool
-
+from app.domain.policies.engine import PolicyEngine
+from app.runtime.llm.base import ToolCall
+from app.runtime.llm.service import LLMService
+from app.skills.base import BaseTool
 
 TOOL_EXECUTION_TIMEOUT_SECONDS = 30.0
 
@@ -30,15 +30,12 @@ def _to_openai_tool_call(tc: ToolCall) -> dict:
     return {
         "id": tc.id,
         "type": "function",
-        "function": {
-            "name": tc.name,
-            "arguments": json.dumps(tc.arguments)
-        }
+        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
     }
 
 
 def build_agent_graph(
-    llm_service: LLMService, 
+    llm_service: LLMService,
     tools: list[BaseTool],
     agent_id: UUID,
     org_id: UUID,
@@ -63,12 +60,14 @@ def build_agent_graph(
                 execution_id=execution_id,
                 model=response.model,
                 prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens
+                completion_tokens=response.usage.completion_tokens,
             )
 
         assistant_message: dict = {"role": "assistant", "content": response.content}
         if response.tool_calls:
-            assistant_message["tool_calls"] = [_to_openai_tool_call(tc) for tc in response.tool_calls]
+            assistant_message["tool_calls"] = [
+                _to_openai_tool_call(tc) for tc in response.tool_calls
+            ]
 
         return {"messages": [assistant_message], "steps": state["steps"] + 1}
 
@@ -85,7 +84,9 @@ def build_agent_graph(
             tool = tools_by_name.get(name)
             if tool is None:
                 result = {"error": "unknown_tool", "reason": f"no tool named '{name}' is available"}
-                await audit_service.log_tool_call(org_id, agent_id, execution_id, name, False, "Unknown tool")
+                await audit_service.log_tool_call(
+                    org_id, agent_id, execution_id, name, False, "Unknown tool"
+                )
             else:
                 # GOVERNANCE GATE: policy check + timed execution + audit log,
                 # for every tool call, allowed or denied.
@@ -101,7 +102,9 @@ def build_agent_graph(
                     budget_guard=budget_guard,
                 )
 
-            results.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)})
+            results.append(
+                {"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)}
+            )
 
         return {"messages": results}
 
@@ -143,8 +146,15 @@ async def run_agent(
 ) -> dict:
     """Run a goal through the security-hardened agent graph."""
     graph = build_agent_graph(
-        llm_service, tools, agent_id, org_id, execution_id, 
-        policy_engine, audit_service, cost_service, budget_guard
+        llm_service,
+        tools,
+        agent_id,
+        org_id,
+        execution_id,
+        policy_engine,
+        audit_service,
+        cost_service,
+        budget_guard,
     )
 
     messages = []
@@ -152,9 +162,13 @@ async def run_agent(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": goal})
 
-    final_state = await graph.ainvoke({"messages": messages, "steps": 0, "max_steps": max_steps, "stopped_reason": None})
+    final_state = await graph.ainvoke(
+        {"messages": messages, "steps": 0, "max_steps": max_steps, "stopped_reason": None}
+    )
 
-    hit_max_steps = final_state["steps"] >= max_steps and final_state["messages"][-1].get("tool_calls")
+    hit_max_steps = final_state["steps"] >= max_steps and final_state["messages"][-1].get(
+        "tool_calls"
+    )
     final_message = final_state["messages"][-1]
 
     return {

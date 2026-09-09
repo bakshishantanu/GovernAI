@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 from uuid import UUID
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
+
 
 class AgentRepository:
     def __init__(self, session: AsyncSession):
@@ -15,9 +19,7 @@ class AgentRepository:
         )
 
     async def get_agent(self, agent_id: UUID) -> Agent | None:
-        result = await self.session.execute(
-            self._with_relations().where(Agent.id == agent_id)
-        )
+        result = await self.session.execute(self._with_relations().where(Agent.id == agent_id))
         return result.scalar_one_or_none()
 
     async def list_agents_by_org(
@@ -33,7 +35,7 @@ class AgentRepository:
             query = query.where(Agent.owner_id == owner_id)
         if assigned_user_id:
             query = query.where(Agent.assigned_user_id == assigned_user_id)
-            
+
         result = await self.session.execute(
             query.order_by(Agent.created_at.desc()).offset(offset).limit(limit)
         )

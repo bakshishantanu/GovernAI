@@ -1,13 +1,13 @@
-from unittest.mock import AsyncMock
 import asyncio
-import uuid
 import json
+import uuid
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
+from app.domain.policies.engine import PolicyDecision
 from app.runtime.agent_graph import run_agent
 from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage, ToolCall
 from app.runtime.llm.service import LLMService
-from app.domain.policies.engine import PolicyDecision
 from app.skills.base import BaseTool
 
 # These tests exercise the graph's reasoning-loop mechanics (tool dispatch,
@@ -108,7 +108,15 @@ async def test_agent_completes_without_any_tool_call():
     service = LLMService([provider])
 
     result = await run_agent(
-        service, tools=[], agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(), policy_engine=_AllowAllPolicyEngine(), goal="what is the answer?"
+        service,
+        tools=[],
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="what is the answer?",
     )
 
     assert result["final_answer"] == "the answer is 42"
@@ -122,7 +130,15 @@ async def test_agent_calls_a_tool_then_produces_final_answer():
     service = LLMService([provider])
 
     result = await run_agent(
-        service, tools=[_EchoTool()], agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(), policy_engine=_AllowAllPolicyEngine(), goal="echo hi"
+        service,
+        tools=[_EchoTool()],
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="echo hi",
     )
 
     assert result["final_answer"] == "I echoed: hi"
@@ -141,7 +157,15 @@ async def test_multiple_tool_calls_in_one_turn_all_execute():
     service = LLMService([provider])
 
     result = await run_agent(
-        service, tools=[_EchoTool()], agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(), policy_engine=_AllowAllPolicyEngine(), goal="echo a and b"
+        service,
+        tools=[_EchoTool()],
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="echo a and b",
     )
 
     tool_messages = [m for m in result["messages"] if m["role"] == "tool"]
@@ -155,7 +179,15 @@ async def test_unknown_tool_call_does_not_crash_the_run():
     service = LLMService([provider])
 
     result = await run_agent(
-        service, tools=[], agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(), policy_engine=_AllowAllPolicyEngine(), goal="do something"
+        service,
+        tools=[],
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="do something",
     )
 
     tool_messages = [m for m in result["messages"] if m["role"] == "tool"]
@@ -172,7 +204,11 @@ async def test_tool_exception_is_caught_and_reported_not_raised():
     result = await run_agent(
         service,
         tools=[_AlwaysFailTool()],
-        agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(),
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
         policy_engine=_AllowAllPolicyEngine(),
         goal="fail please",
     )
@@ -195,7 +231,11 @@ async def test_hung_tool_is_timed_out_and_reported_not_left_hanging(monkeypatch)
     result = await run_agent(
         service,
         tools=[_NeverFinishesTool()],
-        agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(),
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
         policy_engine=_AllowAllPolicyEngine(),
         goal="run the hung tool",
     )
@@ -216,7 +256,11 @@ async def test_policy_engine_denial_is_reported_to_the_llm_not_executed():
     result = await run_agent(
         service,
         tools=[_EchoTool()],
-        agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(),
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
         policy_engine=_DenyAllPolicyEngine(),
         goal="echo hi",
     )
@@ -233,7 +277,11 @@ async def test_max_steps_guard_stops_an_infinite_tool_calling_loop():
     result = await run_agent(
         service,
         tools=[_EchoTool()],
-        agent_id=_TEST_AGENT_ID, org_id=uuid.uuid4(), execution_id=uuid.uuid4(), audit_service=AsyncMock(), cost_service=AsyncMock(),
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=AsyncMock(),
+        cost_service=AsyncMock(),
         policy_engine=_AllowAllPolicyEngine(),
         goal="loop forever",
         max_steps=3,
@@ -242,4 +290,3 @@ async def test_max_steps_guard_stops_an_infinite_tool_calling_loop():
     assert result["steps"] == 3
     assert result["stopped_reason"] == "max_steps_reached"
     assert result["final_answer"] is None
-

@@ -53,7 +53,7 @@ export function CostGovernance() {
           <p className="mt-5 text-[var(--l-cream)]/60 leading-relaxed max-w-md">
             Every agent gets a real spending budget that auto-pauses it the moment
             it&apos;s exceeded. Most governance platforms treat cost as an
-            afterthought — GovernAI makes it the primary, demoable feature.
+            afterthought. GovernAI makes it the primary, demoable feature.
           </p>
         </motion.div>
 
@@ -68,7 +68,7 @@ export function CostGovernance() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-[var(--l-cream)]/60">
               <Wallet className="w-4 h-4" />
-              Invoice Triage Bot — daily budget
+              Invoice Triage Bot · daily budget
             </div>
             {paused && (
               <motion.div

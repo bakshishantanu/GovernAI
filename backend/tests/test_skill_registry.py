@@ -11,7 +11,9 @@ def _mock_session() -> AsyncMock:
 
 
 def _added(session, model_type):
-    return [call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], model_type)]
+    return [
+        call.args[0] for call in session.add.call_args_list if isinstance(call.args[0], model_type)
+    ]
 
 
 async def test_bootstrap_registers_all_three_mvp_skills_independently():
@@ -80,7 +82,10 @@ async def test_bootstrap_persists_a_specific_required_permission_per_tool():
     assert tools_by_name["read_ticket"].required_permission == "ticket:read"
     assert tools_by_name["search_tickets"].required_permission == "ticket:read"
     assert tools_by_name["create_ticket_reply"].required_permission == "ticket:create"
-    assert tools_by_name["run_sql_query"].required_permission == "sql:read:internal_payroll,sql:read:tickets"
+    assert (
+        tools_by_name["run_sql_query"].required_permission
+        == "sql:read:internal_payroll,sql:read:tickets"
+    )
     assert tools_by_name["search_documents"].required_permission == "docs:search:public"
     assert tools_by_name["get_document"].required_permission == "docs:search:public"
 

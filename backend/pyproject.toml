@@ -2,7 +2,7 @@
 name = "governai-backend"
 version = "0.1.0"
 description = "GovernAI backend"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -34,15 +34,21 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+# target-version must match the interpreter this project is actually run and
+# tested on (3.10), not an aspirational one. It was "py312" while the venv was
+# 3.10.11, so `ruff --fix` rewrote every `datetime.timezone.utc` into
+# `datetime.UTC` (UP017) - a 3.11+ name - and the whole backend stopped
+# importing. A lint target ahead of the runtime silently generates code that
+# cannot run.
 [tool.ruff]
-target-version = "py312"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pyright]
-pythonVersion = "3.12"
+pythonVersion = "3.10"
 typeCheckingMode = "basic"
 
 [build-system]

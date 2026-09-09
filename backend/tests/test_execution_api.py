@@ -1,20 +1,20 @@
 from __future__ import annotations
+
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+
 import pytest
+from fastapi import BackgroundTasks, HTTPException
+
+from app.api.execution_runner import run_execution
+from app.api.schemas.auth import CurrentUser
+from app.api.schemas.execution import ExecutionCreate
+from app.api.v1.executions import (
+    cancel_execution,
+    create_and_run_execution,
+)
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.executions.models import Execution
-from app.domain.executions.service import ExecutionService
-from app.api.v1.executions import (
-    create_and_run_execution,
-    list_executions,
-    get_execution_detail,
-    cancel_execution,
-)
-from app.api.schemas.execution import ExecutionCreate
-from app.api.schemas.auth import CurrentUser
-from app.api.execution_runner import run_execution
-from fastapi import BackgroundTasks, HTTPException
 
 
 @pytest.fixture

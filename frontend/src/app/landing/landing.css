@@ -19,6 +19,12 @@
   --l-teal: #1f8a83;
   --l-teal-soft: #6fbcb4;
 
+  /* soft pink/blush background family (from the reference's real swatch
+     values: --pale-pink #feb6fa, --soft-pink #ffdbfd) */
+  --l-pink-pale: #ffdede;
+  --l-pink-blush: #ffc5c5;
+  --l-pink-lilac: #feb6fa;
+
   --l-line: rgba(22, 19, 14, 0.14);
   --l-line-dark: rgba(244, 237, 225, 0.14);
 
@@ -39,12 +45,14 @@
 
 .landing-display {
   font-family: var(--font-display, ui-sans-serif), system-ui, sans-serif;
+  font-weight: 800;
   letter-spacing: -0.02em;
 }
 
 .landing-hand {
   font-family: var(--font-hand, cursive);
 }
+
 
 .landing-scrollbar::-webkit-scrollbar {
   width: 10px;
@@ -59,9 +67,61 @@
   mix-blend-mode: overlay;
 }
 
+/* Static organic shape only, cheap to composite (transform-only) when the
+   element is also scroll-linked via JS (e.g. Hero's blobs) — animating
+   border-radius forces a repaint every frame, which fights with a
+   simultaneous scroll transform on the same (blurred, large) layer. */
 .landing-blob {
   border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+}
+
+/* Opt-in continuous morph, only for blobs with no competing scroll
+   transform on the same element. */
+.landing-blob-animate {
   animation: landing-blob-morph 14s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-blob-animate {
+    animation: none;
+  }
+}
+
+/* Smooth in-page anchor scrolling (nav links, "see how it works", etc.)
+   scoped to routes that use the landing design system only. */
+html:has(.landing) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing) {
+    scroll-behavior: auto;
+  }
+}
+
+.landing-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.landing-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes landing-slow-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.landing-slow-spin {
+  animation: landing-slow-spin 18s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-slow-spin {
+    animation: none;
+  }
 }
 
 @keyframes landing-blob-morph {

@@ -7,9 +7,9 @@ import { ShieldCheck, ArrowRight } from "lucide-react";
 
 const LINKS = [
   { href: "#problem", label: "Why" },
+  { href: "#skills", label: "Skills" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#cost", label: "Cost control" },
-  { href: "#features", label: "Features" },
 ];
 
 export function LandingNav() {

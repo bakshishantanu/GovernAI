@@ -1,21 +1,17 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { EyeOff, RefreshCcw, HelpCircle } from "lucide-react";
 
 const POINTS = [
   {
-    icon: RefreshCcw,
     title: "Rebuilt, not reused",
-    body: "Every team wires up its own ticketing, doc-search, and SQL connectors from scratch — the same integrations, duplicated across the org.",
+    body: "Every team wires up its own ticketing, doc-search, and SQL connectors from scratch, duplicating integrations that already exist elsewhere in the org.",
   },
   {
-    icon: EyeOff,
     title: "No consistent identity",
     body: "Agents get unmonitored access to internal data with no shared permission model. Nobody agreed on what an agent is even allowed to touch.",
   },
   {
-    icon: HelpCircle,
     title: "Unanswerable questions",
     body: "“How much are we spending on agents?” “Can we pause this one right now?” Leadership asks. Today, nobody can answer.",
   },
@@ -37,7 +33,7 @@ const item = {
 export function Problem() {
   return (
     <section id="problem" className="relative bg-[var(--l-cream)] py-28 md:py-36 overflow-hidden">
-      <div className="landing-blob pointer-events-none absolute -bottom-32 -right-32 w-[420px] h-[420px] bg-[var(--l-yellow)] opacity-30" />
+      <div className="landing-blob landing-blob-animate pointer-events-none absolute -bottom-32 -right-32 w-[420px] h-[420px] bg-[var(--l-yellow)] opacity-30" />
       <div className="max-w-6xl mx-auto px-6 relative">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -62,14 +58,16 @@ export function Problem() {
           viewport={{ once: true, amount: 0.3 }}
           className="mt-16 grid md:grid-cols-3 gap-6"
         >
-          {POINTS.map((p) => (
+          {POINTS.map((p, i) => (
             <motion.div
               key={p.title}
               variants={item}
               className="rounded-2xl border border-[var(--l-line)] bg-white/60 p-7 hover:bg-white transition-colors"
             >
-              <p.icon className="w-6 h-6 text-[var(--l-teal)]" />
-              <h3 className="mt-5 text-lg font-semibold text-[var(--l-charcoal)]">
+              <span className="landing-display text-2xl text-[var(--l-teal)]">
+                0{i + 1}
+              </span>
+              <h3 className="mt-4 text-lg font-semibold text-[var(--l-charcoal)]">
                 {p.title}
               </h3>
               <p className="mt-2.5 text-sm leading-relaxed text-[var(--l-charcoal)]/65">

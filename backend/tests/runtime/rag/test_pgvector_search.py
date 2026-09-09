@@ -7,7 +7,9 @@ from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 _DOC_ID = uuid.uuid4()
 
 
-def _chunk(text: str, embedding: list[float], index: int = 0, title: str = "Policy Engine Overview"):
+def _chunk(
+    text: str, embedding: list[float], index: int = 0, title: str = "Policy Engine Overview"
+):
     return SimpleNamespace(
         document_id=_DOC_ID,
         chunk_index=index,
@@ -36,7 +38,9 @@ async def test_search_embeds_the_query_and_returns_scored_results():
     embeddings = _embeddings([1.0, 0.0])
     adapter = PgVectorDocumentSearchAdapter(repo=repo, embedding_provider=embeddings)
 
-    results = await adapter.search("how does the policy engine work", permitted_scopes=frozenset({"public"}))
+    results = await adapter.search(
+        "how does the policy engine work", permitted_scopes=frozenset({"public"})
+    )
 
     assert len(results) == 1
     assert results[0].chunk_id == f"{_DOC_ID}#0"
@@ -49,7 +53,9 @@ async def test_search_passes_permitted_scopes_and_embedding_to_the_repo():
     embeddings = _embeddings([1.0, 0.0])
     adapter = PgVectorDocumentSearchAdapter(repo=repo, embedding_provider=embeddings)
 
-    await adapter.search("query", permitted_scopes=frozenset({"public", "hr_confidential"}), top_n=5)
+    await adapter.search(
+        "query", permitted_scopes=frozenset({"public", "hr_confidential"}), top_n=5
+    )
 
     _, kwargs = repo.search_chunks_by_scope.call_args
     assert kwargs["embedding"] == [1.0, 0.0]
@@ -62,7 +68,9 @@ async def test_search_filters_out_results_below_min_relevance_score():
     chunk = _chunk("unrelated content", embedding=[0.0, 1.0])
     repo = _repo([chunk])
     embeddings = _embeddings([1.0, 0.0])
-    adapter = PgVectorDocumentSearchAdapter(repo=repo, embedding_provider=embeddings, min_relevance_score=0.3)
+    adapter = PgVectorDocumentSearchAdapter(
+        repo=repo, embedding_provider=embeddings, min_relevance_score=0.3
+    )
 
     results = await adapter.search("query", permitted_scopes=frozenset({"public"}))
 

@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from uuid import UUID
+
 from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.domain.executions.models import Execution, ExecutionStep
+
 
 class ExecutionRepository:
     def __init__(self, session: AsyncSession):
