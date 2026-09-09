@@ -23,6 +23,7 @@ def _service():
     # silently satisfy the "at least one skill" rule and the test would pass
     # while proving nothing.
     agent_repo.list_skill_ids.return_value = []
+    agent_repo.owner_is_in_org.return_value = True
     perm_repo.list_forbidden_pairs.return_value = []
     service = AgentService(agent_repo, perm_repo, skill_repo)
     return service, agent_repo, skill_repo, perm_repo
@@ -313,3 +314,44 @@ async def test_submit_for_review_reports_every_violation_at_once():
 
     assert [v.rule for v in exc.value.violations] == ["owner", "skills", "permission_subset"]
     assert "must have an owner" in str(exc.value)
+
+
+async def test_submit_for_review_fails_when_the_owner_is_not_in_the_org():
+    """Rule 1, in the only form that can actually fail through the API.
+
+    owner_id is NOT NULL and comes from the caller's own token, so "is it set"
+    can never be false. "Is the owner a person this organisation knows" can be:
+    a profile can be deleted, and an id copied from elsewhere points outside
+    the org.
+    """
+    service, agent_repo, skill_repo, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="DRAFT", permissions=["ticket:read"])
+    agent_repo.get_agent.return_value = agent
+    agent_repo.list_skill_ids.return_value = ["ticketing"]
+    skill_repo.get_skill.return_value = _skill("ticket:read")
+    agent_repo.owner_is_in_org.return_value = False
+
+    with pytest.raises(ComplianceError) as exc:
+        await service.submit_for_review(agent.id)
+
+    assert [v.rule for v in exc.value.violations] == ["owner"]
+    assert "not a member of this organisation" in exc.value.violations[0].message
+    agent_repo.owner_is_in_org.assert_awaited_once_with(agent.owner_id, agent.org_id)
+
+
+async def test_a_missing_owner_is_not_looked_up_at_all():
+    """No owner id means there is nothing to look up; the check must not go to
+    the database with None and must still report the simpler problem."""
+    service, agent_repo, skill_repo, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="DRAFT", permissions=["ticket:read"])
+    agent.owner_id = None
+    agent_repo.get_agent.return_value = agent
+    agent_repo.list_skill_ids.return_value = ["ticketing"]
+    skill_repo.get_skill.return_value = _skill("ticket:read")
+
+    with pytest.raises(ComplianceError) as exc:
+        await service.submit_for_review(agent.id)
+
+    assert [v.rule for v in exc.value.violations] == ["owner"]
+    assert exc.value.violations[0].message == "Agent must have an owner."
+    agent_repo.owner_is_in_org.assert_not_awaited()

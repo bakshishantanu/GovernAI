@@ -29,6 +29,7 @@ class Violation:
 def check_compliance(
     *,
     owner_id: UUID | None,
+    owner_is_known: bool = True,
     skill_ids: Sequence[str],
     granted_permissions: Sequence[str],
     allowed_permissions: Sequence[str],
@@ -39,6 +40,11 @@ def check_compliance(
     Every rule runs even when an earlier one has already failed: showing one
     problem, then another on the next attempt, wastes the builder's time.
 
+    - `owner_is_known` — whether that owner is a real profile in the agent's own
+      organisation. Resolved by the caller, because a pure function cannot look
+      it up. Without it rule 1 is unfalsifiable through the API: `owner_id` is
+      NOT NULL and taken from the caller's own token, so it can never be absent
+      — but it can point at a profile that was deleted or belongs elsewhere.
     - `granted_permissions` — what the agent's passport actually holds.
     - `allowed_permissions` — the union of its bound skills' declared
       permissions, i.e. the ceiling it may not exceed.
@@ -49,6 +55,13 @@ def check_compliance(
 
     if owner_id is None:
         violations.append(Violation(rule="owner", message="Agent must have an owner."))
+    elif not owner_is_known:
+        violations.append(
+            Violation(
+                rule="owner",
+                message="Agent's owner is not a member of this organisation.",
+            )
+        )
 
     if not skill_ids:
         violations.append(Violation(rule="skills", message="Agent must have at least one skill."))

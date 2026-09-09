@@ -137,6 +137,10 @@ class AgentService:
         skill_ids = await self.agent_repo.list_skill_ids(agent_id)
         violations = check_compliance(
             owner_id=agent.owner_id,
+            owner_is_known=(
+                bool(agent.owner_id)
+                and await self.agent_repo.owner_is_in_org(agent.owner_id, agent.org_id)
+            ),
             skill_ids=skill_ids,
             granted_permissions=[p.permission for p in agent.passport.permissions],
             allowed_permissions=await self._permissions_for_skills(skill_ids),

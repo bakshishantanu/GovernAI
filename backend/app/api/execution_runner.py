@@ -66,7 +66,10 @@ async def run_execution(
         async with async_session_factory() as session:
             exec_service = ExecutionService(exec_repo=ExecutionRepository(session))
             agent_repo = AgentRepository(session)
-            audit_service = AuditService(audit_repo=AuditRepository(session), event_bus=event_bus)
+            # Named rather than inline: the policy engine's RATE_LIMIT rule
+            # counts recent tool calls from this same repository.
+            audit_repo = AuditRepository(session)
+            audit_service = AuditService(audit_repo=audit_repo, event_bus=event_bus)
             cost_repo = CostRepository(session)
 
             kill_switch = KillSwitchService(
@@ -111,6 +114,7 @@ async def run_execution(
                     agent_repo=agent_repo,
                     perm_repo=PermissionRepository(session),
                     policy_repo=PolicyRepository(session),
+                    audit_repo=audit_repo,
                 ),
                 audit_service=audit_service,
                 cost_service=CostService(cost_repo=cost_repo, event_bus=event_bus),

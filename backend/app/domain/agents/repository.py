@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
+from app.domain.auth.models import Profile
 
 
 class AgentRepository:
@@ -55,6 +56,21 @@ class AgentRepository:
 
         result = await self.session.execute(query)
         return result.scalar_one()
+
+    async def owner_is_in_org(self, owner_id: UUID, org_id: UUID) -> bool:
+        """Whether this agent's owner is a real profile in this agent's org.
+
+        Compliance rule 1 is "the agent has an owner". Read only as "owner_id is
+        set" it can never fail through the API, because the column is NOT NULL
+        and the value comes from the caller's own token. Read as "the owner is a
+        person this organisation knows" it can: a profile can be deleted, and an
+        owner_id copied from elsewhere points outside the org. That is the
+        version worth checking.
+        """
+        result = await self.session.execute(
+            select(Profile.id).where(Profile.id == owner_id, Profile.org_id == org_id)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def create_agent(self, agent: Agent) -> Agent:
         self.session.add(agent)

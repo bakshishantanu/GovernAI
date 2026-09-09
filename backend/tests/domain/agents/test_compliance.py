@@ -82,3 +82,31 @@ def test_all_rules_report_together_rather_than_stopping_at_the_first():
 
 def test_violation_is_comparable():
     assert Violation(rule="owner", message="x") == Violation(rule="owner", message="x")
+
+
+def test_an_unknown_owner_fails_rule_one():
+    violations = check_compliance(
+        owner_id=uuid4(),
+        owner_is_known=False,
+        skill_ids=["ticketing"],
+        granted_permissions=["ticket:read"],
+        allowed_permissions=["ticket:read"],
+        forbidden_pairs=[],
+    )
+
+    assert [v.rule for v in violations] == ["owner"]
+    assert "not a member of this organisation" in violations[0].message
+
+
+def test_a_known_owner_passes_rule_one():
+    assert (
+        check_compliance(
+            owner_id=uuid4(),
+            owner_is_known=True,
+            skill_ids=["ticketing"],
+            granted_permissions=["ticket:read"],
+            allowed_permissions=["ticket:read"],
+            forbidden_pairs=[],
+        )
+        == []
+    )

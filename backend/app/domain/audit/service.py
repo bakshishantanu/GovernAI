@@ -67,6 +67,57 @@ class AuditService:
             )
         )
 
+    async def log_compliance_passed(self, org_id: UUID, actor_id: UUID, agent_id: UUID) -> None:
+        """FRD-02: an audit event exists after every compliance attempt."""
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="system",
+            actor_id=actor_id,
+            agent_id=agent_id,
+            action="compliance_check.passed",
+            policy_decision="ALLOW",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.compliance.passed",
+                {"agent_id": str(agent_id), "org_id": str(org_id)},
+            )
+        )
+
+    async def log_compliance_failed(
+        self, org_id: UUID, actor_id: UUID, agent_id: UUID, violations: list
+    ) -> None:
+        """As above, plus the violations themselves.
+
+        They go in `metadata_json` as well as `reason` because the audit log is
+        what someone reads afterwards: a decision without its grounds is not an
+        audit trail. Every violation is joined into `reason`, not just the
+        first - a reason naming one of three problems misleads whoever reads it.
+        """
+        payload = [{"rule": v.rule, "message": v.message} for v in violations]
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="system",
+            actor_id=actor_id,
+            agent_id=agent_id,
+            action="compliance_check.failed",
+            policy_decision="DENY",
+            reason="; ".join(v.message for v in violations),
+            metadata_json={"violations": payload},
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.compliance.failed",
+                {"agent_id": str(agent_id), "org_id": str(org_id), "violations": payload},
+            )
+        )
+
     async def log_tool_call(
         self,
         org_id: UUID,

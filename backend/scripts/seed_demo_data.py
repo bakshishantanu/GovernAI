@@ -15,10 +15,29 @@ from app.domain.documents.models import Document, DocumentChunk
 from app.domain.executions.models import Execution
 from app.domain.permissions.models import Permission
 from app.domain.policies.models import Policy, PolicyRule
-from app.domain.skills.models import SkillModel
+from app.domain.skills.models import SkillPermission
+from app.domain.skills.registry import SkillRegistry
+from app.domain.skills.repository import SkillRepository
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def derive_permissions(session, passport_id: uuid.UUID, skill_ids: list[str]) -> None:
+    """Grant a passport the union of its skills' declared permissions.
+
+    The same rule AgentService.create_agent applies, so a seeded agent and a
+    console-built one hold permission sets derived the same way. Hand-writing
+    them here is what let the seed disagree with the product (D-043): four
+    permissions on one agent, none on any other.
+    """
+    if not skill_ids:
+        return
+    rows = await session.execute(
+        select(SkillPermission.permission).where(SkillPermission.skill_id.in_(skill_ids))
+    )
+    for permission in sorted(set(rows.scalars().all())):
+        session.add(Permission(id=uuid.uuid4(), passport_id=passport_id, permission=permission))
 
 
 async def seed_data():
@@ -50,37 +69,17 @@ async def seed_data():
 
         await session.flush()
 
-        # 0.5. Skills bootstrap
-        skills_to_seed = [
-            SkillModel(
-                id="ticketing",
-                name="ticketing",
-                display_name="Ticketing & ITSM",
-                description="Create and resolve tickets",
-                version="1.0",
-                trust_level="verified",
-            ),
-            SkillModel(
-                id="sql_query",
-                name="sql_query",
-                display_name="SQL Query",
-                description="Query internal databases",
-                version="1.0",
-                trust_level="verified",
-            ),
-            SkillModel(
-                id="document_search",
-                name="document_search",
-                display_name="Knowledge Search",
-                description="RAG document search",
-                version="1.0",
-                trust_level="verified",
-            ),
-        ]
-        for sk in skills_to_seed:
-            existing = await session.get(SkillModel, sk.id)
-            if not existing:
-                session.add(sk)
+        # 0.5. Skills bootstrap — from the registry, not by hand.
+        #
+        # The skill classes are the source of truth for what each skill's tools
+        # actually require at runtime, so seeding from anywhere else lets the
+        # two drift. The previous hand-written block created SkillModel rows
+        # with **no SkillPermission rows at all**, which is worse than it looks:
+        # permissions are derived from those rows, so a freshly seeded database
+        # produced agents with empty passports - denied on every tool call.
+        # bootstrap() also creates the ToolModel rows, and skips any skill that
+        # already exists, so it is safe to re-run.
+        await SkillRegistry(SkillRepository(session), session).bootstrap()
         await session.flush()
 
         # 1. Policies
@@ -193,19 +192,11 @@ async def seed_data():
         )
         session.add(passport)
 
-        permissions = [
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:read"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:create"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:tickets"),
-            Permission(
-                id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:internal_payroll"
-            ),
-        ]
-        session.add_all(permissions)
-
         # AgentSkills (ticketing and sql_query)
         session.add(AgentSkill(agent_id=agent.id, skill_id="ticketing"))
         session.add(AgentSkill(agent_id=agent.id, skill_id="sql_query"))
+
+        await derive_permissions(session, passport_id, ["ticketing", "sql_query"])
 
         # Agent 2: Self-initiated build by builder (no user assignment, in draft)
         agent_draft_id = uuid.uuid4()
@@ -232,6 +223,8 @@ async def seed_data():
             )
         )
         session.add(AgentSkill(agent_id=agent_draft_id, skill_id="document_search"))
+
+        await derive_permissions(session, passport_draft_id, ["document_search"])
 
         # 4. Documents
         doc_id_1 = uuid.uuid4()

@@ -6,7 +6,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_agent_service, get_db, get_kill_switch_service
+from app.api.deps import (
+    get_agent_service,
+    get_audit_service,
+    get_db,
+    get_kill_switch_service,
+)
 from app.api.schemas.agent import (
     AgentCreate,
     AgentResponse,
@@ -23,6 +28,7 @@ from app.domain.agents.service import (
     InvalidStateTransitionError,
     SkillNotFoundError,
 )
+from app.domain.audit.service import AuditService
 from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.domain.skills.models import SkillModel
@@ -156,6 +162,7 @@ async def submit_agent_for_review(
     agent_id: UUID,
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
+    audit: AuditService = Depends(get_audit_service),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a draft agent for governance review."""
@@ -168,16 +175,23 @@ async def submit_agent_for_review(
 
     try:
         await service.submit_for_review(agent_id)
+        # FRD-02: an audit event after every compliance attempt, not only the
+        # refusals. A log that records what was stopped and not what was let
+        # through cannot answer "who approved this agent, and when".
+        await audit.log_compliance_passed(user.org_id, user.id, agent_id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ComplianceError as e:
-        # Commit the FAILED verdict before reporting it. The service writes
-        # compliance_status and compliance_checked_at on the way out; without a
-        # commit here the session is discarded and the passport would still read
-        # PENDING, so the console could never show that a check had been run and
-        # refused.
+        await audit.log_compliance_failed(user.org_id, user.id, agent_id, e.violations)
+
+        # Commit the FAILED verdict and the audit row before reporting them. The
+        # service writes compliance_status and compliance_checked_at on the way
+        # out; without a commit here the session is discarded with the exception
+        # and the passport would still read PENDING, so the console could never
+        # show that a check had been run and refused - and an audit trail that
+        # records only successes is worse than none.
         if isinstance(db, AsyncSession):
             await db.commit()
 
