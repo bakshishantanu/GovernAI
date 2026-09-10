@@ -164,6 +164,27 @@ async def test_dummy_token_user_grants_user_role(dev_bypass_on):
     assert user.role == "user"
     assert user.is_builder is True
     assert user.is_admin is False
+    assert user.email is None
+    assert user.full_name is None
+
+
+@pytest.mark.asyncio
+async def test_full_name_extracted_from_user_metadata(configured_secret):
+    """User full_name is parsed from user_metadata claim."""
+    user_id = str(uuid4())
+    payload = {
+        "sub": user_id,
+        "email": "jane@company.com",
+        "user_metadata": {"full_name": "Jane Doe"},
+        "app_metadata": {"role": "agent_builder"},
+    }
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.full_name == "Jane Doe"
+    assert user.email == "jane@company.com"
 
 
 @pytest.mark.asyncio

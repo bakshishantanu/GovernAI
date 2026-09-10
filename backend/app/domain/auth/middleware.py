@@ -136,7 +136,8 @@ async def get_current_user(
             id=user_id,
             org_id=UUID("00000000-0000-0000-0000-000000000000"),
             role=dev_role,  # type: ignore[arg-type]
-            email="dev@governai.local",
+            email=None,
+            full_name=None,
         )
 
     payload = decode_supabase_token(token)
@@ -151,6 +152,8 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token: malformed subject UUID")
 
     email = payload.get("email")
+    user_metadata = payload.get("user_metadata", {})
+    full_name = user_metadata.get("full_name") or payload.get("name")
     app_metadata = payload.get("app_metadata", {})
     raw_role = app_metadata.get("role")
 
@@ -165,4 +168,10 @@ async def get_current_user(
     else:
         org_id = UUID("00000000-0000-0000-0000-000000000000")
 
-    return CurrentUser(id=user_id, org_id=org_id, role=role, email=email)
+    return CurrentUser(
+        id=user_id,
+        org_id=org_id,
+        role=role,
+        email=email,
+        full_name=full_name,
+    )

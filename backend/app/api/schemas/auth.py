@@ -13,6 +13,7 @@ class CurrentUser(BaseModel):
     org_id: UUID
     role: Role
     email: str | None = None
+    full_name: str | None = None
 
     @property
     def is_admin(self) -> bool:
