@@ -45,6 +45,9 @@ class ExecutionResponse(BaseModel):
     error: str | None = None
     started_at: datetime
     completed_at: datetime | None = None
+    # The column has existed since the execution_triggered_by migration but was
+    # never surfaced, so the console had no way to say who started a run. Null
+    # for runs with no human actor (e.g. the Jira webhook).
     triggered_by_id: UUID | None = None
     steps: list[ExecutionStepResponse] = []
     # Populated only by get_execution_detail, which loads them from
@@ -56,12 +59,19 @@ class ExecutionResponse(BaseModel):
 
 
 class ExecutionTimelineResponse(BaseModel):
-    """The full history of one run: every governed tool call and every LLM
-    call, each in its own real shape rather than flattened into a generic
-    "event" that would lose fields. The frontend interleaves the two by
-    timestamp for a single chronological feed; kept separate here because
-    they answer different questions (governance decisions vs. spend) and a
-    caller that only wants one need not parse the other out of a merge."""
+    """The full recorded history of one run: every governed tool call and every
+    LLM call, each in its own real shape rather than flattened into a generic
+    "event" that would lose fields.
+
+    Exists because `/stream` only ever shows events from the moment a client
+    connects — nothing before that, and nothing at all for a run that had
+    already finished by the time someone opened its page.
+
+    The console interleaves the two lists by timestamp into one chronological
+    feed. They are kept separate here because they answer different questions
+    (governance decisions vs. spend), and a caller that wants only one should
+    not have to parse the other back out of a merge.
+    """
 
     execution_id: UUID
     governance_events: list[AuditEventResponse]

@@ -18,10 +18,21 @@ from app.api.execution_runner import run_execution
 from app.api.schemas.audit import AuditEventResponse
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.cost import CostEventResponse
-from app.api.schemas.execution import ExecutionCreate, ExecutionResponse, ExecutionTimelineResponse
+from app.api.schemas.execution import (
+    ExecutionCreate,
+    ExecutionResponse,
+    ExecutionTimelineResponse,
+)
 from app.api.sse import SSE_HEADERS, format_sse
 from app.api.sse import stream as sse_stream
+
+# Reused rather than reimplemented: a CostEvent row cannot simply be
+# model_validate'd (the column is `metadata` in the database but
+# `metadata_json` on the model, and the event type needs translating), and a
+# second copy of that mapping here would be free to drift from the one the
+# costs routes use.
+from app.api.v1.costs import _to_response as cost_event_to_response
+from app.domain.agents.models import Agent
 from app.domain.agents.service import AgentService
 from app.domain.audit.repository import AuditRepository
 from app.domain.auth.middleware import get_current_user
@@ -35,34 +46,6 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 #: Mirrors `api/v1/costs.py`'s own `_EVENT_TYPE_ALIASES` -- kept local rather
 #: than imported across routers for a two-line dict; both read the same
 #: `CostEvent.event_type` values and must stay in agreement if either changes.
-_COST_EVENT_TYPE_ALIASES = {
-    "llm_inference": "LLM_CALL",
-    "llm_call": "LLM_CALL",
-    "tool_call": "TOOL_CALL",
-}
-
-
-def _cost_event_to_response(event) -> CostEventResponse:
-    """Same mapping as `costs.py`'s `_to_response`: the DB column is named
-    `metadata` but the model attribute is `metadata_json`, so this cannot be
-    built with `from_attributes` alone."""
-    return CostEventResponse(
-        id=event.id,
-        agent_id=event.agent_id,
-        execution_id=event.execution_id,
-        execution_step_id=event.execution_step_id,
-        event_type=_COST_EVENT_TYPE_ALIASES.get((event.event_type or "").lower(), "TOOL_CALL"),
-        model=event.model,
-        provider=event.provider,
-        prompt_tokens=event.prompt_tokens,
-        completion_tokens=event.completion_tokens,
-        total_tokens=event.total_tokens,
-        cost_usd=event.cost_usd,
-        timestamp=event.timestamp,
-        metadata=event.metadata_json,
-    )
-
-
 @router.post(
     "/",
     response_model=Envelope[ExecutionResponse],
@@ -184,9 +167,7 @@ async def get_execution_detail(
         )
 
     # Re-fetch agent to verify ownership
-    agent = await exec_service.exec_repo.session.get(
-        app.domain.agents.models.Agent, execution.agent_id
-    )
+    agent = await exec_service.exec_repo.session.get(Agent, execution.agent_id)
     if agent:
         if current_user.role != "admin" and current_user.id not in (
             agent.owner_id,
@@ -209,16 +190,17 @@ async def get_execution_timeline(
     cost_repo: CostRepository = Depends(get_cost_repository),
     db: AsyncSession = Depends(get_db),
 ):
-    """The full recorded history of one run: every governed tool call and
-    every LLM call, for reconstructing what happened on a run opened after
-    the fact (the live `/stream` endpoint only ever shows events from the
-    moment a client connects — nothing before that, and nothing at all for a
-    run that already finished by the time someone opens its page).
+    """The full recorded history of one run: every governed tool call and every
+    LLM call, for reconstructing what happened on a run opened after the fact.
 
-    Authorization is identical to `get_execution_detail` above, not the
-    stricter admin/builder-only gate on `GET /costs/` — a user must be able
-    to see their own run's cost history even though they cannot see the
-    org-wide spend dashboard.
+    `/stream` only ever shows events from the moment a client connects —
+    nothing before that, and nothing at all for a run that had already finished
+    by the time someone opened its page. This fills that gap.
+
+    Authorization is identical to `get_execution_detail` above, deliberately
+    *not* the stricter admin-only gate on `GET /costs/`: someone must be able to
+    see their own run's cost history even though they cannot see the org-wide
+    spend dashboard.
     """
     execution = await exec_service.get_execution(execution_id)
     if not execution or execution.org_id != current_user.org_id:
@@ -227,16 +209,18 @@ async def get_execution_timeline(
             detail="Execution not found",
         )
 
-    agent = await exec_service.exec_repo.session.get(
-        app.domain.agents.models.Agent, execution.agent_id
-    )
+    agent = await exec_service.exec_repo.session.get(Agent, execution.agent_id)
     if agent:
-        if current_user.role != "admin" and current_user.id not in (
-            agent.owner_id,
-            agent.assigned_user_id,
+        if (
+            current_user.is_builder
+            and agent.owner_id != current_user.id
+            and agent.assigned_user_id != current_user.id
         ):
             raise HTTPException(status_code=403, detail="Not authorized to view this execution")
 
+    # Only reached once the execution above is authorized — which is what makes
+    # the repository's execution_id filter safe to use without also applying its
+    # ownership filter.
     audit_repo = AuditRepository(db)
     audit_events = await audit_repo.get_events_for_org(
         org_id=current_user.org_id, execution_id=execution_id, limit=1000
@@ -245,13 +229,14 @@ async def get_execution_timeline(
         org_id=current_user.org_id, execution_id=execution_id, limit=1000
     )
 
+    # Both repositories return newest-first; a timeline reads oldest-first.
     return Envelope(
         data=ExecutionTimelineResponse(
             execution_id=execution_id,
             governance_events=[
                 AuditEventResponse.model_validate(e) for e in reversed(audit_events)
             ],
-            cost_events=[_cost_event_to_response(e) for e in reversed(cost_events)],
+            cost_events=[cost_event_to_response(e) for e in reversed(cost_events)],
         )
     )
 

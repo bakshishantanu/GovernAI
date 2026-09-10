@@ -45,9 +45,10 @@ export interface Agent {
   skills?: Array<{ id?: string; name?: string } | string>;
 }
 
-// Matches what GET /executions/{id} actually returns (confirmed against a
-// live response) -- not `prompt`/`created_at`, which an earlier version of
-// this file guessed at and which the API has never sent.
+// Matches what GET /executions/{id} actually returns, confirmed against a live
+// response — not `prompt`/`created_at`, which this file previously guessed at
+// and which the API has never sent. `executions/page.tsx` was formatting
+// `exec.created_at`, i.e. formatting undefined, as a direct result.
 export interface Execution {
   id: string;
   agent_id: string;

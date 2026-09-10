@@ -43,19 +43,22 @@ class AuditRepository:
         assigned_user_id: UUID | None = None,
         execution_id: UUID | None = None,
     ) -> list[AuditEvent]:
+
         query = select(AuditEvent).where(AuditEvent.org_id == org_id)
 
-        # Narrowing to one run: the caller (e.g. the execution timeline
-        # endpoint) has already authorized access to this specific execution,
-        # so this does not also apply the builder/user OR-filter below — a
+        # Narrowing to one run: the caller (the execution timeline endpoint)
+        # has already authorized access to this specific execution, so this
+        # deliberately does *not* also apply the ownership OR-filter below — a
         # user allowed to view their own run's timeline sees every governance
-        # event on it, not just the ones they personally triggered.
+        # event on it, not only the ones they personally triggered.
+        #
+        # Because of that, this parameter must stay internal: it is reachable
+        # only through a route that authorizes the execution first. Exposing it
+        # as a query param on the public /audits route would let any org member
+        # read another user's run by guessing an id.
         if execution_id is not None:
             query = query.where(AuditEvent.execution_id == execution_id)
 
-        # A builder sees events for agents they own; a user, events for agents
-        # assigned to them. Either also sees events they themselves caused,
-        # which is why actor_id is OR-ed in rather than replaced.
         elif builder_id or assigned_user_id:
             query = query.outerjoin(Agent, AuditEvent.agent_id == Agent.id)
             conditions = []
