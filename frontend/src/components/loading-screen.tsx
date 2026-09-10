@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Ticket, Database, FileSearch, Telescope, ShoppingCart, Check } from "lucide-react";
+import { Ticket, Search, FileSearch, Telescope, ShoppingCart, Check } from "lucide-react";
 import { kecal } from "@/lib/landing-fonts";
 import "@/app/landing/landing.css";
 
 const SKILLS = [
   { name: "Ticketing", Icon: Ticket, color: "#1f8a83" },
-  { name: "SQL Query", Icon: Database, color: "#3b3f4a" },
+  { name: "Enterprise Search", Icon: Search, color: "#3b3f4a" },
   { name: "Document Search", Icon: FileSearch, color: "#ff3d8a" },
   { name: "Research", Icon: Telescope, color: "#f0a227" },
 ];

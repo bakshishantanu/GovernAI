@@ -12,7 +12,7 @@ from app.runtime.rag.embeddings import EmbeddingProvider
 from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
-from app.skills.sql_query import SqlQuerySkill
+from app.skills.solr_search import SolrSearchSkill
 from app.skills.ticketing import JiraTicketingAdapter, TicketingSkill
 
 
@@ -51,7 +51,7 @@ class SkillRegistry:
             skill.name: skill
             for skill in (
                 TicketingSkill(adapter=jira_adapter),
-                SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
+                SolrSearchSkill(permitted_collections={"knowledge_base", "compliance_docs"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
             )
         }

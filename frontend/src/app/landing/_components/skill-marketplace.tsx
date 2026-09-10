@@ -7,7 +7,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Ticket,
-  Database,
+  Search,
   FileSearch,
   Telescope,
   Terminal,
@@ -54,14 +54,14 @@ const SKILLS: Skill[] = [
   },
   {
     status: "LIVE",
-    name: "SQL Query",
-    body: "Read-only queries, validated at the AST level rather than a regex blocklist, so an agent can query real data without ever mutating it.",
+    name: "Enterprise Search",
+    body: "Full-text search over enterprise document collections, governed per agent. Faceted, ranked, and scoped to exactly what the passport permits.",
     detail:
-      "Every query is parsed to an AST with sqlglot, not matched against a regex blocklist, so it's confirmed structurally read-only (no INSERT, UPDATE, DELETE, or DDL) and confirmed in-scope, table by table. Execution also runs over a genuinely read-only database connection underneath, so validation isn't the only thing standing between an agent and a write.",
-    tags: ["Read-only", "AST-validated", "In-scope tables only"],
+      "Powered by Apache Solr. Every query is validated for collection scope and field access before execution. Supports faceted search, BM25 relevance ranking, highlighting, and rich document formats (PDF, Word, Excel) via Tika. Running against a mock adapter by design \u2014 a real SolrCloud cluster can be swapped in without the skill\u2019s tools changing.",
+    tags: ["Faceted search", "Collection-scoped", "BM25 ranking"],
     bg: "var(--l-navy-deep)",
     fg: "var(--l-cream)",
-    icon: Database,
+    icon: Search,
   },
   {
     status: "LIVE",
