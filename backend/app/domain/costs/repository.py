@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.costs.models import CostEvent
@@ -25,9 +25,14 @@ class CostRepository:
         )
         return list(result.scalars().all())
 
-    async def get_costs_summary(self, org_id: UUID, builder_id: UUID | None = None) -> list[dict]:
+    async def get_costs_summary(
+        self,
+        org_id: UUID,
+        builder_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
+    ) -> list[dict]:
         from app.domain.agents.models import Agent
-        
+
         # Returns totals grouped by agent, model, and execution
         query = (
             select(
@@ -38,10 +43,18 @@ class CostRepository:
             )
             .where(CostEvent.org_id == org_id)
         )
-        
-        if builder_id:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(Agent.owner_id == builder_id)
-            
+
+        if builder_id or assigned_user_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id)
+            if builder_id and assigned_user_id:
+                query = query.where(
+                    or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
+                )
+            elif builder_id:
+                query = query.where(Agent.owner_id == builder_id)
+            else:
+                query = query.where(Agent.assigned_user_id == assigned_user_id)
+
         result = await self.session.execute(
             query.group_by(CostEvent.agent_id, CostEvent.model, CostEvent.execution_id)
         )
@@ -64,6 +77,7 @@ class CostRepository:
         limit: int = 50,
         offset: int = 0,
         builder_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
     ) -> list[CostEvent]:
         """Cost events for one org, newest first, optionally narrowed.
 
@@ -71,15 +85,23 @@ class CostRepository:
         by guessing an agent id.
         """
         from app.domain.agents.models import Agent
-        
+
         query = select(CostEvent).where(CostEvent.org_id == org_id)
         if agent_id is not None:
             query = query.where(CostEvent.agent_id == agent_id)
         if execution_id is not None:
             query = query.where(CostEvent.execution_id == execution_id)
-            
-        if builder_id:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(Agent.owner_id == builder_id)
+
+        if builder_id or assigned_user_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id)
+            if builder_id and assigned_user_id:
+                query = query.where(
+                    or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
+                )
+            elif builder_id:
+                query = query.where(Agent.owner_id == builder_id)
+            else:
+                query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)

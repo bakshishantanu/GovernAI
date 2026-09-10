@@ -229,7 +229,9 @@ async def test_builder_gets_scoped_cost_summary(builder_user):
     repo = AsyncMock()
     repo.get_costs_summary.return_value = []
     res = await cost_summary(user=builder_user, repo=repo)
-    repo.get_costs_summary.assert_awaited_once_with(builder_user.org_id, builder_id=builder_user.id)
+    repo.get_costs_summary.assert_awaited_once_with(
+        builder_user.org_id, builder_id=builder_user.id, assigned_user_id=builder_user.id
+    )
     assert res.data.total_cost_usd == 0.0
 
 # 10. Agent activation: Builder can activate their own agent

@@ -85,6 +85,7 @@ async def list_costs(
 ):
     """Individual cost events, newest first, scoped to the caller's org."""
     builder_id = user.id if user.is_builder else None
+    assigned_user_id = user.id if user.is_builder else None
 
     # One extra row, not a separate COUNT query: if it comes back, there is
     # a next page. CostRepository has no count method, and PaginatedMeta
@@ -97,6 +98,7 @@ async def list_costs(
         limit=limit + 1,
         offset=offset,
         builder_id=builder_id,
+        assigned_user_id=assigned_user_id,
     )
     has_more = len(events) > limit
     events = events[:limit]
@@ -117,7 +119,10 @@ async def cost_summary(
     grouped result into the shape the dashboard reads.
     """
     builder_id = user.id if user.is_builder else None
-    rows = await repo.get_costs_summary(user.org_id, builder_id=builder_id)
+    assigned_user_id = user.id if user.is_builder else None
+    rows = await repo.get_costs_summary(
+        user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
+    )
 
     total = 0.0
     by_agent: dict[str, float] = {}
