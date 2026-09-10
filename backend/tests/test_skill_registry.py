@@ -82,7 +82,7 @@ async def test_bootstrap_persists_a_specific_required_permission_per_tool():
     tools_by_name = {t.name: t for t in _added(session, ToolModel)}
     assert tools_by_name["read_ticket"].required_permission == "ticket:read"
     assert tools_by_name["search_tickets"].required_permission == "ticket:read"
-    assert tools_by_name["create_ticket_reply"].required_permission == "ticket:create"
+    assert tools_by_name["draft_ticket_reply"].required_permission == "ticket:create"
     assert (
         tools_by_name["search_solr"].required_permission
         == "solr:search:compliance_docs,solr:search:knowledge_base"
@@ -100,7 +100,7 @@ def test_get_tools_resolves_bound_skill_ids_to_their_tools():
 
     tools = registry.get_tools(["ticketing"])
 
-    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "draft_ticket_reply"}
 
 
 def test_get_tools_combines_multiple_bound_skills():
@@ -111,7 +111,7 @@ def test_get_tools_combines_multiple_bound_skills():
     assert {t.name for t in tools} == {
         "read_ticket",
         "search_tickets",
-        "create_ticket_reply",
+        "draft_ticket_reply",
         "search_solr",
         "facet_solr",
     }
@@ -124,7 +124,7 @@ def test_get_tools_skips_an_unregistered_skill_id():
 
     tools = registry.get_tools(["ticketing", "not_a_real_skill"])
 
-    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "draft_ticket_reply"}
 
 
 def test_get_tools_returns_empty_list_for_no_bound_skills():

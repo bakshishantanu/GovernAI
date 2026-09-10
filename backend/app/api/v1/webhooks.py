@@ -34,14 +34,14 @@ class JiraIssueWebhook(BaseModel):
     description: str = ""
 
 
-def _verify_webhook_secret(x_webhook_secret: str | None) -> None:
+def _verify_webhook_secret(provided: str | None) -> None:
     if not settings.JIRA_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="JIRA_WEBHOOK_SECRET is not configured on this server.",
         )
     # Constant-time comparison -- this is a bearer secret, not a public id.
-    if not x_webhook_secret or not hmac.compare_digest(x_webhook_secret, settings.JIRA_WEBHOOK_SECRET):
+    if not provided or not hmac.compare_digest(provided, settings.JIRA_WEBHOOK_SECRET):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook secret")
 
 
@@ -50,6 +50,9 @@ async def jira_issue_created(
     payload: JiraIssueWebhook,
     background_tasks: BackgroundTasks,
     x_webhook_secret: str | None = Header(default=None),
+    # Query-param alternative to the X-Webhook-Secret header, for callers that
+    # cannot reliably attach custom headers (Jira Automation drops them).
+    secret: str | None = None,
     db: AsyncSession = Depends(get_db),
     llm_service: LLMService = Depends(get_llm_service),
 ):
@@ -63,7 +66,7 @@ async def jira_issue_created(
     Routing by which Jira project maps to which org/agent is a real problem
     once there's more than one org using this, but isn't one yet.
     """
-    _verify_webhook_secret(x_webhook_secret)
+    _verify_webhook_secret(x_webhook_secret or secret)
 
     agent_repo = AgentRepository(db)
     exec_service = ExecutionService(exec_repo=ExecutionRepository(db))

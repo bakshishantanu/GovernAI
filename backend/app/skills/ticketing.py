@@ -224,28 +224,76 @@ class SearchTicketsTool(BaseTool):
         return {"results": [asdict(t) for t in results]}
 
 
-class CreateTicketReplyTool(BaseTool):
-    name = "create_ticket_reply"
-    description = "Add a reply to an existing ticket."
+def build_jira_adapter_from_settings() -> JiraTicketingAdapter | None:
+    """The Jira adapter if credentials are configured, otherwise None.
+
+    Shared by the skill registry (which gives it to the agent for reads) and
+    by the draft-approval path (which uses it to post an approved reply), so
+    both resolve the same configuration the same way.
+    """
+    from app.config import settings
+
+    if not settings.JIRA_BASE_URL:
+        return None
+    return JiraTicketingAdapter(
+        base_url=settings.JIRA_BASE_URL,
+        email=settings.JIRA_EMAIL,
+        api_token=settings.JIRA_API_TOKEN,
+        project_key=settings.JIRA_PROJECT_KEY,
+    )
+
+
+class TicketDraftStore(ABC):
+    """Where a composed reply is parked for a human to review.
+
+    Declared here rather than imported from the domain layer so the
+    dependency only ever points one way: the domain knows about skills,
+    skills do not know about the domain.
+    """
+
+    @abstractmethod
+    async def save_draft(self, ticket_id: str, body: str) -> str:
+        """Persist the draft and return its id."""
+
+
+class DraftTicketReplyTool(BaseTool):
+    name = "draft_ticket_reply"
+    description = (
+        "Compose a reply to a ticket and save it for human review. The reply is "
+        "NOT sent to the ticket or seen by the requester until a person approves "
+        "it. Use this when you have finished working out what the response should say."
+    )
     required_permission = "ticket:create"
     parameters = {
         "type": "object",
         "properties": {
-            "ticket_id": {"type": "string"},
-            "reply": {"type": "string"},
+            "ticket_id": {"type": "string", "description": "e.g. SCRUM-12"},
+            "reply": {"type": "string", "description": "The full reply text to propose."},
         },
         "required": ["ticket_id", "reply"],
     }
 
-    def __init__(self, adapter: TicketingAdapter) -> None:
-        self._adapter = adapter
+    def __init__(self, draft_store: TicketDraftStore | None) -> None:
+        self._draft_store = draft_store
 
     async def execute(self, **kwargs) -> dict:
-        try:
-            ticket = await self._adapter.add_reply(kwargs["ticket_id"], kwargs["reply"])
-        except KeyError:
-            return {"success": False, "error": "ticket_not_found", "ticket_id": kwargs["ticket_id"]}
-        return {"success": True, "ticket_id": ticket.id, "reply_count": len(ticket.replies)}
+        if self._draft_store is None:
+            # Reached when the skill is instantiated outside a run (e.g. the
+            # registry's metadata bootstrap). Reported to the model rather
+            # than raised, so a run never dies on it.
+            return {
+                "success": False,
+                "error": "drafting_unavailable",
+                "reason": "No draft store is wired up in this context.",
+            }
+        draft_id = await self._draft_store.save_draft(kwargs["ticket_id"], kwargs["reply"])
+        return {
+            "success": True,
+            "draft_id": draft_id,
+            "ticket_id": kwargs["ticket_id"],
+            "status": "PENDING_REVIEW",
+            "note": "Saved for human review. Nothing has been sent to the ticket yet.",
+        }
 
 
 class TicketingSkill(BaseSkill):
@@ -256,12 +304,17 @@ class TicketingSkill(BaseSkill):
     required_permissions = ["ticket:read", "ticket:create"]
     trust_level = TrustLevel.VERIFIED
 
-    def __init__(self, adapter: TicketingAdapter | None = None) -> None:
+    def __init__(
+        self,
+        adapter: TicketingAdapter | None = None,
+        draft_store: TicketDraftStore | None = None,
+    ) -> None:
         self._adapter = adapter or MockTicketingAdapter()
+        self._draft_store = draft_store
 
     def get_tools(self) -> list[BaseTool]:
         return [
             ReadTicketTool(self._adapter),
             SearchTicketsTool(self._adapter),
-            CreateTicketReplyTool(self._adapter),
+            DraftTicketReplyTool(self._draft_store),
         ]

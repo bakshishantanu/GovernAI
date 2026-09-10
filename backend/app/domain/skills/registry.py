@@ -4,7 +4,6 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.domain.documents.repository import DocumentRepository
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
 from app.domain.skills.repository import SkillRepository
@@ -13,7 +12,11 @@ from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.solr_search import SolrSearchSkill
-from app.skills.ticketing import JiraTicketingAdapter, TicketingSkill
+from app.skills.ticketing import (
+    TicketDraftStore,
+    TicketingSkill,
+    build_jira_adapter_from_settings,
+)
 
 
 class SkillRegistry:
@@ -22,6 +25,7 @@ class SkillRegistry:
         skill_repo: SkillRepository,
         session: AsyncSession,
         embedding_provider: EmbeddingProvider | None = None,
+        draft_store: TicketDraftStore | None = None,
     ):
         self.skill_repo = skill_repo
         self.session = session
@@ -36,21 +40,14 @@ class SkillRegistry:
 
         # Real Jira when configured (see .env.example); falls back to
         # TicketingSkill's own in-memory mock otherwise, e.g. in tests.
-        jira_adapter = None
-        if settings.JIRA_BASE_URL:
-            jira_adapter = JiraTicketingAdapter(
-                base_url=settings.JIRA_BASE_URL,
-                email=settings.JIRA_EMAIL,
-                api_token=settings.JIRA_API_TOKEN,
-                project_key=settings.JIRA_PROJECT_KEY,
-            )
+        jira_adapter = build_jira_adapter_from_settings()
 
         # In a real app, this scans all classes inheriting from BaseSkill.
         # For now, we manually register the MVP skills (FRD-05).
         self._instances = {
             skill.name: skill
             for skill in (
-                TicketingSkill(adapter=jira_adapter),
+                TicketingSkill(adapter=jira_adapter, draft_store=draft_store),
                 SolrSearchSkill(permitted_collections={"knowledge_base", "compliance_docs"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
             )
