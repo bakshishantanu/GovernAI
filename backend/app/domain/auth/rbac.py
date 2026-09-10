@@ -47,8 +47,11 @@ def _forbidden_message(allowed_roles: Iterable[str]) -> str:
 #: Admit administrators only.
 require_admin = require_role("admin")
 
-#: Admit agent builders.
-require_builder = require_role("agent_builder")
+#: Admit agent builders and users (non-admin members).
+require_builder = require_role("agent_builder", "user")
 
-#: Admit builders or administrators.
-require_builder_or_admin = require_role("agent_builder", "admin")
+#: Alias for non-admin members.
+require_user = require_role("agent_builder", "user")
+
+#: Admit builders, users, or administrators.
+require_builder_or_admin = require_role("agent_builder", "user", "admin")

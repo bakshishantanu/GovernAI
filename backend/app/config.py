@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
+    ADMIN_EMAILS: str = ""
 
     # --- LLM Providers ---
     GROQ_API_KEY: str = ""

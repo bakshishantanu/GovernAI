@@ -84,7 +84,7 @@ async def list_costs(
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Individual cost events, newest first, scoped to the caller's org."""
-    builder_id = user.id if user.role == "agent_builder" else None
+    builder_id = user.id if user.is_builder else None
 
     # One extra row, not a separate COUNT query: if it comes back, there is
     # a next page. CostRepository has no count method, and PaginatedMeta
@@ -116,7 +116,7 @@ async def cost_summary(
     The grouping is done by the database; this only pivots the already-small
     grouped result into the shape the dashboard reads.
     """
-    builder_id = user.id if user.role == "agent_builder" else None
+    builder_id = user.id if user.is_builder else None
     rows = await repo.get_costs_summary(user.org_id, builder_id=builder_id)
 
     total = 0.0

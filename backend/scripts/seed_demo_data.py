@@ -54,7 +54,7 @@ async def seed_data():
         # 0.5. Skills bootstrap
         skills_to_seed = [
             SkillModel(id="ticketing", name="ticketing", display_name="Ticketing & ITSM", description="Create and resolve tickets", version="1.0", trust_level="verified"),
-            SkillModel(id="sql_query", name="sql_query", display_name="SQL Query", description="Query internal databases", version="1.0", trust_level="verified"),
+            SkillModel(id="solr_search", name="solr_search", display_name="Enterprise Search", description="Full-text search over enterprise document collections", version="1.0", trust_level="verified"),
             SkillModel(id="document_search", name="document_search", display_name="Knowledge Search", description="RAG document search", version="1.0", trust_level="verified"),
         ]
         for sk in skills_to_seed:
@@ -111,8 +111,8 @@ async def seed_data():
             builder_id=builder_id,
             agent_id=None,
             title="Sales Analytics & Reporting Bot",
-            description="Queries internal sales SQL tables and compiles weekly revenue digests.",
-            requested_skills=["sql_query"],
+            description="Searches enterprise knowledge base and compliance docs to compile weekly digests.",
+            requested_skills=["solr_search"],
             status="CLAIMED",
             claimed_at=datetime.now(timezone.utc),
             created_at=datetime.now(timezone.utc)
@@ -131,7 +131,7 @@ async def seed_data():
             agent_id=None,
             title="Customer Support Escalation Assistant",
             description="Automated triage bot for support escalations and disputes.",
-            requested_skills=["ticketing", "sql_query"],
+            requested_skills=["ticketing", "solr_search"],
             status="FULFILLED",
             claimed_at=datetime.now(timezone.utc),
             fulfilled_at=datetime.now(timezone.utc),
@@ -171,16 +171,14 @@ async def seed_data():
         permissions = [
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:read"),
             Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:create"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:tickets"),
-            Permission(
-                id=uuid.uuid4(), passport_id=passport_id, permission="sql:read:internal_payroll"
-            ),
+            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="solr:search:knowledge_base"),
+            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="solr:search:compliance_docs"),
         ]
         session.add_all(permissions)
 
-        # AgentSkills (ticketing and sql_query)
+        # AgentSkills (ticketing and solr_search)
         session.add(AgentSkill(agent_id=agent.id, skill_id="ticketing"))
-        session.add(AgentSkill(agent_id=agent.id, skill_id="sql_query"))
+        session.add(AgentSkill(agent_id=agent.id, skill_id="solr_search"))
 
         # Agent 2: Self-initiated build by builder (no user assignment, in draft)
         agent_draft_id = uuid.uuid4()

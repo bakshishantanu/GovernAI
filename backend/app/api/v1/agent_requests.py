@@ -96,7 +96,7 @@ async def cancel_request(
     if not req or req.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Request not found")
         
-    if user.role == "agent_builder" and req.requester_id != user.id:
+    if user.is_builder and req.requester_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found")
         
     try:

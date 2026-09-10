@@ -6,14 +6,25 @@ from uuid import UUID
 import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient, PyJWKClientError
 
 from app.api.schemas.auth import CurrentUser
 from app.config import settings
+from app.domain.auth.role_rules import resolve_role
 
 security = HTTPBearer()
 
 # The literal token that unlocks the local-development bypass below.
 DEV_TOKEN = "dummy-token"
+
+DEV_TOKENS = {
+    DEV_TOKEN: ("admin", UUID("11111111-1111-1111-1111-111111111111")),
+    "dummy-token-admin": ("admin", UUID("11111111-1111-1111-1111-111111111111")),
+    "dummy-token-builder": ("agent_builder", UUID("22222222-2222-2222-2222-222222222222")),
+    "dummy-token-user": ("user", UUID("22222222-2222-2222-2222-222222222222")),
+}
+
+_jwks_client: PyJWKClient | None = None
 
 
 def dev_token_allowed() -> bool:
@@ -26,12 +37,7 @@ def dev_token_allowed() -> bool:
 
 
 def get_supabase_jwt_secret() -> str:
-    """Return the Supabase JWT signing secret.
-
-    Fails closed when it is not configured: without the real secret we cannot
-    verify a signature, and falling back to a known default would let anyone
-    forge a valid token.
-    """
+    """Return the Supabase JWT signing secret."""
     secret = os.environ.get("SUPABASE_JWT_SECRET") or settings.SUPABASE_JWT_SECRET
     if not secret:
         raise HTTPException(
@@ -39,6 +45,78 @@ def get_supabase_jwt_secret() -> str:
             detail="Authentication is not configured on this server",
         )
     return secret
+
+
+def get_jwks_client() -> PyJWKClient | None:
+    """Return a cached PyJWKClient pointing to the Supabase JWKS endpoint."""
+    global _jwks_client
+    supabase_url = os.environ.get("SUPABASE_URL") or settings.SUPABASE_URL
+    if not supabase_url:
+        return None
+    if _jwks_client is None:
+        jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url, cache_jwk_set=True, lifespan=3600)
+    return _jwks_client
+
+
+def decode_supabase_token(token: str) -> dict:
+    """Decode and verify a Supabase JWT token.
+
+    Supports:
+    - JWKS-first asymmetric verification (ES256 / RS256) for modern Supabase.
+    - HS256 symmetric verification fallback (when SUPABASE_JWT_SECRET is set).
+    """
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token header: {str(e)}")
+
+    alg = header.get("alg")
+    last_error: Exception | None = None
+
+    # 1. Asymmetric verification via JWKS (ES256 / RS256)
+    if alg in ("ES256", "RS256") or "kid" in header:
+        jwks_client = get_jwks_client()
+        if jwks_client:
+            try:
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                return jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=[alg] if alg else ["ES256", "RS256"],
+                    options={"verify_aud": False},
+                )
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=401, detail="Token has expired")
+            except (jwt.InvalidTokenError, PyJWKClientError) as e:
+                last_error = e
+            except Exception as e:
+                last_error = e
+        else:
+            last_error = Exception("JWKS client not configured (missing SUPABASE_URL)")
+
+    # 2. Symmetric verification fallback via SUPABASE_JWT_SECRET (HS256)
+    secret = os.environ.get("SUPABASE_JWT_SECRET") or settings.SUPABASE_JWT_SECRET
+    if secret:
+        try:
+            return jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Token has expired")
+        except jwt.InvalidTokenError as e:
+            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    if last_error is not None:
+        raise HTTPException(status_code=401, detail=f"Could not validate credentials: {str(last_error)}")
+
+    raise HTTPException(
+        status_code=503,
+        detail="Authentication is not configured on this server",
+    )
 
 
 async def get_current_user(
@@ -50,67 +128,41 @@ async def get_current_user(
     token = credentials.credentials
 
     # --- LOCAL DEV BYPASS (inert unless AUTH_ALLOW_DEV_TOKEN is set) ---
-    if token in (DEV_TOKEN, "dummy-token-admin", "dummy-token-builder"):
+    if token in DEV_TOKENS:
         if not dev_token_allowed():
             raise HTTPException(status_code=401, detail="Invalid token")
-        dev_role = "admin"
-        user_id = UUID("11111111-1111-1111-1111-111111111111")
-        if token == "dummy-token-builder":
-            dev_role = "agent_builder"
-            user_id = UUID("22222222-2222-2222-2222-222222222222")
+        dev_role, user_id = DEV_TOKENS[token]
         return CurrentUser(
             id=user_id,
             org_id=UUID("00000000-0000-0000-0000-000000000000"),
             role=dev_role,  # type: ignore[arg-type]
+            email="dev@governai.local",
         )
 
-    secret = get_supabase_jwt_secret()
+    payload = decode_supabase_token(token)
+
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        raise HTTPException(status_code=401, detail="Invalid token: missing subject")
 
     try:
-        # Decode the JWT token using the Supabase JWT secret
-        # Supabase uses HS256 by default.
-        # audience is usually "authenticated"
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},  # Adjust based on exact Supabase config
-        )
-
-        # Extract user identity from the subject claim
-        user_id_str = payload.get("sub")
-        if not user_id_str:
-            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
-
         user_id = UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token: malformed subject UUID")
 
-        # Extract role and org_id from app_metadata (as specified in FRD)
-        app_metadata = payload.get("app_metadata", {})
-        
-        # Default to "agent_builder" if not specified
-        role = app_metadata.get("role", "agent_builder")
-        # Migrate legacy "user" role to "agent_builder" and reject unknown roles
-        if role == "user":
-            role = "agent_builder"
-        elif role not in ("admin", "agent_builder"):
-            role = "agent_builder"
+    email = payload.get("email")
+    app_metadata = payload.get("app_metadata", {})
+    raw_role = app_metadata.get("role")
 
-        # Default org_id for MVP (single tenant)
-        org_id_str = app_metadata.get("org_id")
-        # If org_id is not yet embedded in the JWT by Supabase triggers,
-        # we provide a fallback dummy UUID for local development/MVP to avoid crashing.
-        if org_id_str:
+    role = resolve_role(email, raw_role)
+
+    org_id_str = app_metadata.get("org_id")
+    if org_id_str:
+        try:
             org_id = UUID(org_id_str)
-        else:
+        except ValueError:
             org_id = UUID("00000000-0000-0000-0000-000000000000")
+    else:
+        org_id = UUID("00000000-0000-0000-0000-000000000000")
 
-        return CurrentUser(id=user_id, org_id=org_id, role=role)
-
-    except HTTPException:
-        raise
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Could not validate credentials: {str(e)}")
+    return CurrentUser(id=user_id, org_id=org_id, role=role, email=email)

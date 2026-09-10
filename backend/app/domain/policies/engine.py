@@ -59,8 +59,10 @@ class PolicyEngine:
                     if not rule.enabled:
                         continue
 
-                    # Evaluate SQL Blocklist Rule
-                    if rule.rule_type == "sql_blocklist" and tool_name == "sql_query":
+                    # Evaluate Solr Query Blocklist Rule
+                    if rule.rule_type == "solr_query_blocklist" and tool_name in (
+                        "search_solr", "facet_solr"
+                    ):
                         blocked_keywords = rule.config.get("keywords", [])
                         query = tool_args.get("query", "")
                         for keyword in blocked_keywords:

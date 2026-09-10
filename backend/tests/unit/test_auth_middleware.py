@@ -66,7 +66,7 @@ async def test_missing_sub_rejects(configured_secret):
 
 
 @pytest.mark.asyncio
-async def test_legacy_user_role_mapped_to_agent_builder(configured_secret):
+async def test_user_role_preserved_and_has_builder_permissions(configured_secret):
     user_id = str(uuid4())
     org_id = str(uuid4())
     payload = {"sub": user_id, "app_metadata": {"role": "user", "org_id": org_id}}
@@ -75,7 +75,8 @@ async def test_legacy_user_role_mapped_to_agent_builder(configured_secret):
     user = await get_current_user(creds(token))
 
     assert str(user.id) == user_id
-    assert user.role == "agent_builder"
+    assert user.role == "user"
+    assert user.is_builder is True
 
 
 @pytest.mark.asyncio
@@ -133,3 +134,65 @@ def test_missing_secret_fails_closed(monkeypatch):
         get_supabase_jwt_secret()
 
     assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_admin_email_allowlist_promotes_to_admin(configured_secret, monkeypatch):
+    """Users whose email matches ADMIN_EMAILS are resolved as admin even with builder metadata."""
+    monkeypatch.setenv("ADMIN_EMAILS", "boss@governai.com, admin@deloitte.com")
+    user_id = str(uuid4())
+    payload = {
+        "sub": user_id,
+        "email": "Boss@GovernAI.com",
+        "app_metadata": {"role": "agent_builder"},
+    }
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.role == "admin"
+    assert user.is_admin is True
+    assert user.email == "Boss@GovernAI.com"
+
+
+@pytest.mark.asyncio
+async def test_dummy_token_user_grants_user_role(dev_bypass_on):
+    """dummy-token-user grants role='user' with non-admin builder permissions."""
+    user = await get_current_user(creds("dummy-token-user"))
+
+    assert user.role == "user"
+    assert user.is_builder is True
+    assert user.is_admin is False
+
+
+@pytest.mark.asyncio
+async def test_jwks_asymmetric_token_decoding(monkeypatch):
+    """Verify ES256/RS256 tokens decoded via JWKS signing key without requiring secret."""
+    from unittest.mock import MagicMock
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    # Generate a throwaway RSA private key for testing asymmetric signing
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+
+    user_id = str(uuid4())
+    payload = {"sub": user_id, "email": "engineer@company.com", "app_metadata": {"role": "agent_builder"}}
+    token = jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": "test-key-id"})
+
+    mock_jwks_client = MagicMock()
+    mock_signing_key = MagicMock()
+    mock_signing_key.key = public_key
+    mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+    monkeypatch.setattr("app.domain.auth.middleware.get_jwks_client", lambda: mock_jwks_client)
+    # Ensure SUPABASE_JWT_SECRET is unset to guarantee asymmetric path was used
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    monkeypatch.setattr("app.domain.auth.middleware.settings.SUPABASE_JWT_SECRET", "", raising=False)
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.role == "agent_builder"
+    assert user.email == "engineer@company.com"
+

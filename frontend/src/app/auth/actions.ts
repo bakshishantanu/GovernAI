@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,7 +43,7 @@ export async function signup(formData: FormData) {
     options: {
       data: {
         full_name: fullName || "Team Member",
-        role: "user",
+        role: "agent_builder",
       },
     },
   });
@@ -53,6 +54,31 @@ export async function signup(formData: FormData) {
 
   revalidatePath("/", "layout");
   return { success: "Account created! Please check your email to confirm or log in directly." };
+}
+
+export async function signInWithOAuth(provider: "google" | "github") {
+  const headerList = await headers();
+  const origin =
+    headerList.get("origin") ||
+    (headerList.get("host") ? `http://${headerList.get("host")}` : "http://localhost:3000");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${origin}/auth/callback?next=/`,
+    },
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (data?.url) {
+    return { url: data.url };
+  }
+
+  return { error: "Failed to generate authorization URL." };
 }
 
 export async function logout() {
