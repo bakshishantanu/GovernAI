@@ -19,6 +19,7 @@ export type Skill = {
 export const SKILL_ACCENT: Record<string, { fg: string; bg: string; ring: string }> = {
   ticketing: { fg: "var(--l-teal)", bg: "var(--l-teal)", ring: "var(--l-teal)" },
   document_search: { fg: "var(--l-orange-deep)", bg: "var(--l-orange)", ring: "var(--l-orange)" },
+  solr_search: { fg: "var(--l-navy-deep)", bg: "var(--l-navy-deep)", ring: "var(--l-navy-deep)" },
   sql_query: { fg: "var(--l-yellow-deep)", bg: "var(--l-yellow-deep)", ring: "var(--l-yellow-deep)" },
 };
 
