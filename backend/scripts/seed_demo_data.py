@@ -308,7 +308,11 @@ async def seed_data():
                 org_id=org_id,
                 agent_id=agent.id,
                 execution_id=exec_id,
-                event_type="llm_inference",
+                # "LLM_CALL", matching costs/service.py and the API's
+                # Literal["LLM_CALL","TOOL_CALL"]. 'llm_inference' only survived
+                # because api/v1/costs.py translates it on the way out; the
+                # stored value was still wrong.
+                event_type="LLM_CALL",
                 model="gpt-4o",
                 prompt_tokens=150,
                 completion_tokens=50,
