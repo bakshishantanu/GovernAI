@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot, FileSearch, Database, Ticket } from "lucide-react";
+import { Bot, FileSearch, Database, Ticket, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { money, type Agent, type Budget } from "../../_components/agent-types";
 
 const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
   document_search: FileSearch,
+  solr_search: Search,
   sql_query: Database,
 };
 

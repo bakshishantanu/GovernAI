@@ -26,10 +26,10 @@ const FALLBACK_SKILLS: Skill[] = [
     trust_level: "verified"
   },
   {
-    id: "sql_query",
-    name: "sql_query",
-    display_name: "SQL Data Query",
-    description: "Read and aggregate analytics from internal databases with strict query validation.",
+    id: "solr_search",
+    name: "solr_search",
+    display_name: "Enterprise Search",
+    description: "Full-text search over enterprise document collections, governed per agent.",
     trust_level: "verified"
   },
   {
