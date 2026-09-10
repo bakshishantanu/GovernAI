@@ -156,7 +156,7 @@ export default function ExecutionsPage() {
                     {getStatusBadge(exec.status)}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
-                    {formatDate(exec.created_at)}
+                    {formatDate(exec.started_at)}
                   </TableCell>
                 </TableRow>
               ))}

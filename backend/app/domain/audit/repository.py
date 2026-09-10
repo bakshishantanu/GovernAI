@@ -22,13 +22,27 @@ class AuditRepository:
         cursor: UUID | None = None,
         builder_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
+        execution_id: UUID | None = None,
     ) -> list[AuditEvent]:
         from app.domain.agents.models import Agent
         from sqlalchemy import or_
-        
+
         query = select(AuditEvent).where(AuditEvent.org_id == org_id)
-        
-        if builder_id or assigned_user_id:
+
+        # Narrowing to one run: the caller (the execution timeline endpoint)
+        # has already authorized access to this specific execution, so this
+        # deliberately does *not* also apply the ownership OR-filter below — a
+        # user allowed to view their own run's timeline sees every governance
+        # event on it, not only the ones they personally triggered.
+        #
+        # Because of that, this parameter must stay internal: it is reachable
+        # only through a route that authorizes the execution first. Exposing it
+        # as a query param on the public /audits route would let any org member
+        # read another user's run by guessing an id.
+        if execution_id is not None:
+            query = query.where(AuditEvent.execution_id == execution_id)
+
+        elif builder_id or assigned_user_id:
             query = query.outerjoin(Agent, AuditEvent.agent_id == Agent.id)
             conditions = []
             if builder_id:
