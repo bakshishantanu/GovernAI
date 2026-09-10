@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -43,6 +44,9 @@ def _draft(agent_id, status="PENDING_REVIEW") -> TicketDraft:
         ticket_id="SCRUM-1",
         body="Proposed reply.",
         status=status,
+        # Set explicitly: the column default only fires on flush, and these
+        # drafts never reach a session.
+        created_at=datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc),
     )
 
 
@@ -171,6 +175,33 @@ async def test_approve_commits_only_after_the_reply_is_posted():
 
     service.approve.assert_awaited_once()
     db.commit.assert_awaited_once()
+
+
+def test_response_resolves_agent_name_and_ticket_link():
+    """Saves the console a join and a lookup it has no way to do."""
+    from app.api.schemas.ticket_draft import TicketDraftResponse
+
+    draft = _draft(uuid.uuid4())
+    draft.agent = _agent(uuid.uuid4())
+    draft.agent.name = "Triage Bot"
+
+    out = TicketDraftResponse.from_draft(
+        draft, ticket_base_url="https://example.atlassian.net/"
+    )
+
+    assert out.agent_name == "Triage Bot"
+    # Trailing slash on the configured base must not double up.
+    assert out.ticket_url == "https://example.atlassian.net/browse/SCRUM-1"
+
+
+def test_response_survives_missing_agent_and_unconfigured_ticketing():
+    """Neither is worth failing a whole list request over."""
+    from app.api.schemas.ticket_draft import TicketDraftResponse
+
+    out = TicketDraftResponse.from_draft(_draft(uuid.uuid4()), ticket_base_url="")
+
+    assert out.agent_name is None
+    assert out.ticket_url is None
 
 
 @pytest.mark.asyncio

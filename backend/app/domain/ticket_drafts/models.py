@@ -3,11 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, ForeignKey, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.database import Base
+
+if TYPE_CHECKING:
+    # Same arrangement as agents/models.py: the name is resolved through
+    # SQLAlchemy's registry at mapper-configuration time, so the import is
+    # only here to keep linters and type checkers informed.
+    from app.domain.agents.models import Agent
 
 
 class TicketDraft(Base):
@@ -45,3 +53,7 @@ class TicketDraft(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
+
+    #: Eager by default: every read of a draft is on its way to a reviewer who
+    #: needs the agent's name, and implicit lazy loads raise under asyncio.
+    agent: Mapped["Agent"] = relationship("Agent", lazy="selectin")

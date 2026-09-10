@@ -10,6 +10,7 @@ from app.api.deps import get_agent_service, get_db, get_ticket_draft_service
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.ticket_draft import TicketDraftReject, TicketDraftResponse
+from app.config import settings
 from app.domain.agents.service import AgentService
 from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_builder_or_admin
@@ -21,6 +22,10 @@ from app.domain.ticket_drafts.service import (
 )
 
 router = APIRouter(prefix="/ticket-drafts", tags=["Ticket Drafts"])
+
+
+def _to_response(draft) -> TicketDraftResponse:
+    return TicketDraftResponse.from_draft(draft, ticket_base_url=settings.JIRA_BASE_URL)
 
 
 async def _visible_agent_ids(user: CurrentUser, agent_service: AgentService) -> list[UUID] | None:
@@ -55,7 +60,7 @@ async def list_ticket_drafts(
     drafts = await service.list_drafts(
         user.org_id, status=draft_status or None, agent_ids=agent_ids
     )
-    return Envelope(data=drafts)
+    return Envelope(data=[_to_response(d) for d in drafts])
 
 
 @router.post("/{draft_id}/approve", response_model=Envelope[TicketDraftResponse])
@@ -87,7 +92,7 @@ async def approve_ticket_draft(
     # Committed only once the reply actually reached the ticket, so a failed
     # post leaves the draft pending rather than marked POSTED.
     await db.commit()
-    return Envelope(data=draft)
+    return Envelope(data=_to_response(draft))
 
 
 @router.post("/{draft_id}/reject", response_model=Envelope[TicketDraftResponse])
@@ -115,7 +120,7 @@ async def reject_ticket_draft(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
     await db.commit()
-    return Envelope(data=draft)
+    return Envelope(data=_to_response(draft))
 
 
 async def _assert_may_review(
