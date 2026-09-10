@@ -23,6 +23,8 @@ from app.domain.policies.engine import PolicyEngine
 from app.domain.policies.repository import PolicyRepository
 from app.domain.skills.registry import SkillRegistry
 from app.domain.skills.repository import SkillRepository
+from app.domain.ticket_drafts.repository import TicketDraftRepository
+from app.domain.ticket_drafts.service import TicketDraftService
 from app.infrastructure.database import get_db
 from app.infrastructure.event_bus import event_bus
 from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
@@ -30,6 +32,7 @@ from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from app.skills.ticketing import build_jira_adapter_from_settings
 
 
 class MockFallbackProvider(LLMProvider):
@@ -88,6 +91,15 @@ async def get_execution_service(db: AsyncSession = Depends(get_db)) -> Execution
 async def get_agent_request_service(db: AsyncSession = Depends(get_db)) -> AgentRequestService:
     repo = AgentRequestRepository(db)
     return AgentRequestService(request_repo=repo, event_bus=event_bus)
+
+
+async def get_ticket_draft_service(db: AsyncSession = Depends(get_db)) -> TicketDraftService:
+    # The adapter is only needed on approval, when a draft is actually posted.
+    # None when Jira is unconfigured, which the service reports as 503 rather
+    # than silently dropping the reply.
+    return TicketDraftService(
+        repo=TicketDraftRepository(db), adapter=build_jira_adapter_from_settings()
+    )
 
 
 async def get_policy_engine(db: AsyncSession = Depends(get_db)) -> PolicyEngine:

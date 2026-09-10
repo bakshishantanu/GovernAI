@@ -20,6 +20,7 @@ type AgentBudget = { agent_id: string; spend_usd: number; cap_usd: number };
 const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
   document_search: FileSearch,
+  solr_search: Search,
   sql_query: Database,
 };
 

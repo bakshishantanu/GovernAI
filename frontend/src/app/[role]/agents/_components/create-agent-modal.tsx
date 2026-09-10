@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Bot, FileSearch, Database, Ticket, ShieldCheck, ShieldX } from "lucide-react";
+import { X, Bot, FileSearch, Database, Ticket, ShieldCheck, ShieldX, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, fetchApi, type ApiViolation } from "@/lib/api-client";
 
 const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
   document_search: FileSearch,
+  solr_search: Search,
   sql_query: Database,
 };
 

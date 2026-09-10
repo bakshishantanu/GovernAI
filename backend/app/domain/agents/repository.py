@@ -30,27 +30,15 @@ class AgentRepository:
         offset: int = 0,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
-        visible_to_user_id: UUID | None = None,
     ) -> list[Agent]:
         query = self._with_relations().where(Agent.org_id == org_id)
-        # `visible_to_user_id` is OR, not AND, with itself against both
-        # columns: since the agent_builder/user merge, one non-admin person
-        # can be the owner of some agents and only the assignee of others, so
-        # "mine" now means either column matching them, not both narrowing
-        # the same query. `owner_id`/`assigned_user_id` stay as separate,
-        # independent AND-style filters for any caller that genuinely wants
-        # one column only (e.g. "every agent this specific person owns,
-        # regardless of who it's assigned to").
-        if visible_to_user_id is not None:
+        if owner_id and assigned_user_id:
             query = query.where(
-                or_(
-                    Agent.owner_id == visible_to_user_id,
-                    Agent.assigned_user_id == visible_to_user_id,
-                )
+                or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
             )
-        if owner_id:
+        elif owner_id:
             query = query.where(Agent.owner_id == owner_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         result = await self.session.execute(
@@ -63,19 +51,15 @@ class AgentRepository:
         org_id: UUID,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
-        visible_to_user_id: UUID | None = None,
     ) -> int:
         query = select(func.count(Agent.id)).where(Agent.org_id == org_id)
-        if visible_to_user_id is not None:
+        if owner_id and assigned_user_id:
             query = query.where(
-                or_(
-                    Agent.owner_id == visible_to_user_id,
-                    Agent.assigned_user_id == visible_to_user_id,
-                )
+                or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
             )
-        if owner_id:
+        elif owner_id:
             query = query.where(Agent.owner_id == owner_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         result = await self.session.execute(query)
@@ -115,3 +99,18 @@ class AgentRepository:
             select(AgentSkill.skill_id).where(AgentSkill.agent_id == agent_id)
         )
         return list(result.scalars().all())
+
+    async def list_active_agents_with_skill(self, skill_id: str) -> list[Agent]:
+        """Every ACTIVE agent, across every org, with the given skill bound.
+
+        Used by event-driven triggers (e.g. the Jira webhook) that have no
+        org context of their own to scope by -- unlike a normal HTTP request,
+        which always knows its org from the caller's JWT.
+        """
+        result = await self.session.execute(
+            self._with_relations()
+            .join(AgentSkill, AgentSkill.agent_id == Agent.id)
+            .join(AgentPassport, AgentPassport.agent_id == Agent.id)
+            .where(AgentSkill.skill_id == skill_id, AgentPassport.lifecycle_state == "ACTIVE")
+        )
+        return list(result.scalars().unique().all())

@@ -99,7 +99,8 @@ async def list_costs(
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Individual cost events, newest first, scoped to the caller's org."""
-    visible_to_user_id = None if user.role == "admin" else user.id
+    builder_id = user.id if user.is_builder else None
+    assigned_user_id = user.id if user.is_builder else None
 
     # One extra row, not a separate COUNT query: if it comes back, there is
     # a next page. CostRepository has no count method, and PaginatedMeta
@@ -111,7 +112,8 @@ async def list_costs(
         execution_id=execution_id,
         limit=limit + 1,
         offset=offset,
-        visible_to_user_id=visible_to_user_id,
+        builder_id=builder_id,
+        assigned_user_id=assigned_user_id,
     )
     has_more = len(events) > limit
     events = events[:limit]
@@ -136,9 +138,13 @@ async def cost_summary(
     than a separate aggregation path, since the shape of the answer never
     changes, only how far back it looks.
     """
-    visible_to_user_id = None if user.role == "admin" else user.id
+    builder_id = user.id if user.is_builder else None
+    assigned_user_id = user.id if user.is_builder else None
     rows = await repo.get_costs_summary(
-        user.org_id, visible_to_user_id=visible_to_user_id, since=_since_for(window)
+        user.org_id,
+        builder_id=builder_id,
+        assigned_user_id=assigned_user_id,
+        since=_since_for(window),
     )
 
     total = 0.0

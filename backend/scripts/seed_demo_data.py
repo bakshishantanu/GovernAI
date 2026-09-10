@@ -19,7 +19,8 @@ from app.domain.skills.models import SkillPermission
 from app.domain.skills.registry import SkillRegistry
 from app.domain.skills.repository import SkillRepository
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False)
+connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
+engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -45,9 +46,9 @@ async def seed_data():
         org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
         admin_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
         builder_id = uuid.UUID("22222222-2222-2222-2222-222222222222")
-        user_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
+        builder2_id = uuid.UUID("33333333-3333-3333-3333-333333333333")
 
-        # 0. Organization & Profiles (3 roles: admin, agent_builder, user)
+        # 0. Organization & Profiles (2 roles: admin, agent_builder)
         res = await session.execute(select(Organization).where(Organization.id == org_id))
         org = res.scalar_one_or_none()
         if not org:
@@ -57,7 +58,7 @@ async def seed_data():
         profiles_data = [
             (admin_id, "admin"),
             (builder_id, "agent_builder"),
-            (user_id, "user"),
+            (builder2_id, "agent_builder"),
         ]
         for pid, role in profiles_data:
             p_res = await session.execute(select(Profile).where(Profile.id == pid))
@@ -105,42 +106,39 @@ async def seed_data():
         session.add(policy_rule)
 
         # 2. Agent Requests
-        # Request 1: PENDING (User requested, awaiting builder claim)
+        # Request 1: PENDING (Builder2 requested, awaiting builder claim)
         req_pending_id = uuid.uuid4()
-        session.add(
-            AgentRequest(
-                id=req_pending_id,
-                org_id=org_id,
-                requester_id=user_id,
-                builder_id=None,
-                agent_id=None,
-                title="Customer IT Onboarding Agent",
-                description="Automates provisioning IT access and issuing initial support tickets.",
-                requested_skills=["ticketing"],
-                status="PENDING",
-                created_at=datetime.now(timezone.utc),
-            )
-        )
+        session.add(AgentRequest(
+            id=req_pending_id,
+            org_id=org_id,
+            requester_id=builder2_id,
+            builder_id=None,
+            agent_id=None,
+            title="Customer IT Onboarding Agent",
+            description="Automates provisioning IT access and issuing initial support tickets.",
+            requested_skills=["ticketing"],
+            status="PENDING",
+            created_at=datetime.now(timezone.utc)
+        ))
 
         # Request 2: CLAIMED (Builder claimed, in development)
         req_claimed_id = uuid.uuid4()
-        session.add(
-            AgentRequest(
-                id=req_claimed_id,
-                org_id=org_id,
-                requester_id=user_id,
-                builder_id=builder_id,
-                agent_id=None,
-                title="Sales Analytics & Reporting Bot",
-                description=(
-                    "Queries internal sales SQL tables and compiles weekly revenue digests."
-                ),
-                requested_skills=["sql_query"],
-                status="CLAIMED",
-                claimed_at=datetime.now(timezone.utc),
-                created_at=datetime.now(timezone.utc),
-            )
-        )
+        session.add(AgentRequest(
+            id=req_claimed_id,
+            org_id=org_id,
+            requester_id=builder2_id,
+            builder_id=builder_id,
+            agent_id=None,
+            title="Sales Analytics & Reporting Bot",
+            description=(
+                "Searches enterprise knowledge base and compliance docs to compile "
+                "weekly digests."
+            ),
+            requested_skills=["solr_search"],
+            status="CLAIMED",
+            claimed_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc)
+        ))
 
         # 3. Agents & Linked Requests
         req_fulfilled_id = uuid.uuid4()
@@ -150,12 +148,12 @@ async def seed_data():
         req_fulfilled = AgentRequest(
             id=req_fulfilled_id,
             org_id=org_id,
-            requester_id=user_id,
+            requester_id=builder2_id,
             builder_id=builder_id,
             agent_id=None,
             title="Customer Support Escalation Assistant",
             description="Automated triage bot for support escalations and disputes.",
-            requested_skills=["ticketing", "sql_query"],
+            requested_skills=["ticketing", "solr_search"],
             status="FULFILLED",
             claimed_at=datetime.now(timezone.utc),
             fulfilled_at=datetime.now(timezone.utc),
@@ -169,7 +167,7 @@ async def seed_data():
             id=agent_id,
             org_id=org_id,
             owner_id=builder_id,
-            assigned_user_id=user_id,
+            assigned_user_id=builder2_id,
             request_id=req_fulfilled_id,
             name="Support Escalation Bot",
             description="Reads tickets and queries payroll to resolve customer disputes.",
@@ -186,17 +184,17 @@ async def seed_data():
         passport = AgentPassport(
             id=passport_id,
             agent_id=agent.id,
-            compliance_status="COMPLIANT",
+            compliance_status="PASSED",
             lifecycle_state="ACTIVE",
             permissions=[],
         )
         session.add(passport)
 
-        # AgentSkills (ticketing and sql_query)
+        # AgentSkills (ticketing and solr_search)
         session.add(AgentSkill(agent_id=agent.id, skill_id="ticketing"))
-        session.add(AgentSkill(agent_id=agent.id, skill_id="sql_query"))
+        session.add(AgentSkill(agent_id=agent.id, skill_id="solr_search"))
 
-        await derive_permissions(session, passport_id, ["ticketing", "sql_query"])
+        await derive_permissions(session, passport_id, ["ticketing", "solr_search"])
 
         # Agent 2: Self-initiated build by builder (no user assignment, in draft)
         agent_draft_id = uuid.uuid4()
@@ -330,7 +328,7 @@ async def seed_data():
         )
 
         await session.commit()
-        print("Demo seed data for Three-Role Model successfully generated!")
+        print("Demo seed data for Two-Role Model successfully generated!")
 
 
 if __name__ == "__main__":

@@ -102,10 +102,15 @@ async def stream_global_events(
     async def refresh_scope() -> None:
         if role == "admin":
             return
-        # OR, not owner-only: a user watches agents they built and agents
-        # handed to them, since a merged user can be either or both.
+        # Passing both owner_id and assigned_user_id together already ORs
+        # them (see repository.list_agents_by_org) -- a merged agent_builder
+        # watches agents they built and agents handed to them, since they
+        # can be either or both.
         agents = await agent_repo.list_agents_by_org(
-            current_user.org_id, limit=200, visible_to_user_id=current_user.id
+            current_user.org_id,
+            limit=200,
+            owner_id=current_user.id,
+            assigned_user_id=current_user.id,
         )
         allowed_agent_ids.clear()
         allowed_agent_ids.update(str(agent.id) for agent in agents)

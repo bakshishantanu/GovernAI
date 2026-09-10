@@ -1,98 +1,83 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { login, signup } from "../auth/actions";
+import { login, signup, signInWithOAuth } from "../auth/actions";
 import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { PASSWORD_REQUIREMENTS, isPasswordValid } from "@/lib/password-policy";
-import { createClient } from "@/lib/supabase/client";
 
-// lucide-react dropped brand icons (Github included) from this major version
-// — inlined here rather than pulling in a whole extra icon package for one glyph.
-function GithubIcon({ className }: { className?: string }) {
+function GoogleIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.09 3.29 9.4 7.86 10.93.58.1.79-.25.79-.56 0-.27-.01-1.16-.02-2.11-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 2.87-.39c.97.01 1.95.13 2.87.39 2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.73.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5z" />
-    </svg>
-  );
-}
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
       <path
-        fill="#FFC107"
-        d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
       />
       <path
-        fill="#FF3D00"
-        d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
       />
       <path
-        fill="#4CAF50"
-        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
       />
       <path
-        fill="#1976D2"
-        d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
       />
     </svg>
   );
 }
 
-export default function LoginPage() {
+function GithubIcon() {
+  return (
+    <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+      />
+    </svg>
+  );
+}
+
+function LoginForm() {
   const [isLogin, setIsLogin] = useState(true);
-  const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [oauthPending, setOauthPending] = useState<"google" | "github" | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
+  const [password, setPassword] = useState("");
 
-  const handleOAuth = async (provider: "google" | "github") => {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setOauthPending(provider);
-
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        // Lands on the existing PKCE-exchange route, which already redirects
-        // into the app on success — same landing spot a password login uses.
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    // A successful call navigates the browser away to the provider's consent
-    // screen itself; we only ever reach this line on a real failure (e.g.
-    // the provider isn't enabled on the Supabase project yet).
-    if (error) {
-      setErrorMessage(error.message);
-      setOauthPending(null);
-    }
-  };
-
-  // Only the signup form gates on this — logging in checks a password
-  // against what an account already has, it never re-validates its shape.
+  // Signing in must never be gated on the policy: existing accounts predate it,
+  // and locking someone out of their own account to enforce a rule about *new*
+  // passwords would be a worse bug than the one this prevents.
   const passwordOk = isLogin || isPasswordValid(password);
+  const [isPending, startTransition] = useTransition();
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "auth_callback_failed") {
+      setErrorMessage("Authentication failed or was cancelled. Please try again.");
+    } else if (error) {
+      setErrorMessage(`Authentication error: ${error}`);
+    }
+  }, [searchParams]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!isLogin && !passwordOk) {
-      setErrorMessage("Password does not meet the requirements below.");
-      return;
-    }
-
-    // Captured now, not read later: React nulls a pooled SyntheticEvent's
-    // fields once the handler that received it returns, and this handler
-    // returns immediately (startTransition's callback runs after an await).
-    // Reading `e.currentTarget` after that await crashed with "Cannot read
-    // properties of null" on a real successful signup — the plain element
-    // reference below survives the await instead.
+    // Captured now, not read later: React nulls the SyntheticEvent's
+    // `currentTarget` once the handler that received it returns, and this
+    // handler returns immediately — startTransition's callback runs after an
+    // await. Reading `e.currentTarget` in there crashed with "Cannot read
+    // properties of null (reading 'reset')" on a real successful signup. The
+    // plain element reference survives the await instead.
     const form = e.currentTarget;
     const formData = new FormData(form);
 
@@ -109,11 +94,31 @@ export default function LoginPage() {
         } else if (res?.success) {
           setSuccessMessage(res.success);
           form.reset();
+          // form.reset() clears the DOM input, but `password` is controlled —
+          // without this the checklist stays populated under an empty field.
           setPassword("");
         }
       }
     });
   };
+
+  const handleOAuth = (provider: "google" | "github") => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setOauthLoading(provider);
+
+    startTransition(async () => {
+      const res = await signInWithOAuth(provider);
+      if (res?.error) {
+        setErrorMessage(res.error);
+        setOauthLoading(null);
+      } else if (res?.url) {
+        window.location.href = res.url;
+      }
+    });
+  };
+
+  const isAnyLoading = isPending || oauthLoading !== null;
 
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center bg-[var(--l-yellow)] text-[var(--l-ink)] p-4 overflow-hidden">
@@ -204,6 +209,9 @@ export default function LoginPage() {
                 required
               />
 
+              {/* Only while signing up, and only once they've started typing —
+                  a checklist of unmet rules on an empty field reads as five
+                  errors before anyone has done anything wrong. */}
               <AnimatePresence>
                 {!isLogin && password.length > 0 && (
                   <motion.ul
@@ -237,7 +245,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isPending || !passwordOk}
+              disabled={isAnyLoading || !passwordOk}
               className="group w-full mt-2 inline-flex items-center justify-center gap-2 py-2.5 bg-[var(--l-orange)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full text-sm shadow-[0_5px_0_0_var(--l-orange-deep)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_0_var(--l-orange-deep)] transition-transform"
             >
               {isPending ? "Please wait..." : isLogin ? "Sign in" : "Sign up"}
@@ -247,40 +255,58 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="flex items-center gap-3 mt-5">
-            <div className="h-px flex-1 bg-[var(--l-line)]" />
-            <span className="text-xs text-[var(--l-charcoal)]/45">or continue with</span>
-            <div className="h-px flex-1 bg-[var(--l-line)]" />
+          {/* Social OAuth Divider */}
+          <div className="relative my-6 text-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--l-line)]" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-3 text-[var(--l-charcoal)]/45 font-medium tracking-wider">
+                or continue with
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mt-4">
+          {/* Social OAuth Buttons */}
+          <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => handleOAuth("google")}
-              disabled={isPending || oauthPending !== null}
-              className="inline-flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[var(--l-line)] bg-[var(--l-cream)] text-sm font-medium text-[var(--l-charcoal)] hover:bg-[var(--l-cream-deep)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={isAnyLoading}
+              className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--l-cream)] hover:bg-[#ede9de] border border-[var(--l-line)] rounded-2xl text-xs font-semibold text-[var(--l-charcoal)] transition-all hover:shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <GoogleIcon className="w-4 h-4" />
-              {oauthPending === "google" ? "Redirecting..." : "Google"}
+              {oauthLoading === "google" ? (
+                <span className="inline-block w-4 h-4 border-2 border-[var(--l-charcoal)]/30 border-t-[var(--l-charcoal)] rounded-full animate-spin" />
+              ) : (
+                <GoogleIcon />
+              )}
+              <span>Google</span>
             </button>
+
             <button
               type="button"
               onClick={() => handleOAuth("github")}
-              disabled={isPending || oauthPending !== null}
-              className="inline-flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[var(--l-line)] bg-[var(--l-cream)] text-sm font-medium text-[var(--l-charcoal)] hover:bg-[var(--l-cream-deep)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={isAnyLoading}
+              className="flex items-center justify-center gap-2 py-2.5 px-4 bg-[var(--l-cream)] hover:bg-[#ede9de] border border-[var(--l-line)] rounded-2xl text-xs font-semibold text-[var(--l-charcoal)] transition-all hover:shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <GithubIcon className="w-4 h-4" />
-              {oauthPending === "github" ? "Redirecting..." : "GitHub"}
+              {oauthLoading === "github" ? (
+                <span className="inline-block w-4 h-4 border-2 border-[var(--l-charcoal)]/30 border-t-[var(--l-charcoal)] rounded-full animate-spin" />
+              ) : (
+                <GithubIcon />
+              )}
+              <span>GitHub</span>
             </button>
           </div>
 
-          <div className="text-center text-sm mt-5">
+          <div className="text-center text-sm mt-6">
             <button
               type="button"
               onClick={() => {
                 setIsLogin(!isLogin);
                 setErrorMessage(null);
                 setSuccessMessage(null);
+                // Switching modes must not carry a half-typed password into a
+                // context where it is suddenly judged against different rules.
                 setPassword("");
               }}
               className="text-[var(--l-charcoal)]/55 hover:text-[var(--l-orange)] transition-colors"
@@ -297,5 +323,13 @@ export default function LoginPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

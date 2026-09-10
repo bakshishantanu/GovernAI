@@ -30,7 +30,7 @@ class CostRepository:
         org_id: UUID,
         builder_id: UUID | None = None,
         since: datetime | None = None,
-        visible_to_user_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
     ) -> list[dict]:
         from app.domain.agents.models import Agent
 
@@ -45,19 +45,19 @@ class CostRepository:
         if since is not None:
             query = query.where(CostEvent.timestamp >= since)
 
-        # OR, not owner-only: a user now sees spend for agents they own OR
-        # are assigned (agent_builder's Costs access merged into user).
-        if visible_to_user_id is not None:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
-                or_(
-                    Agent.owner_id == visible_to_user_id,
-                    Agent.assigned_user_id == visible_to_user_id,
+        # OR, not owner-only: a non-admin sees spend for agents they own OR
+        # are assigned (agent_builder's Costs access merged into user). Callers
+        # pass their own id as both, which lands on the first branch below.
+        if builder_id or assigned_user_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id)
+            if builder_id and assigned_user_id:
+                query = query.where(
+                    or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
                 )
-            )
-        elif builder_id:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
-                Agent.owner_id == builder_id
-            )
+            elif builder_id:
+                query = query.where(Agent.owner_id == builder_id)
+            else:
+                query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         result = await self.session.execute(
             query.group_by(CostEvent.agent_id, CostEvent.model, CostEvent.execution_id)
@@ -81,7 +81,7 @@ class CostRepository:
         limit: int = 50,
         offset: int = 0,
         builder_id: UUID | None = None,
-        visible_to_user_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
     ) -> list[CostEvent]:
         """Cost events for one org, newest first, optionally narrowed.
 
@@ -96,17 +96,16 @@ class CostRepository:
         if execution_id is not None:
             query = query.where(CostEvent.execution_id == execution_id)
 
-        if visible_to_user_id is not None:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
-                or_(
-                    Agent.owner_id == visible_to_user_id,
-                    Agent.assigned_user_id == visible_to_user_id,
+        if builder_id or assigned_user_id:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id)
+            if builder_id and assigned_user_id:
+                query = query.where(
+                    or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
                 )
-            )
-        elif builder_id:
-            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
-                Agent.owner_id == builder_id
-            )
+            elif builder_id:
+                query = query.where(Agent.owner_id == builder_id)
+            else:
+                query = query.where(Agent.assigned_user_id == assigned_user_id)
 
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)

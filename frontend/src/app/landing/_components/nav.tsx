@@ -38,14 +38,22 @@ export function LandingNav() {
           GovernAI
         </a>
 
-        <nav className="hidden md:flex items-center gap-2 rounded-full bg-[var(--l-cream)]/80 backdrop-blur px-2 py-2 shadow-sm">
-          {LINKS.map((l) => (
+        <nav className="hidden md:flex items-center gap-3">
+          {LINKS.map((l, i) => (
             <a
               key={l.href}
               href={l.href}
-              className="text-sm font-medium px-4 py-2 rounded-full text-[var(--l-ink)]/75 hover:bg-[var(--l-yellow-pale)] hover:text-[var(--l-ink)] transition-colors"
+              className={`group relative overflow-hidden text-sm font-medium px-5 py-2.5 rounded-full backdrop-blur shadow-sm text-[var(--l-ink)]/80 transition-colors duration-300 hover:text-[var(--l-ink)] ${
+                i % 2 === 0
+                  ? "bg-[var(--l-cream)]/45 hover:bg-[var(--l-yellow-pale)]/90"
+                  : "bg-[var(--l-yellow-pale)]/50 hover:bg-[var(--l-yellow)]/85"
+              }`}
             >
-              {l.label}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full"
+              />
+              <span className="relative">{l.label}</span>
             </a>
           ))}
         </nav>

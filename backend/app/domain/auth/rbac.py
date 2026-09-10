@@ -1,13 +1,11 @@
 """Role-based access control for API routes.
 
-FRD-01 defines two roles and what each may do:
+Two roles exist:
 
-- ``admin``  — full CRUD on agents, skills and policies; kill switch; all audit logs.
-- ``member`` — create and view their own agents and their own audit logs.
-
-``CurrentUser`` has carried a ``role`` since auth was built, but until now no route
-read it, so a member could perform every admin action. These dependencies are the
-enforcement point.
+- ``admin``  — full CRUD on agents, skills and policies; kill switch; all audit
+  and cost logs. Admin accounts are provisioned exclusively through a CLI command.
+- ``agent_builder`` — create, build, request, claim, execute and monitor agents.
+  This is the default role for all self-registering users.
 """
 
 from __future__ import annotations
@@ -46,8 +44,7 @@ def _forbidden_message(allowed_roles: Iterable[str]) -> str:
     return f"This action requires the {roles} role"
 
 
-#: Admit administrators only. Use on anything that changes governance itself —
-#: activating an agent, editing policy, or stopping a run.
+#: Admit administrators only.
 require_admin = require_role("admin")
 
 #: Admit regular users.

@@ -34,6 +34,9 @@ from app.domain.policies.engine import PolicyEngine
 from app.domain.policies.repository import PolicyRepository
 from app.domain.skills.registry import SkillRegistry
 from app.domain.skills.repository import SkillRepository
+from app.domain.ticket_drafts.repository import TicketDraftRepository
+from app.domain.ticket_drafts.service import TicketDraftService
+from app.domain.ticket_drafts.store import ExecutionScopedDraftStore
 from app.infrastructure.database import async_session_factory
 from app.infrastructure.event_bus import event_bus
 from app.runtime.agent_graph import run_agent
@@ -91,6 +94,16 @@ async def run_execution(
                 else None
             )
 
+            # Replies the agent composes land here for a human to review.
+            # Bound to this run so the drafting tool, which only ever sees the
+            # model's own arguments, still records who produced the draft.
+            draft_store = ExecutionScopedDraftStore(
+                TicketDraftService(repo=TicketDraftRepository(session)),
+                org_id=org_id,
+                agent_id=agent_id,
+                execution_id=execution_id,
+            )
+
             tools = await load_agent_tools(
                 agent_id=agent_id,
                 agent_repo=agent_repo,
@@ -98,6 +111,7 @@ async def run_execution(
                     skill_repo=SkillRepository(session),
                     session=session,
                     embedding_provider=embedding_provider,
+                    draft_store=draft_store,
                 ),
             )
 

@@ -57,7 +57,7 @@ async def test_missing_permission_blocked(policy_engine, mock_agent_repo, mock_p
     mock_perm_repo.get_permissions_for_passport.return_value = [mock_perm]
 
     decision = await policy_engine.evaluate(
-        agent_id=uuid.uuid4(), tool_name="sql_query", tool_args={}, required_permission="db:read"
+        agent_id=uuid.uuid4(), tool_name="search_solr", tool_args={}, required_permission="db:read"
     )
 
     assert decision.allowed is False
@@ -79,15 +79,15 @@ async def test_destructive_sql_policy_blocked(
 
     # Setup: The database has a rule blocking "DROP"
     rule = PolicyRule(
-        rule_type="sql_blocklist", enabled=True, config={"keywords": ["DROP", "DELETE"]}
+        rule_type="solr_query_blocklist", enabled=True, config={"keywords": ["DROP", "DELETE"]}
     )
-    policy = Policy(name="Safe SQL", enabled=True, rules=[rule])
+    policy = Policy(name="Safe Search", enabled=True, rules=[rule])
     mock_policy_repo.get_active_policies_for_org.return_value = [policy]
 
-    # Act: Agent attempts to run a DROP TABLE command
+    # Act: Agent attempts to run a DROP command
     decision = await policy_engine.evaluate(
         agent_id=uuid.uuid4(),
-        tool_name="sql_query",
+        tool_name="search_solr",
         tool_args={"query": "DROP TABLE users;"},
         required_permission="db:read",
     )
@@ -110,15 +110,15 @@ async def test_valid_action_allowed(
     mock_perm.permission = "db:read"
     mock_perm_repo.get_permissions_for_passport.return_value = [mock_perm]
 
-    rule = PolicyRule(rule_type="sql_blocklist", enabled=True, config={"keywords": ["DROP"]})
-    policy = Policy(name="Safe SQL", enabled=True, rules=[rule])
+    rule = PolicyRule(rule_type="solr_query_blocklist", enabled=True, config={"keywords": ["DROP"]})
+    policy = Policy(name="Safe Search", enabled=True, rules=[rule])
     mock_policy_repo.get_active_policies_for_org.return_value = [policy]
 
     # Act: Safe query
     decision = await policy_engine.evaluate(
         agent_id=uuid.uuid4(),
-        tool_name="sql_query",
-        tool_args={"query": "SELECT * FROM tickets;"},
+        tool_name="search_solr",
+        tool_args={"query": "password reset procedure"},
         required_permission="db:read",
     )
 

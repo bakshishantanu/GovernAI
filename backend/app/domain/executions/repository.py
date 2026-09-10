@@ -28,7 +28,6 @@ class ExecutionRepository:
         org_id: UUID,
         builder_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
-        visible_to_user_id: UUID | None = None,
     ) -> list[Execution]:
         from app.domain.agents.models import Agent
 
@@ -39,18 +38,15 @@ class ExecutionRepository:
             .where(Execution.org_id == org_id)
         )
         # OR, not AND-via-two-elifs: a merged user can be the owner of some
-        # agents and only the assignee of others, and must see executions
-        # for both. See the identical note on agents/repository.py.
-        if visible_to_user_id is not None:
+        # agents and only the assignee of others, and must see executions for
+        # both. Callers pass their own id as both parameters, landing here.
+        if builder_id and assigned_user_id:
             stmt = stmt.where(
-                or_(
-                    Agent.owner_id == visible_to_user_id,
-                    Agent.assigned_user_id == visible_to_user_id,
-                )
+                or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
             )
-        if builder_id:
+        elif builder_id:
             stmt = stmt.where(Agent.owner_id == builder_id)
-        if assigned_user_id:
+        elif assigned_user_id:
             stmt = stmt.where(Agent.assigned_user_id == assigned_user_id)
 
         stmt = stmt.order_by(Execution.started_at.desc())

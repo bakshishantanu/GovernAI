@@ -15,9 +15,9 @@ from app.api.deps import (
     get_llm_service,
 )
 from app.api.execution_runner import run_execution
+from app.api.schemas.audit import AuditEventResponse
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.audit import AuditEventResponse
 from app.api.schemas.cost import CostEventResponse
 from app.api.schemas.execution import ExecutionCreate, ExecutionResponse, ExecutionTimelineResponse
 from app.api.sse import SSE_HEADERS, format_sse
@@ -35,7 +35,11 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 #: Mirrors `api/v1/costs.py`'s own `_EVENT_TYPE_ALIASES` -- kept local rather
 #: than imported across routers for a two-line dict; both read the same
 #: `CostEvent.event_type` values and must stay in agreement if either changes.
-_COST_EVENT_TYPE_ALIASES = {"llm_inference": "LLM_CALL", "llm_call": "LLM_CALL", "tool_call": "TOOL_CALL"}
+_COST_EVENT_TYPE_ALIASES = {
+    "llm_inference": "LLM_CALL",
+    "llm_call": "LLM_CALL",
+    "tool_call": "TOOL_CALL",
+}
 
 
 def _cost_event_to_response(event) -> CostEventResponse:
@@ -153,10 +157,11 @@ async def list_executions(
     List all execution runs for the current user's organization (newest first).
     Role-scoped filtering applies based on the user's role.
     """
-    visible_to_user_id = None if current_user.role == "admin" else current_user.id
+    builder_id = current_user.id if current_user.is_builder else None
+    assigned_user_id = current_user.id if current_user.is_builder else None
 
     executions = await exec_service.list_executions_for_org(
-        current_user.org_id, visible_to_user_id=visible_to_user_id
+        current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
     )
     return Envelope(data=executions)
 

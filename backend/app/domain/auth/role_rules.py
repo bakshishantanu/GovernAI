@@ -10,6 +10,8 @@ who can ever sign in as admin, full stop.
 
 from __future__ import annotations
 
+import os
+
 from app.config import settings
 
 Role = str  # "admin" | "agent_builder" — see api/schemas/auth.py
@@ -17,6 +19,22 @@ Role = str  # "admin" | "agent_builder" — see api/schemas/auth.py
 
 def _parse_email_list(raw: str) -> frozenset[str]:
     return frozenset(email.strip().lower() for email in raw.split(",") if email.strip())
+
+
+def get_admin_emails() -> frozenset[str]:
+    """The configured admin allowlist, lowercased.
+
+    The process environment wins over the settings default so a deployment can
+    change the allowlist without a rebuild.
+    """
+    return _parse_email_list(os.environ.get("ADMIN_EMAILS") or settings.ADMIN_EMAILS or "")
+
+
+def is_admin_email(email: str | None) -> bool:
+    """Whether this email address is on the admin allowlist."""
+    if not email:
+        return False
+    return email.strip().lower() in get_admin_emails()
 
 
 def resolve_role_by_email(email: str | None, *, admin_emails: str) -> Role:
@@ -40,4 +58,19 @@ def resolve_role_by_email(email: str | None, *, admin_emails: str) -> Role:
 
 def role_for_email(email: str | None) -> Role:
     """Convenience wrapper reading the admin list from the running config."""
-    return resolve_role_by_email(email, admin_emails=settings.ADMIN_EMAILS)
+    if is_admin_email(email):
+        return "admin"
+    return "agent_builder"
+
+
+def resolve_role(email: str | None, raw_role: str | None = None) -> Role:
+    """Kept for the call sites that pass the token's own role claim.
+
+    `raw_role` is deliberately **ignored**. It used to be able to promote:
+    a token whose `app_metadata.role` said "admin" became an admin. That is
+    exactly the gap this module closes, since that claim is hand-set config
+    that nothing keeps in sync with who someone actually is. The parameter
+    stays so existing callers keep working, and so that deleting it is a
+    separate, reviewable change rather than a silent signature break.
+    """
+    return role_for_email(email)

@@ -51,6 +51,19 @@ def standard_user(org_id):
     return CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
 
 
+#: Two roles now, so "the non-admin" has one meaning. Both names below are
+#: that same person: `standard_user` is what this file called them, and
+#: `assigned_builder` / `builder_user` are the names main's own tests use.
+@pytest.fixture
+def assigned_builder(standard_user):
+    return standard_user
+
+
+@pytest.fixture
+def builder_user(standard_user):
+    return standard_user
+
+
 def make_agent(
     agent_id, org_id, owner_id, assigned_user_id=None, status="ACTIVE", lifecycle="ACTIVE"
 ):
@@ -120,39 +133,43 @@ async def test_user_cannot_access_someone_elses_owned_agent(standard_user):
     agent_service.agent_repo.get_agent.return_value = agent
 
     with pytest.raises(HTTPException) as exc:
-        await get_agent(agent_id=agent_id, service=agent_service, user=standard_user, db=make_db())
+        await get_agent(
+            agent_id=agent_id, service=agent_service, user=standard_user, db=make_db()
+        )
 
     assert exc.value.status_code == 404
 
 
 # 3. User cannot access unassigned agent (404)
 @pytest.mark.asyncio
-async def test_user_cannot_access_unassigned_agent(standard_user):
+async def test_builder_cannot_access_unrelated_agent(assigned_builder):
     agent_id = uuid.uuid4()
-    agent = make_agent(agent_id, standard_user.org_id, uuid.uuid4(), assigned_user_id=None)
+    agent = make_agent(agent_id, assigned_builder.org_id, uuid.uuid4(), assigned_user_id=None)
 
     agent_service = AsyncMock()
     agent_service.agent_repo.get_agent.return_value = agent
 
     with pytest.raises(HTTPException) as exc:
-        await get_agent(agent_id=agent_id, service=agent_service, user=standard_user, db=make_db())
+        await get_agent(
+            agent_id=agent_id, service=agent_service, user=assigned_builder, db=make_db()
+        )
 
     assert exc.value.status_code == 404
 
 
 # 4. User CAN access assigned agent (200)
 @pytest.mark.asyncio
-async def test_user_can_access_assigned_agent(standard_user):
+async def test_builder_can_access_assigned_agent(assigned_builder):
     agent_id = uuid.uuid4()
     agent = make_agent(
-        agent_id, standard_user.org_id, uuid.uuid4(), assigned_user_id=standard_user.id
+        agent_id, assigned_builder.org_id, uuid.uuid4(), assigned_user_id=assigned_builder.id
     )
 
     agent_service = AsyncMock()
     agent_service.agent_repo.get_agent.return_value = agent
 
     res = await get_agent(
-        agent_id=agent_id, service=agent_service, user=standard_user, db=make_db()
+        agent_id=agent_id, service=agent_service, user=assigned_builder, db=make_db()
     )
     assert res.data.id == agent_id
 
@@ -197,6 +214,103 @@ async def test_user_can_list_policies(standard_user):
     res = await list_policies(current_user=standard_user, repo=repo)
     assert res.data == []
 
+# 6. Request creation: Builder CAN create agent requests (merged permission)
+@pytest.mark.asyncio
+async def test_builder_can_create_agent_request(builder_user):
+    from app.api.schemas.agent_requests import AgentRequestCreate
+    from app.api.v1.agent_requests import create_request
+    from app.domain.agent_requests.models import AgentRequest
+
+    service = AsyncMock()
+    req_id = uuid.uuid4()
+    service.create_request.return_value = AgentRequest(
+        id=req_id,
+        org_id=builder_user.org_id,
+        requester_id=builder_user.id,
+        title="New Request",
+        description="Desc",
+        requested_skills=[],
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    payload = AgentRequestCreate(title="New Request", description="Desc", requested_skills=[])
+    res = await create_request(request=payload, service=service, user=builder_user)
+    assert res.id == req_id
+    assert res.requester_id == builder_user.id
+
+# 7. Listing agents: Builder sees own + assigned agents (OR filter)
+@pytest.mark.asyncio
+async def test_builder_sees_own_and_assigned_agents(builder_user):
+    from app.api.v1.agents import list_agents
+
+    service = AsyncMock()
+    service.agent_repo.list_agents_by_org.return_value = []
+    service.agent_repo.count_agents_by_org.return_value = 0
+    db = AsyncMock()
+
+    await list_agents(user=builder_user, service=service, db=db, limit=50, offset=0)
+    service.agent_repo.list_agents_by_org.assert_awaited_once_with(
+        builder_user.org_id,
+        limit=50,
+        offset=0,
+        owner_id=builder_user.id,
+        assigned_user_id=builder_user.id,
+    )
+    service.agent_repo.count_agents_by_org.assert_awaited_once_with(
+        builder_user.org_id,
+        owner_id=builder_user.id,
+        assigned_user_id=builder_user.id,
+    )
+
+# 8. Execution access: Builder can execute assigned agent even if not owner
+@pytest.mark.asyncio
+async def test_builder_can_execute_assigned_agent(assigned_builder):
+    from fastapi import BackgroundTasks
+
+    from app.api.schemas.execution import ExecutionCreate
+    from app.api.v1.executions import create_and_run_execution
+    from app.domain.executions.models import Execution
+
+    agent_id = uuid.uuid4()
+    other_owner = uuid.uuid4()
+    agent = make_agent(
+        agent_id,
+        assigned_builder.org_id,
+        other_owner,
+        assigned_user_id=assigned_builder.id,
+        status="ACTIVE",
+        lifecycle="ACTIVE",
+    )
+
+    agent_service = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = agent
+
+    exec_service = AsyncMock()
+    mock_exec = Execution(
+        id=uuid.uuid4(),
+        agent_id=agent_id,
+        org_id=assigned_builder.org_id,
+        goal="Do work",
+        status="RUNNING",
+    )
+    exec_service.create_execution.return_value = mock_exec
+
+    db = AsyncMock()
+    llm_service = AsyncMock()
+    bg_tasks = BackgroundTasks()
+
+    payload = ExecutionCreate(agent_id=agent_id, goal="Do work")
+    res = await create_and_run_execution(
+        payload=payload,
+        background_tasks=bg_tasks,
+        current_user=assigned_builder,
+        db=db,
+        agent_service=agent_service,
+        exec_service=exec_service,
+        llm_service=llm_service,
+    )
+    assert res.data.id == mock_exec.id
 
 # 7. Cost access: a user CAN list costs now (agent_builder's access merged
 # in, per the confirmed decision to widen this) — scoped to their own agents.
@@ -206,7 +320,10 @@ async def test_user_gets_scoped_cost_summary(standard_user):
     repo.get_costs_summary.return_value = []
     res = await cost_summary(user=standard_user, window="all", repo=repo)
     repo.get_costs_summary.assert_awaited_once_with(
-        standard_user.org_id, visible_to_user_id=standard_user.id, since=None
+        standard_user.org_id,
+        builder_id=standard_user.id,
+        assigned_user_id=standard_user.id,
+        since=None,
     )
     assert res.data.total_cost_usd == 0.0
 
@@ -217,7 +334,7 @@ async def test_admin_gets_unscoped_cost_summary(admin_user):
     repo.get_costs_summary.return_value = []
     res = await cost_summary(user=admin_user, window="all", repo=repo)
     repo.get_costs_summary.assert_awaited_once_with(
-        admin_user.org_id, visible_to_user_id=None, since=None
+        admin_user.org_id, builder_id=None, assigned_user_id=None, since=None
     )
     assert res.data.total_cost_usd == 0.0
 

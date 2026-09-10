@@ -28,6 +28,7 @@ EXPECTED_PATHS = {
     "/api/v1/executions/{execution_id}/stream",
     "/api/v1/costs/",
     "/api/v1/costs/summary",
+    "/api/v1/events/stream",
     "/api/v1/policies/{policy_id}",
     "/api/v1/policies/{policy_id}/rules",
     "/api/v1/policies/{policy_id}/rules/{rule_id}",

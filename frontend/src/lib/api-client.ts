@@ -31,24 +31,15 @@ function devToken(): string {
 }
 
 /**
- * Bug found and fixed 2026-09-08 while wiring the app shell to the live
- * backend. `supabase.auth.getSession()` against the placeholder host is not
- * simply slow — it is genuinely nondeterministic: confirmed live, sometimes
- * it settles in under a second, sometimes it is still pending 8+ seconds
- * later on an otherwise-identical fresh page load. A timeout race around it
- * was tried first and made the symptom intermittent rather than fixing it —
- * a `Promise.race` only stops *waiting*, it does not stop whatever the SDK
- * is doing to the shared GoTrueClient/localStorage lock underneath, so the
- * next call could still be starved by it. The `session?.access_token`
- * fallback to `dummy-token` was therefore unreachable in practice: sidebar,
- * header, and every future screen built on fetchApi() would randomly hang
- * rather than showing real seeded data.
- *
- * The actual fix is to never call the SDK at all when there is nothing for
- * it to do — with no configured Supabase project, there is no session to
- * fetch, so `SUPABASE_CONFIGURED` short-circuits straight to the intended
- * dev fallback. This is deterministic (no network call, no SDK involved)
- * and changes nothing once real NEXT_PUBLIC_SUPABASE_* values are set.
+ * Note on why this never calls the Supabase SDK when no project is
+ * configured (found and fixed 2026-09-08): `supabase.auth.getSession()`
+ * against a placeholder host is nondeterministic — sometimes under a second,
+ * sometimes still pending 8+ seconds later. A `Promise.race` timeout only
+ * stops *waiting*; it does not stop the SDK holding the shared
+ * GoTrueClient/localStorage lock, so the next call could still be starved.
+ * `SUPABASE_CONFIGURED` short-circuits straight to the dev fallback instead,
+ * which is deterministic and changes nothing once real
+ * NEXT_PUBLIC_SUPABASE_* values are set.
  */
 export async function getAuthHeader(): Promise<string> {
   if (!SUPABASE_CONFIGURED) return `Bearer ${devToken()}`

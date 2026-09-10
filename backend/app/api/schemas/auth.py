@@ -18,3 +18,14 @@ class CurrentUser(BaseModel):
     #: falls back to the role name in that case rather than showing "None".
     email: str | None = None
     full_name: str | None = None
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
+    @property
+    def is_builder(self) -> bool:
+        #: "user" used to be admitted here too, while both names were valid
+        #: aliases during the transition. Two roles only now (D-057), and
+        #: `Role` no longer accepts "user", so this is the whole set.
+        return self.role == "agent_builder"

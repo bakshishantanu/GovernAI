@@ -28,10 +28,10 @@ async def test_bootstrap_registers_all_three_mvp_skills_independently():
     await registry.bootstrap()
 
     checked_ids = [call.args[0] for call in skill_repo.get_skill.call_args_list]
-    assert checked_ids == ["ticketing", "sql_query", "document_search"]
+    assert checked_ids == ["ticketing", "solr_search", "document_search"]
 
     added_ids = {s.id for s in _added(session, SkillModel)}
-    assert added_ids == {"ticketing", "sql_query", "document_search"}
+    assert added_ids == ["ticketing", "solr_search", "document_search"] or added_ids == {"ticketing", "solr_search", "document_search"}
 
 
 async def test_bootstrap_skips_only_the_skill_that_already_exists():
@@ -47,7 +47,7 @@ async def test_bootstrap_skips_only_the_skill_that_already_exists():
 
     added_ids = {s.id for s in _added(session, SkillModel)}
     assert "ticketing" not in added_ids
-    assert added_ids == {"sql_query", "document_search"}
+    assert added_ids == {"solr_search", "document_search"}
 
 
 async def test_bootstrap_persists_skill_level_permissions():
@@ -63,7 +63,8 @@ async def test_bootstrap_persists_skill_level_permissions():
     added_permissions = {p.permission for p in _added(session, SkillPermission)}
     assert "ticket:read" in added_permissions
     assert "ticket:create" in added_permissions
-    assert "sql:read:tickets" in added_permissions
+    assert "solr:search:compliance_docs" in added_permissions
+    assert "solr:search:knowledge_base" in added_permissions
     assert "docs:search:public" in added_permissions
 
 
@@ -81,10 +82,14 @@ async def test_bootstrap_persists_a_specific_required_permission_per_tool():
     tools_by_name = {t.name: t for t in _added(session, ToolModel)}
     assert tools_by_name["read_ticket"].required_permission == "ticket:read"
     assert tools_by_name["search_tickets"].required_permission == "ticket:read"
-    assert tools_by_name["create_ticket_reply"].required_permission == "ticket:create"
+    assert tools_by_name["draft_ticket_reply"].required_permission == "ticket:create"
     assert (
-        tools_by_name["run_sql_query"].required_permission
-        == "sql:read:internal_payroll,sql:read:tickets"
+        tools_by_name["search_solr"].required_permission
+        == "solr:search:compliance_docs,solr:search:knowledge_base"
+    )
+    assert (
+        tools_by_name["facet_solr"].required_permission
+        == "solr:search:compliance_docs,solr:search:knowledge_base"
     )
     assert tools_by_name["search_documents"].required_permission == "docs:search:public"
     assert tools_by_name["get_document"].required_permission == "docs:search:public"
@@ -95,19 +100,20 @@ def test_get_tools_resolves_bound_skill_ids_to_their_tools():
 
     tools = registry.get_tools(["ticketing"])
 
-    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "draft_ticket_reply"}
 
 
 def test_get_tools_combines_multiple_bound_skills():
     registry = SkillRegistry(AsyncMock(), _mock_session())
 
-    tools = registry.get_tools(["ticketing", "sql_query"])
+    tools = registry.get_tools(["ticketing", "solr_search"])
 
     assert {t.name for t in tools} == {
         "read_ticket",
         "search_tickets",
-        "create_ticket_reply",
-        "run_sql_query",
+        "draft_ticket_reply",
+        "search_solr",
+        "facet_solr",
     }
 
 
@@ -118,7 +124,7 @@ def test_get_tools_skips_an_unregistered_skill_id():
 
     tools = registry.get_tools(["ticketing", "not_a_real_skill"])
 
-    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "create_ticket_reply"}
+    assert {t.name for t in tools} == {"read_ticket", "search_tickets", "draft_ticket_reply"}
 
 
 def test_get_tools_returns_empty_list_for_no_bound_skills():

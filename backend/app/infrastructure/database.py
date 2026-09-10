@@ -11,12 +11,16 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     pool_size=5,
     max_overflow=10,
+    connect_args=connect_args,
 )
+
 
 async_session_factory = async_sessionmaker(
     engine,

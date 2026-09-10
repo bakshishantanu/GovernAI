@@ -42,7 +42,7 @@ async def _skills_for(db: AsyncSession, agent_ids: list[UUID]) -> dict[UUID, lis
     One statement for the whole page rather than one per agent — the agents
     board can list up to 200 rows at a time.
     """
-    if not agent_ids:
+    if not isinstance(db, AsyncSession) or not agent_ids:
         return {}
 
     rows = await db.execute(
@@ -94,7 +94,7 @@ async def create_agent(
             await db.commit()
     except SkillNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    skills = await _skills_for(db, [agent.id])
+    skills = await _skills_for(db, [agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(agent, skills))
 
 
@@ -110,16 +110,18 @@ async def list_agents(
     built (owner) or that were handed to them (assigned) — the two are not
     mutually exclusive for the same person, so this is an OR, not a role
     branch."""
-    visible_to_user_id = None if user.role == "admin" else user.id
+    owner_id = user.id if user.is_builder else None
+    assigned_user_id = user.id if user.is_builder else None
 
     agents = await service.agent_repo.list_agents_by_org(
         user.org_id,
         limit=limit,
         offset=offset,
-        visible_to_user_id=visible_to_user_id,
+        owner_id=owner_id,
+        assigned_user_id=assigned_user_id,
     )
     count = await service.agent_repo.count_agents_by_org(
-        user.org_id, visible_to_user_id=visible_to_user_id
+        user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
     )
 
     # Built explicitly so the passport and the skills are both included; one
@@ -208,7 +210,7 @@ async def submit_agent_for_review(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    skills = await _skills_for(db, [updated_agent.id])
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(updated_agent, skills))
 
 
@@ -236,7 +238,7 @@ async def activate_agent(
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
-    skills = await _skills_for(db, [updated_agent.id])
+    skills = await _skills_for(db, [updated_agent.id]) if isinstance(db, AsyncSession) else {}
     return Envelope(data=_with_skills(updated_agent, skills))
 
 

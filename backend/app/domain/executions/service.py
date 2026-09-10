@@ -34,10 +34,9 @@ class ExecutionService:
         org_id: UUID,
         builder_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
-        visible_to_user_id: UUID | None = None,
     ) -> list[Execution]:
         return await self.exec_repo.list_executions_for_org(
-            org_id, builder_id, assigned_user_id, visible_to_user_id=visible_to_user_id
+            org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
         )
 
     async def list_executions_for_agent(self, agent_id: UUID) -> list[Execution]:

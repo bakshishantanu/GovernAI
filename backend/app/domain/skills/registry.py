@@ -11,8 +11,12 @@ from app.runtime.rag.embeddings import EmbeddingProvider
 from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
-from app.skills.sql_query import SqlQuerySkill
-from app.skills.ticketing import TicketingSkill
+from app.skills.solr_search import SolrSearchSkill
+from app.skills.ticketing import (
+    TicketDraftStore,
+    TicketingSkill,
+    build_jira_adapter_from_settings,
+)
 
 
 class SkillRegistry:
@@ -21,6 +25,7 @@ class SkillRegistry:
         skill_repo: SkillRepository,
         session: AsyncSession,
         embedding_provider: EmbeddingProvider | None = None,
+        draft_store: TicketDraftStore | None = None,
     ):
         self.skill_repo = skill_repo
         self.session = session
@@ -33,13 +38,17 @@ class SkillRegistry:
                 repo=DocumentRepository(session), embedding_provider=embedding_provider
             )
 
+        # Real Jira when configured (see .env.example); falls back to
+        # TicketingSkill's own in-memory mock otherwise, e.g. in tests.
+        jira_adapter = build_jira_adapter_from_settings()
+
         # In a real app, this scans all classes inheriting from BaseSkill.
         # For now, we manually register the MVP skills (FRD-05).
         self._instances = {
             skill.name: skill
             for skill in (
-                TicketingSkill(),
-                SqlQuerySkill(permitted_tables={"tickets", "internal_payroll"}),
+                TicketingSkill(adapter=jira_adapter, draft_store=draft_store),
+                SolrSearchSkill(permitted_collections={"knowledge_base", "compliance_docs"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
             )
         }

@@ -1,3 +1,6 @@
+> [!WARNING]
+> **ARCHIVED** — This skill has been superseded by the **Enterprise Search** skill (`specs/002-solr-search/`). This spec is preserved for historical reference. The SQL Query skill was removed from the codebase and replaced with an Apache Solr-based enterprise search implementation.
+
 # Feature Specification: SQL Query Skill
 
 **Feature Branch**: `001-sql-query-safety`

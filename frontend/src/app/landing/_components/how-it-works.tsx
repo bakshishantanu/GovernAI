@@ -139,7 +139,7 @@ function StepVisual({ step }: { step: number }) {
       <div>
         <Icon className="w-7 h-7 text-[var(--l-orange-soft)]" />
         <div className="mt-6 grid grid-cols-2 gap-2.5">
-          {["Ticketing", "Doc search", "SQL query", "+ Skill"].map((s) => (
+          {["Ticketing", "Doc search", "Enterprise Search", "+ Skill"].map((s) => (
             <div
               key={s}
               className="rounded-lg border border-[var(--l-line-dark)] bg-white/[0.04] px-3 py-3 text-xs font-mono text-[var(--l-cream)]/70"

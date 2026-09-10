@@ -127,6 +127,16 @@ html:has(.landing) {
   }
 }
 
+/* Keep the page scrollable but hide the browser's default scrollbar,
+   scoped to landing routes only — the console app keeps its normal one. */
+html:has(.landing) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html:has(.landing)::-webkit-scrollbar {
+  display: none;
+}
+
 .landing-hide-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;

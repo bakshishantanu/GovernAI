@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
+    ADMIN_EMAILS: str = ""
 
     # --- Role assignment ---
     # Comma-separated email addresses. Role is decided by which list a signed-in
@@ -26,6 +27,19 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     LLM_PRIMARY_MODEL: str = "openai/gpt-oss-20b"
     LLM_FALLBACK_MODEL: str = "gemini-2.5-flash"
+
+    # --- Ticketing skill: Jira ---
+    # Left blank, the Ticketing skill falls back to its in-memory mock
+    # adapter (see SkillRegistry) so local dev/tests never need real
+    # Jira credentials.
+    JIRA_BASE_URL: str = ""
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_PROJECT_KEY: str = ""
+    # Shared secret Jira Automation sends back as a header, checked by the
+    # webhook receiver below so the endpoint can't be triggered by anyone
+    # who happens to find its URL.
+    JIRA_WEBHOOK_SECRET: str = ""
 
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"

@@ -1,10 +1,11 @@
 """forbidden_permission_pairs, and backfill agent permissions from skills
 
 Revision ID: d7c3a1f0be21
-Revises: acbf56ba6efa
+Revises: 71eb28d10245
 Create Date: 2026-09-09
 
-Two halves of the same fix (D-043).
+Two halves of the same fix (D-043, from a separate compliance-rules branch
+that never made it onto `main`).
 
 1. `forbidden_permission_pairs` is FRD-03 rule 4 as *data*. No source document
    defines what a forbidden combination is — it is a project decision, and one
@@ -20,6 +21,10 @@ Two halves of the same fix (D-043).
 Deliberately, the backfill does **not** re-check or demote anything already
 ACTIVE. Granting an agent the permissions it was always meant to have is a
 repair; silently suspending running agents from inside a migration is not.
+
+Required for this to run without error: `domain/permissions/repository.py`
+actively SELECTs from `ForbiddenPermissionPair` at runtime — without this
+table, that query 500s the moment it's hit, not just a missing feature.
 """
 
 from typing import Sequence, Union
@@ -29,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d7c3a1f0be21"
-down_revision: Union[str, Sequence[str], None] = "acbf56ba6efa"
+down_revision: Union[str, Sequence[str], None] = "71eb28d10245"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

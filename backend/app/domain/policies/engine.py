@@ -72,7 +72,12 @@ class PolicyEngine:
                     rule_type = (rule.rule_type or "").strip().lower()
 
                     if rule_type == "sql_blocklist" and tool_name == "sql_query":
-                        denial = self._check_sql_blocklist(policy, rule, tool_args)
+                        denial = self._check_query_blocklist(policy, rule, tool_args)
+                    elif rule_type == "solr_query_blocklist" and tool_name in (
+                        "search_solr",
+                        "facet_solr",
+                    ):
+                        denial = self._check_query_blocklist(policy, rule, tool_args)
                     elif rule_type == "deny_list":
                         denial = self._check_deny_list(policy, rule, tool_name, tool_args)
                     elif rule_type == "rate_limit":
@@ -96,8 +101,14 @@ class PolicyEngine:
     # is one method plus one branch rather than another nested block.
 
     @staticmethod
-    def _check_sql_blocklist(policy, rule, tool_args: dict[str, Any]) -> PolicyDecision | None:
-        """Deny a SQL query containing a blocked keyword."""
+    def _check_query_blocklist(policy, rule, tool_args: dict[str, Any]) -> PolicyDecision | None:
+        """Deny a query containing a blocked keyword.
+
+        Shared by `sql_blocklist` and `solr_query_blocklist`: both rule types
+        ask the identical question of the identical `query` argument, only of
+        a different tool, so they run one check rather than two copies that
+        could drift apart.
+        """
         query = tool_args.get("query", "")
         for keyword in rule.config.get("keywords", []):
             # Word boundaries, case-insensitive: "dropped" is not "DROP".
