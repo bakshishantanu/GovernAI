@@ -95,6 +95,8 @@ function LoginForm() {
       if (res?.error) {
         setErrorMessage(res.error);
         setOauthLoading(null);
+      } else if (res?.url) {
+        window.location.href = res.url;
       }
     });
   };

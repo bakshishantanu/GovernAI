@@ -75,8 +75,10 @@ export async function signInWithOAuth(provider: "google" | "github") {
   }
 
   if (data?.url) {
-    redirect(data.url);
+    return { url: data.url };
   }
+
+  return { error: "Failed to generate authorization URL." };
 }
 
 export async function logout() {
