@@ -102,7 +102,7 @@ async def list_agents(
     """List agents. Admin sees all in org. Builder sees own + assigned."""
     owner_id = None
     assigned_user_id = None
-    if user.role == "agent_builder":
+    if user.is_builder:
         owner_id = user.id
         assigned_user_id = user.id
 
@@ -134,7 +134,7 @@ async def get_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.role == "agent_builder" and agent.owner_id != user.id and agent.assigned_user_id != user.id:
+    if user.is_builder and agent.owner_id != user.id and agent.assigned_user_id != user.id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     skills = await _skills_for(db, [agent.id])
@@ -153,7 +153,7 @@ async def submit_agent_for_review(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
         
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    if user.is_builder and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to submit this agent")
 
     try:
@@ -183,7 +183,7 @@ async def activate_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
         
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    if user.is_builder and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to activate this agent")
 
     try:
@@ -219,7 +219,7 @@ async def update_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
         
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    if user.is_builder and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this agent")
 
     if payload.skills is not None:

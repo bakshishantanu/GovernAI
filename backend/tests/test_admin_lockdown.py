@@ -54,9 +54,15 @@ async def test_jwt_unknown_role_defaults_to_agent_builder(configured_secret):
     assert user.role == "agent_builder"
 
 
-# 2. Dev token: dummy-token-user is rejected even with dev bypass on
+# 2. Dev token: dummy-token-user is supported when dev bypass is on, rejected when off
 @pytest.mark.asyncio
-async def test_dummy_token_user_is_rejected(dev_bypass_on, configured_secret):
+async def test_dummy_token_user_is_user_when_bypass_on(dev_bypass_on):
+    user = await get_current_user(creds("dummy-token-user"))
+    assert user.role == "user"
+
+
+@pytest.mark.asyncio
+async def test_dummy_token_user_rejected_when_bypass_off():
     with pytest.raises(HTTPException) as exc:
         await get_current_user(creds("dummy-token-user"))
     assert exc.value.status_code == 401
