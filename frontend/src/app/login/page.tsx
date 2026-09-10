@@ -65,7 +65,14 @@ function LoginForm() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const formData = new FormData(e.currentTarget);
+    // Captured now, not read later: React nulls the SyntheticEvent's
+    // `currentTarget` once the handler that received it returns, and this
+    // handler returns immediately — startTransition's callback runs after an
+    // await. Reading `e.currentTarget` in there crashed with "Cannot read
+    // properties of null (reading 'reset')" on a real successful signup. The
+    // plain element reference survives the await instead.
+    const form = e.currentTarget;
+    const formData = new FormData(form);
 
     startTransition(async () => {
       if (isLogin) {
@@ -79,7 +86,7 @@ function LoginForm() {
           setErrorMessage(res.error);
         } else if (res?.success) {
           setSuccessMessage(res.success);
-          e.currentTarget.reset();
+          form.reset();
         }
       }
     });
