@@ -3,9 +3,10 @@
 import { useState, useTransition, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { login, signup, signInWithOAuth } from "../auth/actions";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
+import { PASSWORD_REQUIREMENTS, isPasswordValid } from "@/lib/password-policy";
 
 function GoogleIcon() {
   return (
@@ -47,6 +48,12 @@ function LoginForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
+  const [password, setPassword] = useState("");
+
+  // Signing in must never be gated on the policy: existing accounts predate it,
+  // and locking someone out of their own account to enforce a rule about *new*
+  // passwords would be a worse bug than the one this prevents.
+  const passwordOk = isLogin || isPasswordValid(password);
   const [isPending, startTransition] = useTransition();
 
   const searchParams = useSearchParams();
@@ -87,6 +94,9 @@ function LoginForm() {
         } else if (res?.success) {
           setSuccessMessage(res.success);
           form.reset();
+          // form.reset() clears the DOM input, but `password` is controlled —
+          // without this the checklist stays populated under an empty field.
+          setPassword("");
         }
       }
     });
@@ -193,14 +203,49 @@ function LoginForm() {
               <input
                 type="password"
                 name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-[var(--l-cream)] border border-[var(--l-line)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--l-charcoal)] focus:outline-none focus:border-[var(--l-orange)] focus:ring-2 focus:ring-[var(--l-orange)]/20 transition-colors"
                 required
               />
+
+              {/* Only while signing up, and only once they've started typing —
+                  a checklist of unmet rules on an empty field reads as five
+                  errors before anyone has done anything wrong. */}
+              <AnimatePresence>
+                {!isLogin && password.length > 0 && (
+                  <motion.ul
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden space-y-1 pt-1"
+                  >
+                    {PASSWORD_REQUIREMENTS.map((req) => {
+                      const met = req.test(password);
+                      return (
+                        <li
+                          key={req.id}
+                          className="flex items-center gap-1.5 text-[12px]"
+                          style={{ color: met ? "var(--l-teal)" : "var(--l-charcoal)" }}
+                        >
+                          {met ? (
+                            <Check className="h-3 w-3 shrink-0" />
+                          ) : (
+                            <X className="h-3 w-3 shrink-0 opacity-40" />
+                          )}
+                          <span className={met ? "" : "opacity-60"}>{req.label}</span>
+                        </li>
+                      );
+                    })}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
             </div>
 
             <button
               type="submit"
-              disabled={isAnyLoading}
+              disabled={isAnyLoading || !passwordOk}
               className="group w-full mt-2 inline-flex items-center justify-center gap-2 py-2.5 bg-[var(--l-orange)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full text-sm shadow-[0_5px_0_0_var(--l-orange-deep)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_0_var(--l-orange-deep)] transition-transform"
             >
               {isPending ? "Please wait..." : isLogin ? "Sign in" : "Sign up"}
@@ -260,6 +305,9 @@ function LoginForm() {
                 setIsLogin(!isLogin);
                 setErrorMessage(null);
                 setSuccessMessage(null);
+                // Switching modes must not carry a half-typed password into a
+                // context where it is suddenly judged against different rules.
+                setPassword("");
               }}
               className="text-[var(--l-charcoal)]/55 hover:text-[var(--l-orange)] transition-colors"
             >
