@@ -45,13 +45,21 @@ export interface Agent {
   skills?: Array<{ id?: string; name?: string } | string>;
 }
 
+// Matches what GET /executions/{id} actually returns, confirmed against a live
+// response — not `prompt`/`created_at`, which this file previously guessed at
+// and which the API has never sent. `executions/page.tsx` was formatting
+// `exec.created_at`, i.e. formatting undefined, as a direct result.
 export interface Execution {
   id: string;
   agent_id: string;
+  org_id: string;
+  goal: string;
   status: string;
-  triggered_by?: string;
-  created_at: string;
+  result?: string | null;
+  error?: string | null;
+  started_at: string;
   completed_at?: string | null;
-  prompt?: string;
-  result?: Record<string, unknown> | string | null;
+  triggered_by_id?: string | null;
+  total_cost_usd?: number | null;
+  total_tokens?: number | null;
 }

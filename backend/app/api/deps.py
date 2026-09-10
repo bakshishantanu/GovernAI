@@ -110,6 +110,10 @@ async def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
     return AuditService(audit_repo=repo, event_bus=event_bus)
 
 
+async def get_cost_repository(db: AsyncSession = Depends(get_db)) -> CostRepository:
+    return CostRepository(db)
+
+
 async def get_cost_service(db: AsyncSession = Depends(get_db)) -> CostService:
     repo = CostRepository(db)
     return CostService(cost_repo=repo, event_bus=event_bus)

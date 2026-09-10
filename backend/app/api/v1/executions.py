@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_agent_service,
+    get_cost_repository,
     get_db,
     get_execution_service,
     get_llm_service,
@@ -15,11 +16,25 @@ from app.api.deps import (
 from app.api.execution_runner import run_execution
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.execution import ExecutionCreate, ExecutionResponse
+from app.api.schemas.audit import AuditEventResponse
+# Reused rather than reimplemented: a CostEvent row cannot simply be
+# model_validate'd (the column is `metadata` in the database but
+# `metadata_json` on the model, and the event type needs translating), and a
+# second copy of that mapping here would be free to drift from the one the
+# costs routes use.
+from app.api.v1.costs import _to_response as cost_event_to_response
+from app.api.schemas.execution import (
+    ExecutionCreate,
+    ExecutionResponse,
+    ExecutionTimelineResponse,
+)
 from app.api.sse import SSE_HEADERS, format_sse
 from app.api.sse import stream as sse_stream
 from app.domain.agents.service import AgentService
+from app.domain.agents.models import Agent
+from app.domain.audit.repository import AuditRepository
 from app.domain.auth.middleware import get_current_user
+from app.domain.costs.repository import CostRepository
 from app.domain.executions.service import ExecutionService
 from app.infrastructure.event_bus import Event
 from app.runtime.llm.service import LLMService
@@ -131,12 +146,71 @@ async def get_execution_detail(
         )
 
     # Re-fetch agent to verify ownership
-    agent = await exec_service.exec_repo.session.get(app.domain.agents.models.Agent, execution.agent_id)
+    agent = await exec_service.exec_repo.session.get(Agent, execution.agent_id)
     if agent:
         if current_user.is_builder and agent.owner_id != current_user.id and agent.assigned_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to view this execution")
 
     return Envelope(data=execution)
+
+
+@router.get("/{execution_id}/timeline", response_model=Envelope[ExecutionTimelineResponse])
+async def get_execution_timeline(
+    execution_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    exec_service: ExecutionService = Depends(get_execution_service),
+    cost_repo: CostRepository = Depends(get_cost_repository),
+    db: AsyncSession = Depends(get_db),
+):
+    """The full recorded history of one run: every governed tool call and every
+    LLM call, for reconstructing what happened on a run opened after the fact.
+
+    `/stream` only ever shows events from the moment a client connects —
+    nothing before that, and nothing at all for a run that had already finished
+    by the time someone opened its page. This fills that gap.
+
+    Authorization is identical to `get_execution_detail` above, deliberately
+    *not* the stricter admin-only gate on `GET /costs/`: someone must be able to
+    see their own run's cost history even though they cannot see the org-wide
+    spend dashboard.
+    """
+    execution = await exec_service.get_execution(execution_id)
+    if not execution or execution.org_id != current_user.org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found",
+        )
+
+    agent = await exec_service.exec_repo.session.get(Agent, execution.agent_id)
+    if agent:
+        if (
+            current_user.is_builder
+            and agent.owner_id != current_user.id
+            and agent.assigned_user_id != current_user.id
+        ):
+            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
+
+    # Only reached once the execution above is authorized — which is what makes
+    # the repository's execution_id filter safe to use without also applying its
+    # ownership filter.
+    audit_repo = AuditRepository(db)
+    audit_events = await audit_repo.get_events_for_org(
+        org_id=current_user.org_id, execution_id=execution_id, limit=1000
+    )
+    cost_events = await cost_repo.list_costs(
+        org_id=current_user.org_id, execution_id=execution_id, limit=1000
+    )
+
+    # Both repositories return newest-first; a timeline reads oldest-first.
+    return Envelope(
+        data=ExecutionTimelineResponse(
+            execution_id=execution_id,
+            governance_events=[
+                AuditEventResponse.model_validate(e) for e in reversed(audit_events)
+            ],
+            cost_events=[cost_event_to_response(e) for e in reversed(cost_events)],
+        )
+    )
 
 
 @router.post("/{execution_id}/cancel", response_model=Envelope[ExecutionResponse])
