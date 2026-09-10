@@ -1,21 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { subscribeGlobalEvents } from "./global-events";
 
 /**
  * Keeps a screen current without a page refresh.
  *
- * The honest version of "live" until the org-wide event stream exists: it
- * re-fetches on an interval, and reports when it last succeeded so the UI can
- * say so rather than implying a socket. Three details that make it behave:
+ * Driven by the org-wide event stream (`GET /events/stream`) when it's
+ * connected: a matching backend event triggers an immediate re-fetch, so
+ * most updates arrive the moment they happen rather than on the next tick.
+ * The interval poll below is kept as the fallback — it's what covers the
+ * stream while it's reconnecting, and it's why `updatedAt` is reported at
+ * all, so the UI can say "updated N ago" honestly instead of implying a
+ * socket that might be down. Three more details that make it behave:
  *
  * - It pauses while the tab is hidden. A backgrounded tab that keeps polling
  *   burns the user's battery and the API's budget to update pixels nobody is
  *   looking at, and browsers throttle the timer unevenly anyway.
  * - It re-fetches immediately when the tab comes back, so returning to the
  *   window never shows a stale figure while waiting for the next tick.
- * - It re-fetches on the dev role-switch event, because changing role changes
- *   who the API thinks you are, and the previous role's data must not linger.
  */
 export function useLive<T>(load: () => Promise<T>, intervalMs = 15000) {
   const [data, setData] = useState<T | null>(null);
@@ -63,14 +66,12 @@ export function useLive<T>(load: () => Promise<T>, intervalMs = 15000) {
         start();
       }
     };
-    const onRoleChange = () => refresh();
-
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("govern-ai-role-change", onRoleChange);
+    const unsubscribeLive = subscribeGlobalEvents(refresh);
     return () => {
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("govern-ai-role-change", onRoleChange);
+      unsubscribeLive();
     };
   }, [refresh, intervalMs]);
 

@@ -7,9 +7,22 @@ from app.domain.costs.repository import CostRepository
 from app.infrastructure.event_bus import Event, EventBus
 
 # A mock pricing dictionary. In production, this would be fetched from a config or database.
+#
+# `gpt-4o`/`gpt-3.5-turbo` are OpenAI models this app has never had a provider
+# for - real Groq/Gemini spend was silently pricing at $0.00 until these two
+# real entries were added (found live, 2026-09-09, the first time a real key
+# ever produced a real cost event). Rates are each provider's own published
+# per-million-token price, checked directly against their own docs the same
+# day rather than an aggregator: Groq's `console.groq.com/docs/models` for
+# `openai/gpt-oss-20b` (LLM_PRIMARY_MODEL), Google's own
+# `ai.google.dev/gemini-api/docs/pricing` for `gemini-2.5-flash`
+# (LLM_FALLBACK_MODEL, standard/paid tier, text input). These will drift as
+# providers reprice - worth re-checking periodically, not a one-time fix.
 PRICING_TIERS = {
     "gpt-4o": {"prompt": 5.00 / 1_000_000, "completion": 15.00 / 1_000_000},
     "gpt-3.5-turbo": {"prompt": 0.50 / 1_000_000, "completion": 1.50 / 1_000_000},
+    "openai/gpt-oss-20b": {"prompt": 0.075 / 1_000_000, "completion": 0.30 / 1_000_000},
+    "gemini-2.5-flash": {"prompt": 0.30 / 1_000_000, "completion": 2.50 / 1_000_000},
 }
 
 
@@ -49,6 +62,12 @@ class CostService:
         await self.event_bus.publish(
             Event.create(
                 "cost.llm.incurred",
-                {"execution_id": str(execution_id), "cost_usd": cost_usd, "tokens": total_tokens},
+                {
+                    "execution_id": str(execution_id),
+                    "agent_id": str(agent_id),
+                    "org_id": str(org_id),
+                    "cost_usd": cost_usd,
+                    "tokens": total_tokens,
+                },
             )
         )

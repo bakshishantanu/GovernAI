@@ -6,6 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.api.schemas.audit import AuditEventResponse
+from app.api.schemas.cost import CostEventResponse
+
 ExecutionStatus = Literal["PENDING", "RUNNING", "COMPLETED", "FAILED", "TERMINATED", "CANCELLED"]
 
 
@@ -42,4 +45,24 @@ class ExecutionResponse(BaseModel):
     error: str | None = None
     started_at: datetime
     completed_at: datetime | None = None
+    triggered_by_id: UUID | None = None
     steps: list[ExecutionStepResponse] = []
+    # Populated only by get_execution_detail, which loads them from
+    # CostRepository -- absent (None) on list/create responses rather than
+    # silently 0, so the frontend can tell "not computed" from "genuinely
+    # free".
+    total_cost_usd: float | None = None
+    total_tokens: int | None = None
+
+
+class ExecutionTimelineResponse(BaseModel):
+    """The full history of one run: every governed tool call and every LLM
+    call, each in its own real shape rather than flattened into a generic
+    "event" that would lose fields. The frontend interleaves the two by
+    timestamp for a single chronological feed; kept separate here because
+    they answer different questions (governance decisions vs. spend) and a
+    caller that only wants one need not parse the other out of a merge."""
+
+    execution_id: UUID
+    governance_events: list[AuditEventResponse]
+    cost_events: list[CostEventResponse]

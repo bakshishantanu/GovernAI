@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,6 +13,7 @@ from app.api.schemas.execution import ExecutionCreate
 from app.api.v1.executions import (
     cancel_execution,
     create_and_run_execution,
+    get_execution_detail,
 )
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.executions.models import Execution
@@ -178,6 +180,74 @@ async def test_the_row_is_committed_before_the_task_is_queued(current_user, acti
     )
 
     db.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execution_is_created_with_the_triggering_user(current_user, active_agent):
+    """The row must record who actually asked for this run -- the run detail
+    page needs a real "triggered by" rather than always saying "System"."""
+    agent_service = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = active_agent
+
+    exec_service = AsyncMock()
+    exec_service.create_execution.return_value = Execution(
+        id=uuid.uuid4(),
+        agent_id=active_agent.id,
+        org_id=current_user.org_id,
+        goal="g",
+        status="PENDING",
+        triggered_by_id=current_user.id,
+    )
+
+    await create_and_run_execution(
+        payload=ExecutionCreate(agent_id=active_agent.id, goal="g"),
+        current_user=current_user,
+        db=AsyncMock(),
+        agent_service=agent_service,
+        exec_service=exec_service,
+        llm_service=AsyncMock(),
+        background_tasks=BackgroundTasks(),
+    )
+
+    exec_service.create_execution.assert_awaited_once_with(
+        agent_id=active_agent.id,
+        org_id=current_user.org_id,
+        goal="g",
+        triggered_by_id=current_user.id,
+    )
+
+
+@pytest.mark.asyncio
+async def test_execution_detail_includes_real_cost_totals(current_user, monkeypatch):
+    """The run header needs a total cost/tokens figure without a second
+    frontend round trip -- computed from CostRepository, not fabricated."""
+    exec_id = uuid.uuid4()
+    execution = Execution(
+        id=exec_id,
+        agent_id=uuid.uuid4(),
+        org_id=current_user.org_id,
+        goal="g",
+        status="COMPLETED",
+        started_at=datetime.now(timezone.utc),
+    )
+
+    exec_service = AsyncMock()
+    exec_service.get_execution.return_value = execution
+    exec_service.exec_repo.session.get.return_value = None  # no agent -> skip ownership check
+
+    cost_repo = AsyncMock()
+    cost_repo.get_totals_for_execution.return_value = (0.0123, 456)
+
+    response = await get_execution_detail(
+        execution_id=exec_id,
+        current_user=current_user,
+        exec_service=exec_service,
+        cost_repo=cost_repo,
+    )
+
+    cost_repo.get_totals_for_execution.assert_awaited_once_with(exec_id)
+    assert response.data.total_cost_usd == 0.0123
+    assert response.data.total_tokens == 456
 
 
 @pytest.mark.asyncio

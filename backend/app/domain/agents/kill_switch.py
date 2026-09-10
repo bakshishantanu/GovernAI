@@ -35,7 +35,10 @@ class KillSwitchService:
 
         await self.session.commit()
         await self.event_bus.publish(
-            Event.create("agent.suspended", {"agent_id": str(agent_id), "reason": reason})
+            Event.create(
+                "agent.suspended",
+                {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason},
+            )
         )
 
     async def reactivate_agent(self, agent_id: UUID, actor_id: UUID, org_id: UUID, reason: str):
@@ -56,5 +59,8 @@ class KillSwitchService:
 
         await self.session.commit()
         await self.event_bus.publish(
-            Event.create("agent.reactivated", {"agent_id": str(agent_id), "reason": reason})
+            Event.create(
+                "agent.reactivated",
+                {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason},
+            )
         )

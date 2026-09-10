@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "agent_builder" | "user";
+export type UserRole = "admin" | "agent_builder";
 
 export type AgentRequestStatus = "PENDING" | "CLAIMED" | "FULFILLED" | "CANCELLED";
 
@@ -45,13 +45,20 @@ export interface Agent {
   skills?: Array<{ id?: string; name?: string } | string>;
 }
 
+// Matches what GET /executions/{id} actually returns (confirmed against a
+// live response) -- not `prompt`/`created_at`, which an earlier version of
+// this file guessed at and which the API has never sent.
 export interface Execution {
   id: string;
   agent_id: string;
+  org_id: string;
+  goal: string;
   status: string;
-  triggered_by?: string;
-  created_at: string;
+  result?: string | null;
+  error?: string | null;
+  started_at: string;
   completed_at?: string | null;
-  prompt?: string;
-  result?: Record<string, unknown> | string | null;
+  triggered_by_id?: string | null;
+  total_cost_usd?: number | null;
+  total_tokens?: number | null;
 }

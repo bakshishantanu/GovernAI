@@ -12,7 +12,9 @@ class ExecutionService:
     def __init__(self, exec_repo: ExecutionRepository):
         self.exec_repo = exec_repo
 
-    async def create_execution(self, agent_id: UUID, org_id: UUID, goal: str) -> Execution:
+    async def create_execution(
+        self, agent_id: UUID, org_id: UUID, goal: str, triggered_by_id: UUID | None = None
+    ) -> Execution:
         execution = Execution(
             id=uuid.uuid4(),
             agent_id=agent_id,
@@ -20,6 +22,7 @@ class ExecutionService:
             goal=goal,
             status="PENDING",
             started_at=datetime.now(timezone.utc),
+            triggered_by_id=triggered_by_id,
         )
         return await self.exec_repo.create_execution(execution)
 
@@ -27,9 +30,15 @@ class ExecutionService:
         return await self.exec_repo.get_execution(execution_id)
 
     async def list_executions_for_org(
-        self, org_id: UUID, builder_id: UUID | None = None, assigned_user_id: UUID | None = None
+        self,
+        org_id: UUID,
+        builder_id: UUID | None = None,
+        assigned_user_id: UUID | None = None,
+        visible_to_user_id: UUID | None = None,
     ) -> list[Execution]:
-        return await self.exec_repo.list_executions_for_org(org_id, builder_id, assigned_user_id)
+        return await self.exec_repo.list_executions_for_org(
+            org_id, builder_id, assigned_user_id, visible_to_user_id=visible_to_user_id
+        )
 
     async def list_executions_for_agent(self, agent_id: UUID) -> list[Execution]:
         return await self.exec_repo.list_executions_for_agent(agent_id)

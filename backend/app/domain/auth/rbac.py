@@ -50,11 +50,13 @@ def _forbidden_message(allowed_roles: Iterable[str]) -> str:
 #: activating an agent, editing policy, or stopping a run.
 require_admin = require_role("admin")
 
-#: Admit agent builders.
-require_builder = require_role("agent_builder")
-
 #: Admit regular users.
-require_user = require_role("user")
+require_user = require_role("agent_builder")
 
-#: Admit builders or administrators.
+#: Admit either role — i.e. any authenticated caller. Kept as its own name
+#: (rather than inlining `require_role("agent_builder", "admin")` at each call
+#: site) because its call sites predate the two-role merge and read more
+#: clearly keeping their original name: "build/submit/activate an agent",
+#: "claim a request", "view costs" were agent_builder-or-admin actions from
+#: the start, not actions that were ever meant to be admin-only.
 require_builder_or_admin = require_role("agent_builder", "admin")

@@ -2,9 +2,6 @@ import { createClient } from '@/lib/supabase/client'
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
 
-/** Where the dev-only role switcher stores the acting role. */
-export const ROLE_STORAGE_KEY = 'govern_ai_role'
-
 /**
  * True only when real Supabase credentials are configured. This repo's
  * local dev runs with neither var set (no .env.local; the dev-token bypass
@@ -17,23 +14,20 @@ const SUPABASE_CONFIGURED = Boolean(
 )
 
 /**
- * Which dev token to send when Supabase is not configured.
+ * Which dev token to send when there is no real signed-in session (only
+ * ever reached with Supabase unconfigured, or a real session lookup that
+ * came back empty — see getAuthHeader below).
  *
- * The backend accepts one token per role, so switching role locally is just a
- * matter of which literal we send. The role lives in localStorage because the
- * switcher is a client-only development affordance; it is never the security
- * boundary — every endpoint re-derives the role server-side from the token.
+ * There is no UI for choosing this anymore — role is decided purely by the
+ * account's own email now, with no manual override. This falls back to
+ * reading the current URL's own role prefix (`/admin` vs `/user`) purely so
+ * local dev-token testing can still open either console directly by
+ * navigating to it; it is never the security boundary either way — every
+ * endpoint re-derives the role server-side from the token, not the URL.
  */
 function devToken(): string {
   if (typeof window === 'undefined') return 'dummy-token'
-  switch (localStorage.getItem(ROLE_STORAGE_KEY)) {
-    case 'agent_builder':
-      return 'dummy-token-builder'
-    case 'user':
-      return 'dummy-token-user'
-    default:
-      return 'dummy-token'
-  }
+  return window.location.pathname.startsWith('/user') ? 'dummy-token-user' : 'dummy-token'
 }
 
 /**

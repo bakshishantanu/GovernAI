@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
+    # --- Role assignment ---
+    # Comma-separated email addresses. Role is decided by which list a signed-in
+    # user's email appears on, not by anything client-supplied - an email not on
+    # either list gets the least-privileged role, "user".
+    ADMIN_EMAILS: str = "admin@governai.com"
+
     # --- LLM Providers ---
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""

@@ -29,10 +29,13 @@ async def list_audit_events(
     """
     # Fetch all events (repository already orders by timestamp desc)
     # If the database gets large, we should pass 'limit' down to the repository.
-    builder_id = current_user.id if current_user.role == "agent_builder" else None
-    assigned_user_id = current_user.id if current_user.role == "user" else None
+    # Same id passed to both: get_events_for_org already ORs owner_id,
+    # assigned_user_id and actor_id together (see its docstring), so a
+    # merged user who is both an owner and an assignee sees the union
+    # correctly without any change needed there.
+    non_admin_id = None if current_user.role == "admin" else current_user.id
 
     events = await repo.get_events_for_org(
-        current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
+        current_user.org_id, builder_id=non_admin_id, assigned_user_id=non_admin_id
     )
     return Envelope(data=events[:limit])

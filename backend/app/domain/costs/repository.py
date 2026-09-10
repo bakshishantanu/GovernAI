@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.costs.models import CostEvent
@@ -25,7 +25,13 @@ class CostRepository:
         )
         return list(result.scalars().all())
 
-    async def get_costs_summary(self, org_id: UUID, builder_id: UUID | None = None) -> list[dict]:
+    async def get_costs_summary(
+        self,
+        org_id: UUID,
+        builder_id: UUID | None = None,
+        since: datetime | None = None,
+        visible_to_user_id: UUID | None = None,
+    ) -> list[dict]:
         from app.domain.agents.models import Agent
 
         # Returns totals grouped by agent, model, and execution
@@ -36,7 +42,19 @@ class CostRepository:
             func.sum(CostEvent.cost_usd).label("total_cost_usd"),
         ).where(CostEvent.org_id == org_id)
 
-        if builder_id:
+        if since is not None:
+            query = query.where(CostEvent.timestamp >= since)
+
+        # OR, not owner-only: a user now sees spend for agents they own OR
+        # are assigned (agent_builder's Costs access merged into user).
+        if visible_to_user_id is not None:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
+                or_(
+                    Agent.owner_id == visible_to_user_id,
+                    Agent.assigned_user_id == visible_to_user_id,
+                )
+            )
+        elif builder_id:
             query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
                 Agent.owner_id == builder_id
             )
@@ -63,6 +81,7 @@ class CostRepository:
         limit: int = 50,
         offset: int = 0,
         builder_id: UUID | None = None,
+        visible_to_user_id: UUID | None = None,
     ) -> list[CostEvent]:
         """Cost events for one org, newest first, optionally narrowed.
 
@@ -77,7 +96,14 @@ class CostRepository:
         if execution_id is not None:
             query = query.where(CostEvent.execution_id == execution_id)
 
-        if builder_id:
+        if visible_to_user_id is not None:
+            query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
+                or_(
+                    Agent.owner_id == visible_to_user_id,
+                    Agent.assigned_user_id == visible_to_user_id,
+                )
+            )
+        elif builder_id:
             query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id).where(
                 Agent.owner_id == builder_id
             )
@@ -85,6 +111,19 @@ class CostRepository:
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def get_totals_for_execution(self, execution_id: UUID) -> tuple[float, int]:
+        """(total cost, total tokens) for one run -- summed in the database for
+        the same reason as get_total_cost_for_agent below: cheap regardless of
+        how many LLM calls the run made."""
+        result = await self.session.execute(
+            select(
+                func.coalesce(func.sum(CostEvent.cost_usd), 0.0),
+                func.coalesce(func.sum(CostEvent.total_tokens), 0),
+            ).where(CostEvent.execution_id == execution_id)
+        )
+        cost, tokens = result.one()
+        return float(cost), int(tokens)
 
     async def get_total_cost_for_agent(self, agent_id: UUID, since: datetime) -> float:
         """Total USD spent by one agent since `since`.

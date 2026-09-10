@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { passwordPolicyError } from "@/lib/password-policy";
 
 export async function login(formData: FormData) {
   const email = formData.get("email") as string;
@@ -35,6 +36,14 @@ export async function signup(formData: FormData) {
     return { error: "Email and password are required." };
   }
 
+  // The real enforcement point — the signup form's live checklist is a
+  // convenience, not the boundary. Checked before any Supabase call, so a
+  // weak password never leaves this server for their API at all.
+  const policyError = passwordPolicyError(password);
+  if (policyError) {
+    return { error: policyError };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
@@ -42,7 +51,7 @@ export async function signup(formData: FormData) {
     options: {
       data: {
         full_name: fullName || "Team Member",
-        role: "user",
+        role: "agent_builder",
       },
     },
   });

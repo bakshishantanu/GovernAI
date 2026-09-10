@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import app.domain.agents.models  # noqa: F401  (used via a fully-qualified reference)
 from app.api.deps import (
     get_agent_service,
+    get_cost_repository,
     get_db,
     get_execution_service,
     get_llm_service,
@@ -16,16 +17,46 @@ from app.api.deps import (
 from app.api.execution_runner import run_execution
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.execution import ExecutionCreate, ExecutionResponse
+from app.api.schemas.audit import AuditEventResponse
+from app.api.schemas.cost import CostEventResponse
+from app.api.schemas.execution import ExecutionCreate, ExecutionResponse, ExecutionTimelineResponse
 from app.api.sse import SSE_HEADERS, format_sse
 from app.api.sse import stream as sse_stream
 from app.domain.agents.service import AgentService
+from app.domain.audit.repository import AuditRepository
 from app.domain.auth.middleware import get_current_user
+from app.domain.costs.repository import CostRepository
 from app.domain.executions.service import ExecutionService
 from app.infrastructure.event_bus import Event
 from app.runtime.llm.service import LLMService
 
 router = APIRouter(prefix="/executions", tags=["executions"])
+
+#: Mirrors `api/v1/costs.py`'s own `_EVENT_TYPE_ALIASES` -- kept local rather
+#: than imported across routers for a two-line dict; both read the same
+#: `CostEvent.event_type` values and must stay in agreement if either changes.
+_COST_EVENT_TYPE_ALIASES = {"llm_inference": "LLM_CALL", "llm_call": "LLM_CALL", "tool_call": "TOOL_CALL"}
+
+
+def _cost_event_to_response(event) -> CostEventResponse:
+    """Same mapping as `costs.py`'s `_to_response`: the DB column is named
+    `metadata` but the model attribute is `metadata_json`, so this cannot be
+    built with `from_attributes` alone."""
+    return CostEventResponse(
+        id=event.id,
+        agent_id=event.agent_id,
+        execution_id=event.execution_id,
+        execution_step_id=event.execution_step_id,
+        event_type=_COST_EVENT_TYPE_ALIASES.get((event.event_type or "").lower(), "TOOL_CALL"),
+        model=event.model,
+        provider=event.provider,
+        prompt_tokens=event.prompt_tokens,
+        completion_tokens=event.completion_tokens,
+        total_tokens=event.total_tokens,
+        cost_usd=event.cost_usd,
+        timestamp=event.timestamp,
+        metadata=event.metadata_json,
+    )
 
 
 @router.post(
@@ -60,9 +91,12 @@ async def create_and_run_execution(
             detail="Agent not found in your organization",
         )
 
-    if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
-    elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+    # Owner or assignee, not a role branch: running an agent is a "use"
+    # action, open to whoever built it or whoever it was handed to.
+    if current_user.role != "admin" and current_user.id not in (
+        agent.owner_id,
+        agent.assigned_user_id,
+    ):
         raise HTTPException(status_code=403, detail="Not authorized to execute this agent")
 
     if not agent.passport or agent.passport.lifecycle_state != "ACTIVE":
@@ -79,11 +113,22 @@ async def create_and_run_execution(
         agent_id=agent.id,
         org_id=current_user.org_id,
         goal=payload.goal,
+        triggered_by_id=current_user.id,
     )
     # Committed before the task is queued: the run opens its own session and
     # must be able to see this row.
     await db.commit()
     await db.refresh(execution)
+    # `refresh()` without `attribute_names` only reloads columns, not
+    # relationships, so `steps` stays unloaded. ExecutionResponse includes
+    # `steps`, and accessing an unloaded relationship during response
+    # serialization lazy-loads it outside the request's async context,
+    # raising MissingGreenlet — assigning `execution.steps = []` directly
+    # does not avoid this, because SQLAlchemy's relationship setter reads the
+    # *old* collection first to compute the diff, which triggers the exact
+    # same lazy load. Refreshing `steps` explicitly is a real, awaited query
+    # inside the current async context, so it loads safely.
+    await db.refresh(execution, attribute_names=["steps"])
 
     background_tasks.add_task(
         run_execution,
@@ -108,11 +153,10 @@ async def list_executions(
     List all execution runs for the current user's organization (newest first).
     Role-scoped filtering applies based on the user's role.
     """
-    builder_id = current_user.id if current_user.role == "agent_builder" else None
-    assigned_user_id = current_user.id if current_user.role == "user" else None
+    visible_to_user_id = None if current_user.role == "admin" else current_user.id
 
     executions = await exec_service.list_executions_for_org(
-        current_user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
+        current_user.org_id, visible_to_user_id=visible_to_user_id
     )
     return Envelope(data=executions)
 
@@ -122,9 +166,10 @@ async def get_execution_detail(
     execution_id: UUID,
     current_user: CurrentUser = Depends(get_current_user),
     exec_service: ExecutionService = Depends(get_execution_service),
+    cost_repo: CostRepository = Depends(get_cost_repository),
 ):
     """
-    Get detailed execution progress, status, and final answer.
+    Get detailed execution progress, status, final answer, and run-level totals.
     """
     execution = await exec_service.get_execution(execution_id)
     if not execution or execution.org_id != current_user.org_id:
@@ -138,12 +183,72 @@ async def get_execution_detail(
         app.domain.agents.models.Agent, execution.agent_id
     )
     if agent:
-        if current_user.role == "agent_builder" and agent.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
-        elif current_user.role == "user" and agent.assigned_user_id != current_user.id:
+        if current_user.role != "admin" and current_user.id not in (
+            agent.owner_id,
+            agent.assigned_user_id,
+        ):
             raise HTTPException(status_code=403, detail="Not authorized to view this execution")
 
-    return Envelope(data=execution)
+    total_cost_usd, total_tokens = await cost_repo.get_totals_for_execution(execution_id)
+    response = ExecutionResponse.model_validate(execution).model_copy(
+        update={"total_cost_usd": total_cost_usd, "total_tokens": total_tokens}
+    )
+    return Envelope(data=response)
+
+
+@router.get("/{execution_id}/timeline", response_model=Envelope[ExecutionTimelineResponse])
+async def get_execution_timeline(
+    execution_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    exec_service: ExecutionService = Depends(get_execution_service),
+    cost_repo: CostRepository = Depends(get_cost_repository),
+    db: AsyncSession = Depends(get_db),
+):
+    """The full recorded history of one run: every governed tool call and
+    every LLM call, for reconstructing what happened on a run opened after
+    the fact (the live `/stream` endpoint only ever shows events from the
+    moment a client connects — nothing before that, and nothing at all for a
+    run that already finished by the time someone opens its page).
+
+    Authorization is identical to `get_execution_detail` above, not the
+    stricter admin/builder-only gate on `GET /costs/` — a user must be able
+    to see their own run's cost history even though they cannot see the
+    org-wide spend dashboard.
+    """
+    execution = await exec_service.get_execution(execution_id)
+    if not execution or execution.org_id != current_user.org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Execution not found",
+        )
+
+    agent = await exec_service.exec_repo.session.get(
+        app.domain.agents.models.Agent, execution.agent_id
+    )
+    if agent:
+        if current_user.role != "admin" and current_user.id not in (
+            agent.owner_id,
+            agent.assigned_user_id,
+        ):
+            raise HTTPException(status_code=403, detail="Not authorized to view this execution")
+
+    audit_repo = AuditRepository(db)
+    audit_events = await audit_repo.get_events_for_org(
+        org_id=current_user.org_id, execution_id=execution_id, limit=1000
+    )
+    cost_events = await cost_repo.list_costs(
+        org_id=current_user.org_id, execution_id=execution_id, limit=1000
+    )
+
+    return Envelope(
+        data=ExecutionTimelineResponse(
+            execution_id=execution_id,
+            governance_events=[
+                AuditEventResponse.model_validate(e) for e in reversed(audit_events)
+            ],
+            cost_events=[_cost_event_to_response(e) for e in reversed(cost_events)],
+        )
+    )
 
 
 @router.post("/{execution_id}/cancel", response_model=Envelope[ExecutionResponse])
@@ -217,13 +322,8 @@ async def stream_execution_events(
             {"id": str(event.id), "at": event.timestamp, **event.payload},
         )
 
-    async def on_heartbeat() -> tuple[str | None, bool]:
-        current = await exec_service.get_execution(execution_id)
-        if current is None:
-            return None, False  # the run vanished; nothing left to stream
-        if current.status not in TERMINAL_STATUSES:
-            return None, True  # still going; a keep-alive is sent instead
-        done = format_sse(
+    def _done_frame(current) -> str:
+        return format_sse(
             "done",
             {
                 "status": current.status,
@@ -232,7 +332,14 @@ async def stream_execution_events(
                 "completed_at": current.completed_at,
             },
         )
-        return done, False  # final frame, then close
+
+    async def on_heartbeat() -> tuple[str | None, bool]:
+        current = await exec_service.get_execution(execution_id)
+        if current is None:
+            return None, False  # the run vanished; nothing left to stream
+        if current.status not in TERMINAL_STATUSES:
+            return None, True  # still going; a keep-alive is sent instead
+        return _done_frame(current), False  # final frame, then close
 
     initial = [
         format_sse(
@@ -244,6 +351,26 @@ async def stream_execution_events(
             },
         )
     ]
+
+    # A run that finishes fast (the mock provider often does, in well under a
+    # second) can already be terminal by the time a client opens this stream
+    # — no further bus event will ever arrive for it. Without this, the
+    # client would sit subscribed to the bus for nothing, waiting out a full
+    # HEARTBEAT_SECONDS timeout before `on_heartbeat` ever ran, showing "no
+    # result" for that whole window even though the result has been sitting
+    # in the database since before the connection even opened. Short-circuit
+    # entirely rather than subscribing at all: there is nothing left to wait
+    # for.
+    if execution.status in TERMINAL_STATUSES:
+        initial.append(_done_frame(execution))
+
+        async def _finished_stream():
+            for frame in initial:
+                yield frame
+
+        return StreamingResponse(
+            _finished_stream(), media_type="text/event-stream", headers=SSE_HEADERS
+        )
 
     return StreamingResponse(
         sse_stream(

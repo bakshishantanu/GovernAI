@@ -1,3 +1,7 @@
+"""Two-role governance tests (file name kept for history; the model itself
+collapsed from three roles to two — admin and user — with agent_builder's
+capabilities merged into user. See D-052 in .project-memory/DECISIONS.md."""
+
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -43,13 +47,8 @@ def admin_user(org_id):
 
 
 @pytest.fixture
-def builder_user(org_id):
-    return CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
-
-
-@pytest.fixture
 def standard_user(org_id):
-    return CurrentUser(id=uuid.uuid4(), org_id=org_id, role="user")
+    return CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
 
 
 def make_agent(
@@ -104,24 +103,24 @@ async def test_kill_agent_admin(admin_user):
 
 
 @pytest.mark.asyncio
-async def test_kill_agent_forbidden_for_builder(builder_user):
+async def test_kill_agent_forbidden_for_a_plain_user(standard_user):
     with pytest.raises(HTTPException) as exc:
-        await require_admin(builder_user)
+        await require_admin(standard_user)
     assert exc.value.status_code == 403
 
 
-# 2. Builder cannot access another builder's agent (404)
+# 2. A user cannot access an agent they neither own nor are assigned (404)
 @pytest.mark.asyncio
-async def test_builder_cannot_access_another_builder_agent(builder_user):
+async def test_user_cannot_access_someone_elses_owned_agent(standard_user):
     agent_id = uuid.uuid4()
-    other_builder_id = uuid.uuid4()
-    agent = make_agent(agent_id, builder_user.org_id, other_builder_id)
+    other_owner_id = uuid.uuid4()
+    agent = make_agent(agent_id, standard_user.org_id, other_owner_id)
 
     agent_service = AsyncMock()
     agent_service.agent_repo.get_agent.return_value = agent
 
     with pytest.raises(HTTPException) as exc:
-        await get_agent(agent_id=agent_id, service=agent_service, user=builder_user, db=make_db())
+        await get_agent(agent_id=agent_id, service=agent_service, user=standard_user, db=make_db())
 
     assert exc.value.status_code == 404
 
@@ -158,6 +157,23 @@ async def test_user_can_access_assigned_agent(standard_user):
     assert res.data.id == agent_id
 
 
+# 4b. User CAN access an agent they own even without being assigned (the
+# OR-ownership fix this merge required — the two are independent, not
+# mutually exclusive, for the same person post-merge).
+@pytest.mark.asyncio
+async def test_user_can_access_owned_agent_they_built(standard_user):
+    agent_id = uuid.uuid4()
+    agent = make_agent(agent_id, standard_user.org_id, standard_user.id, assigned_user_id=None)
+
+    agent_service = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = agent
+
+    res = await get_agent(
+        agent_id=agent_id, service=agent_service, user=standard_user, db=make_db()
+    )
+    assert res.data.id == agent_id
+
+
 # 5. Admin can access ANY agent (200)
 @pytest.mark.asyncio
 async def test_admin_can_access_any_agent(admin_user):
@@ -171,48 +187,47 @@ async def test_admin_can_access_any_agent(admin_user):
     assert res.data.id == agent_id
 
 
-# 6. Policy access: User is blocked from listing policies (403 via require_builder_or_admin)
+# 6. Policy access: a user CAN list policies now (agent_builder's read
+# access merged in) — the old three-role model blocked plain "user" here.
 @pytest.mark.asyncio
-async def test_user_cannot_list_policies(standard_user):
-    with pytest.raises(HTTPException) as exc:
-        await require_builder_or_admin(standard_user)
-    assert exc.value.status_code == 403
-
-
-# 7. Policy access: Builder CAN list policies (200)
-@pytest.mark.asyncio
-async def test_builder_can_list_policies(builder_user):
-    assert await require_builder_or_admin(builder_user) is builder_user
+async def test_user_can_list_policies(standard_user):
+    assert await require_builder_or_admin(standard_user) is standard_user
     repo = AsyncMock()
     repo.get_policies_for_org.return_value = []
-    res = await list_policies(current_user=builder_user, repo=repo)
+    res = await list_policies(current_user=standard_user, repo=repo)
     assert res.data == []
 
 
-# 8. Cost access: User is blocked from listing costs (403 via require_builder_or_admin)
+# 7. Cost access: a user CAN list costs now (agent_builder's access merged
+# in, per the confirmed decision to widen this) — scoped to their own agents.
 @pytest.mark.asyncio
-async def test_user_cannot_list_costs(standard_user):
-    with pytest.raises(HTTPException) as exc:
-        await require_builder_or_admin(standard_user)
-    assert exc.value.status_code == 403
-
-
-# 9. Cost summary: Scoped to builder_id for agent_builder
-@pytest.mark.asyncio
-async def test_builder_gets_scoped_cost_summary(builder_user):
+async def test_user_gets_scoped_cost_summary(standard_user):
     repo = AsyncMock()
     repo.get_costs_summary.return_value = []
-    res = await cost_summary(user=builder_user, repo=repo)
-    repo.get_costs_summary.assert_awaited_once_with(builder_user.org_id, builder_id=builder_user.id)
+    res = await cost_summary(user=standard_user, window="all", repo=repo)
+    repo.get_costs_summary.assert_awaited_once_with(
+        standard_user.org_id, visible_to_user_id=standard_user.id, since=None
+    )
     assert res.data.total_cost_usd == 0.0
 
 
-# 10. Agent activation: Builder can activate their own agent
 @pytest.mark.asyncio
-async def test_builder_can_activate_own_agent(builder_user):
+async def test_admin_gets_unscoped_cost_summary(admin_user):
+    repo = AsyncMock()
+    repo.get_costs_summary.return_value = []
+    res = await cost_summary(user=admin_user, window="all", repo=repo)
+    repo.get_costs_summary.assert_awaited_once_with(
+        admin_user.org_id, visible_to_user_id=None, since=None
+    )
+    assert res.data.total_cost_usd == 0.0
+
+
+# 8. Agent activation: a user can activate their own (owned) agent
+@pytest.mark.asyncio
+async def test_user_can_activate_own_agent(standard_user):
     agent_id = uuid.uuid4()
     agent = make_agent(
-        agent_id, builder_user.org_id, builder_user.id, status="ACTIVE", lifecycle="ACTIVE"
+        agent_id, standard_user.org_id, standard_user.id, status="ACTIVE", lifecycle="ACTIVE"
     )
 
     agent_service = AsyncMock()
@@ -221,7 +236,7 @@ async def test_builder_can_activate_own_agent(builder_user):
 
     res = await activate_agent(
         agent_id=agent_id,
-        user=builder_user,
+        user=standard_user,
         service=agent_service,
         db=make_db(),
     )
@@ -229,18 +244,39 @@ async def test_builder_can_activate_own_agent(builder_user):
     agent_service.activate_agent.assert_awaited_once_with(agent_id)
 
 
-# 11. Agent activation: Builder CANNOT activate another builder's agent (403)
+# 9. Agent activation: a user CANNOT activate someone else's agent (403) —
+# and, critically, not even one merely *assigned* to them: activation is an
+# owner-only build action, deliberately not OR'd with assignment.
 @pytest.mark.asyncio
-async def test_builder_cannot_activate_another_agent(builder_user):
+async def test_user_cannot_activate_another_users_owned_agent(standard_user):
     agent_id = uuid.uuid4()
-    agent = make_agent(agent_id, builder_user.org_id, uuid.uuid4())
+    agent = make_agent(agent_id, standard_user.org_id, uuid.uuid4())
     agent_service = AsyncMock()
     agent_service.agent_repo.get_agent.return_value = agent
 
     with pytest.raises(HTTPException) as exc:
         await activate_agent(
             agent_id=agent_id,
-            user=builder_user,
+            user=standard_user,
+            service=agent_service,
+            db=make_db(),
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_user_cannot_activate_an_agent_only_assigned_to_them(standard_user):
+    agent_id = uuid.uuid4()
+    agent = make_agent(
+        agent_id, standard_user.org_id, uuid.uuid4(), assigned_user_id=standard_user.id
+    )
+    agent_service = AsyncMock()
+    agent_service.agent_repo.get_agent.return_value = agent
+
+    with pytest.raises(HTTPException) as exc:
+        await activate_agent(
+            agent_id=agent_id,
+            user=standard_user,
             service=agent_service,
             db=make_db(),
         )

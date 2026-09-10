@@ -34,6 +34,34 @@
   overflow-x: clip;
 }
 
+/* Dark mode, for real — every surface in the app reads these same --l-*
+   custom properties (never a hardcoded hex), so overriding them here is
+   enough to re-theme the whole console/landing/login in one place, with no
+   per-component changes. Before this block existed, toggling next-themes'
+   `.dark` class changed nothing any of our own CSS actually read — the only
+   visible effect was the browser's own native `color-scheme: dark` styling
+   (form controls, scrollbars), which looked like "only the scrollbar changed".
+   Neutrals and pale/soft tints invert; the saturated brand accents (orange,
+   yellow, teal) stay the same hue — they read fine on a dark ground and
+   changing them would cost brand identity for no contrast benefit. This
+   mirrors the same light/dark split already used in this project's own
+   design docs (`projectoverview.html`/`threerole.html`'s paper/ink/charcoal
+   + teal-soft/amber-soft/garnet-soft dark palette). */
+.dark .landing {
+  --l-ink: #f2ede1;
+  --l-charcoal: #c9c1b1;
+  --l-cream: #17140f;
+  --l-cream-deep: #211d16;
+
+  --l-yellow-pale: #332609;
+  --l-pink-pale: #3a1a20;
+  --l-pink-blush: #33161c;
+  --l-pink-lilac: #33193a;
+  --l-teal-soft: #12302c;
+
+  --l-line: rgba(242, 237, 225, 0.16);
+}
+
 .landing * {
   box-sizing: border-box;
 }

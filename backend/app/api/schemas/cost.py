@@ -29,6 +29,9 @@ class CostSummaryResponse(BaseModel):
     total_cost_usd: float
     by_agent: dict[str, float]
     by_model: dict[str, float]
+    #: Echoes back which window this summary was computed over, so the
+    #: console never has to remember what it asked for.
+    window: Literal["24h", "7d", "30d", "all"] = "all"
 
 
 class AgentBudgetStatus(BaseModel):

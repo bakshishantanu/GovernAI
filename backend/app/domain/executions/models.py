@@ -39,6 +39,12 @@ class Execution(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     result: Mapped[str | None] = mapped_column(String, nullable=True)
     error: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Null for every execution started before this column existed, and for
+    # webhook-triggered runs (e.g. the Jira issue-created hook), which have
+    # no signed-in user to attribute the run to.
+    triggered_by_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )

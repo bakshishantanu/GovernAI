@@ -76,6 +76,10 @@ async def get_agent_service(db: AsyncSession = Depends(get_db)) -> AgentService:
     return AgentService(agent_repo=agent_repo, perm_repo=perm_repo, skill_repo=skill_repo)
 
 
+async def get_agent_repository(db: AsyncSession = Depends(get_db)) -> AgentRepository:
+    return AgentRepository(db)
+
+
 async def get_execution_service(db: AsyncSession = Depends(get_db)) -> ExecutionService:
     exec_repo = ExecutionRepository(db)
     return ExecutionService(exec_repo=exec_repo)
@@ -109,6 +113,10 @@ async def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
 async def get_cost_service(db: AsyncSession = Depends(get_db)) -> CostService:
     repo = CostRepository(db)
     return CostService(cost_repo=repo, event_bus=event_bus)
+
+
+async def get_cost_repository(db: AsyncSession = Depends(get_db)) -> CostRepository:
+    return CostRepository(db)
 
 
 def get_embedding_provider() -> EmbeddingProvider | None:

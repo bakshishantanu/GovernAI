@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { logout } from "@/app/auth/actions";
 import { LogOut, User, Bell } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchApi } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
-import { UserRole } from "@/lib/types";
+import { useRoleBase } from "@/lib/use-role-base";
 
 /**
  * App shell header, on Priya's design system (D-038).
@@ -27,23 +27,35 @@ import { UserRole } from "@/lib/types";
  * purely because the tab was hidden. A plain keyed remount (this version)
  * animates in on its own schedule without gating on anything exiting, so
  * real information is never held hostage by a decorative transition.
+ *
+ * No role switcher here anymore — which console you land on is decided
+ * purely by the email you registered/signed in with (admin-listed emails
+ * get `/admin`, everyone else gets `/user`; see `[role]/layout.tsx`), not
+ * by anything chosen in the UI.
+ *
+ * The profile icon used to be a plain, unclickable div — decoration with no
+ * behavior behind it. It's a real link to Settings now (same destination
+ * the sidebar's own identity card links to), showing real initials when a
+ * real name/email is known rather than a generic person icon.
  */
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Admin",
-  agent_builder: "Builder",
-  user: "User",
-};
-
 export function Header() {
   const [orgName, setOrgName] = useState<string | null>(null);
-  const { role, switchRole } = useAuth();
+  const [initials, setInitials] = useState<string | null>(null);
+  const base = useRoleBase();
 
   useEffect(() => {
     let cancelled = false;
     fetchApi("/auth/settings")
       .then((data) => {
-        if (!cancelled) setOrgName(data?.organization?.name ?? null);
+        if (cancelled) return;
+        setOrgName(data?.organization?.name ?? null);
+        const display: string | undefined = data?.user?.full_name || data?.user?.email;
+        if (display) {
+          const parts = display.trim().split(/\s+/);
+          setInitials(
+            (parts.length >= 2 ? parts[0][0] + parts[1][0] : display.slice(0, 2)).toUpperCase()
+          );
+        }
       })
       .catch(() => {
         /* header still renders; the chip just stays a loading state */
@@ -66,10 +78,6 @@ export function Header() {
       </motion.span>
 
       <div className="flex items-center gap-1.5">
-        <RoleSwitcher role={role} onSwitch={switchRole} />
-
-        <div className="mx-2 h-4 w-px bg-[var(--l-line)]" />
-
         <ThemeToggle />
 
         <button className="rounded-full p-2 text-[var(--l-charcoal)]/60 transition-colors hover:bg-[var(--l-cream-deep)] hover:text-[var(--l-ink)]">
@@ -78,9 +86,13 @@ export function Header() {
 
         <div className="mx-2 h-4 w-px bg-[var(--l-line)]" />
 
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[var(--l-charcoal)]/70">
-          <User className="h-4 w-4" />
-        </div>
+        <Link
+          href={`${base}/settings`}
+          title="Your account"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[10.5px] font-semibold text-[var(--l-charcoal)]/70 transition-colors hover:bg-[var(--l-yellow-pale)] hover:text-[var(--l-ink)]"
+        >
+          {initials ?? <User className="h-4 w-4" />}
+        </Link>
 
         <form action={logout}>
           <motion.button
@@ -95,48 +107,5 @@ export function Header() {
         </form>
       </div>
     </header>
-  );
-}
-
-/**
- * A development affordance for seeing all three consoles without three
- * logins. It only changes which dev token the API client sends, so the
- * backend still decides everything — switching here cannot grant access
- * the token does not already carry.
- */
-function RoleSwitcher({
-  role,
-  onSwitch,
-}: {
-  role: UserRole;
-  onSwitch: (role: UserRole) => void;
-}) {
-  const roles: UserRole[] = ["admin", "agent_builder", "user"];
-
-  return (
-    <div className="hidden items-center gap-0.5 rounded-full bg-[var(--l-cream-deep)] p-0.5 sm:flex">
-      {roles.map((r) => {
-        const isActive = role === r;
-        return (
-          <button
-            key={r}
-            type="button"
-            onClick={() => onSwitch(r)}
-            aria-pressed={isActive}
-            className="relative rounded-full px-3 py-1 text-xs font-medium transition-colors"
-            style={{ color: isActive ? "#ffffff" : "var(--l-charcoal)" }}
-          >
-            {isActive && (
-              <motion.span
-                layoutId="header-role-pill"
-                className="absolute inset-0 rounded-full bg-[var(--l-orange)]"
-                transition={{ type: "spring", stiffness: 500, damping: 38 }}
-              />
-            )}
-            <span className="relative z-10">{ROLE_LABELS[r]}</span>
-          </button>
-        );
-      })}
-    </div>
   );
 }

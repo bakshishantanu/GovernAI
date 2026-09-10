@@ -23,7 +23,7 @@ async def test_admin_is_allowed_through():
 async def test_user_is_refused_with_403():
     """FRD-01's acceptance criterion: a user attempting an admin action gets 403."""
     with pytest.raises(HTTPException) as exc:
-        await require_admin(user("user"))
+        await require_admin(user("agent_builder"))
 
     assert exc.value.status_code == 403
     assert "admin" in exc.value.detail
@@ -38,7 +38,7 @@ def test_unknown_role_cannot_even_be_constructed():
 
 @pytest.mark.asyncio
 async def test_require_role_admits_any_listed_role():
-    dependency = require_role("admin", "user")
+    dependency = require_role("admin", "agent_builder")
 
-    for role in ("admin", "user"):
+    for role in ("admin", "agent_builder"):
         assert (await dependency(user(role))).role == role

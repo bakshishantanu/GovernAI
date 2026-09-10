@@ -12,55 +12,54 @@ import {
   FileText,
   DollarSign,
   Settings,
-  ClipboardList,
-  Sparkles,
   PlayCircle,
 } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { useRoleBase } from "@/lib/use-role-base";
 
 /**
  * App shell sidebar, on Priya's landing design system (D-038), with the
  * navigation itself chosen by role.
  *
- * Each role sees only its own surfaces, so the three experiences read as
- * three different sites while sharing one deployment and one design system.
- * This is presentation only: hiding a link is not access control, and every
+ * Two roles (agent_builder merged into user — D-052): admin sees the full
+ * console; user sees agents (whether built or assigned), skills, runs,
+ * activity, and cost figures for those agents. The request/claim flow
+ * (Request an Agent, Requests Queue) was removed once a user could build an
+ * agent directly — a two-step "ask, then someone claims it" ceremony had no
+ * purpose left once the person asking and the person building are the same
+ * person; "New agent" on the agents page is the one direct path now. This
+ * is presentation only: hiding a link is not access control, and every
  * endpoint re-checks the role server-side.
  */
 
 export function Sidebar() {
   const pathname = usePathname();
   const { role } = useAuth();
+  const base = useRoleBase();
 
   const getNavItems = () => {
     switch (role) {
       case "agent_builder":
         return [
-          { name: "Overview", href: "/", icon: LayoutDashboard },
-          { name: "Requests Queue", href: "/requests", icon: ClipboardList },
-          { name: "Skill Marketplace", href: "/skills", icon: Puzzle },
-          { name: "My Builds", href: "/agents", icon: Bot },
-          { name: "My Activity", href: "/audit", icon: FileText },
-        ];
-      case "user":
-        return [
-          { name: "Overview", href: "/", icon: LayoutDashboard },
-          { name: "Request an Agent", href: "/request-agent", icon: Sparkles },
-          { name: "My Agents", href: "/agents", icon: Bot },
-          { name: "My Runs", href: "/executions", icon: PlayCircle },
+          { name: "Overview", href: `${base}`, icon: LayoutDashboard },
+          { name: "My Agents", href: `${base}/agents`, icon: Bot },
+          { name: "Skills", href: `${base}/skills`, icon: Puzzle },
+          { name: "My Runs", href: `${base}/executions`, icon: PlayCircle },
+          { name: "My Activity", href: `${base}/audit`, icon: FileText },
+          { name: "Costs", href: `${base}/costs`, icon: DollarSign },
+          { name: "Settings", href: `${base}/settings`, icon: Settings },
         ];
       case "admin":
       default:
         return [
-          { name: "Overview", href: "/", icon: LayoutDashboard },
-          { name: "All Agents", href: "/agents", icon: Bot },
-          { name: "Requests", href: "/requests", icon: ClipboardList },
-          { name: "Skills", href: "/skills", icon: Puzzle },
-          { name: "Policies", href: "/policies", icon: ShieldCheck },
-          { name: "Audit Log", href: "/audit", icon: FileText },
-          { name: "Costs", href: "/costs", icon: DollarSign },
-          { name: "Settings", href: "/settings", icon: Settings },
+          { name: "Overview", href: `${base}`, icon: LayoutDashboard },
+          { name: "All Agents", href: `${base}/agents`, icon: Bot },
+          { name: "Skills", href: `${base}/skills`, icon: Puzzle },
+          { name: "Policies", href: `${base}/policies`, icon: ShieldCheck },
+          { name: "Audit Log", href: `${base}/audit`, icon: FileText },
+          { name: "Costs", href: `${base}/costs`, icon: DollarSign },
+          { name: "Settings", href: `${base}/settings`, icon: Settings },
         ];
     }
   };
@@ -70,7 +69,7 @@ export function Sidebar() {
   return (
     <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-[var(--l-line)] bg-[var(--l-cream)]">
       <Link
-        href="/"
+        href={base || "/"}
         className="landing-display flex h-16 shrink-0 items-center gap-2 px-6 text-base text-[var(--l-ink)]"
       >
         <ShieldCheck className="h-5 w-5 text-[var(--l-orange)]" />
@@ -81,7 +80,7 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+            (item.href !== base && pathname.startsWith(item.href));
 
           return (
             <Link
@@ -113,18 +112,29 @@ export function Sidebar() {
 
 /**
  * Who is actually signed in, from GET /auth/me — never a hardcoded name.
- * The role is what governs access, so it leads; the raw user id is shown
- * in mono underneath, truncated, the way an id is always presented here.
+ *
+ * Shows the real display name (or email, if no name is set) whenever the
+ * token actually carries one — a real Supabase session always does. The dev
+ * token has no real identity behind it, so those fields come back null and
+ * this falls back to the role name instead of showing nothing/None.
  */
 /** The database's value is a key, not a label - never print it raw. */
 const ROLE_NAME: Record<string, string> = {
   admin: "Admin",
-  agent_builder: "Agent builder",
-  user: "User",
+  agent_builder: "Agent Builder",
 };
 
+type Me = { id: string; role: string; email: string | null; full_name: string | null };
+
+function initials(text: string): string {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return text.slice(0, 2).toUpperCase();
+}
+
 function SignedInAs() {
-  const [me, setMe] = useState<{ id: string; role: string } | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const base = useRoleBase();
 
   useEffect(() => {
     let cancelled = false;
@@ -140,20 +150,23 @@ function SignedInAs() {
     };
   }, []);
 
+  const displayName = me?.full_name || me?.email || (me ? ROLE_NAME[me.role] : null);
+  const subtitle = me?.full_name ? me.email : me ? ROLE_NAME[me.role] : null;
+
   return (
     <Link
-      href="/settings"
+      href={`${base}/settings`}
       className="flex items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-[var(--l-yellow-pale)]/40"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--l-navy-deep)] text-[11px] font-semibold text-[var(--l-cream)]">
-        {me ? me.role.slice(0, 2).toUpperCase() : "··"}
+        {displayName ? initials(displayName) : "··"}
       </span>
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="truncate text-[13px] font-semibold text-[var(--l-ink)]">
-          {me ? (ROLE_NAME[me.role] ?? me.role) : "Signed in"}
+          {displayName ?? "Signed in"}
         </span>
         <span className="truncate font-mono text-[10.5px] text-[var(--l-charcoal)]/50">
-          {me ? `${me.id.slice(0, 8)}…` : "loading…"}
+          {subtitle ?? (me ? `${me.id.slice(0, 8)}…` : "loading…")}
         </span>
       </span>
     </Link>

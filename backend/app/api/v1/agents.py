@@ -106,23 +106,20 @@ async def list_agents(
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """List agents. Admin sees all in org. Builder sees own. User sees assigned."""
-    owner_id = None
-    assigned_user_id = None
-    if user.role == "agent_builder":
-        owner_id = user.id
-    elif user.role == "user":
-        assigned_user_id = user.id
+    """List agents. Admin sees every agent in the org. A user sees agents they
+    built (owner) or that were handed to them (assigned) — the two are not
+    mutually exclusive for the same person, so this is an OR, not a role
+    branch."""
+    visible_to_user_id = None if user.role == "admin" else user.id
 
     agents = await service.agent_repo.list_agents_by_org(
         user.org_id,
         limit=limit,
         offset=offset,
-        owner_id=owner_id,
-        assigned_user_id=assigned_user_id,
+        visible_to_user_id=visible_to_user_id,
     )
     count = await service.agent_repo.count_agents_by_org(
-        user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
+        user.org_id, visible_to_user_id=visible_to_user_id
     )
 
     # Built explicitly so the passport and the skills are both included; one
@@ -147,10 +144,9 @@ async def get_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     # 404 rather than 403 outside the caller's scope: a 403 would confirm the
-    # agent exists.
-    if user.role == "agent_builder" and agent.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    elif user.role == "user" and agent.assigned_user_id != user.id:
+    # agent exists. Owner or assignee (not a role branch — the same person
+    # can be either, or both, for different agents).
+    if user.role != "admin" and user.id not in (agent.owner_id, agent.assigned_user_id):
         raise HTTPException(status_code=404, detail="Agent not found")
 
     skills = await _skills_for(db, [agent.id])
@@ -170,7 +166,10 @@ async def submit_agent_for_review(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    # Build actions (submit/activate/edit) are an owner-only privilege, not
+    # widened to "or assigned" — being handed an agent to *use* is not the
+    # same as being allowed to edit its definition.
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to submit this agent")
 
     try:
@@ -225,7 +224,7 @@ async def activate_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to activate this agent")
 
     try:
@@ -261,7 +260,7 @@ async def update_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.role == "agent_builder" and agent.owner_id != user.id:
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this agent")
 
     if payload.skills is not None:

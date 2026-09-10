@@ -42,7 +42,10 @@ class AuditService:
         )
         await self.audit_repo.record_event(event)
         await self.event_bus.publish(
-            Event.create("audit.agent.suspended", {"agent_id": str(agent_id), "reason": reason})
+            Event.create(
+                "audit.agent.suspended",
+                {"agent_id": str(agent_id), "org_id": str(org_id), "reason": reason},
+            )
         )
 
     async def log_agent_reactivated(
@@ -144,5 +147,14 @@ class AuditService:
 
         topic = "audit.tool.allowed" if allowed else "audit.tool.denied"
         await self.event_bus.publish(
-            Event.create(topic, {"execution_id": str(execution_id), "tool": tool, "reason": reason})
+            Event.create(
+                topic,
+                {
+                    "execution_id": str(execution_id),
+                    "agent_id": str(agent_id),
+                    "org_id": str(org_id),
+                    "tool": tool,
+                    "reason": reason,
+                },
+            )
         )

@@ -31,12 +31,14 @@ def user_client(org_id):
     return CurrentUser(
         id=uuid.uuid4(),
         org_id=org_id,
-        role="user",
+        role="agent_builder",
     )
 
 
 @pytest.fixture
 def builder_client(org_id):
+    """Named for what it does in these tests (claims/builds a request), not
+    for a role that no longer exists — a "user" now covers this."""
     return CurrentUser(
         id=uuid.uuid4(),
         org_id=org_id,
@@ -107,7 +109,7 @@ async def test_list_requests_scopes_to_user(user_client):
 @pytest.mark.asyncio
 async def test_get_request_detail_forbidden_for_different_user(org_id):
     owner_id = uuid.uuid4()
-    other_user = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="user")
+    other_user = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
 
     service = AsyncMock(spec=AgentRequestService)
     service.request_repo = AsyncMock()
@@ -131,13 +133,16 @@ async def test_get_request_detail_forbidden_for_different_user(org_id):
 
 @pytest.mark.asyncio
 async def test_claim_request_success(builder_client):
+    """A user claiming their own request succeeds — post role-merge, claim is
+    restricted to the requester's own request (see claim_request's own
+    docstring), so this fixture's request is theirs."""
     req_id = uuid.uuid4()
     service = AsyncMock(spec=AgentRequestService)
     service.request_repo = AsyncMock()
     service.request_repo.get_request.return_value = AgentRequest(
         id=req_id,
         org_id=builder_client.org_id,
-        requester_id=uuid.uuid4(),
+        requester_id=builder_client.id,
         title="Claimable",
         description="...",
         requested_skills=[],
@@ -172,7 +177,7 @@ async def test_claim_request_conflict(builder_client):
     service.request_repo.get_request.return_value = AgentRequest(
         id=req_id,
         org_id=builder_client.org_id,
-        requester_id=uuid.uuid4(),
+        requester_id=builder_client.id,
         title="Already claimed",
         description="...",
         requested_skills=[],
@@ -186,6 +191,67 @@ async def test_claim_request_conflict(builder_client):
         await claim_request(request_id=req_id, service=service, user=builder_client)
 
     assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_claim_request_forbidden_for_someone_elses_request(builder_client):
+    """A user may claim/build only their own request — a real rule added
+    with the agent_builder-to-user merge, not present in either old role."""
+    req_id = uuid.uuid4()
+    service = AsyncMock(spec=AgentRequestService)
+    service.request_repo = AsyncMock()
+    service.request_repo.get_request.return_value = AgentRequest(
+        id=req_id,
+        org_id=builder_client.org_id,
+        requester_id=uuid.uuid4(),  # someone else
+        title="Someone else's request",
+        description="...",
+        requested_skills=[],
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await claim_request(request_id=req_id, service=service, user=builder_client)
+
+    assert exc.value.status_code == 403
+    service.claim_request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_admin_can_claim_anyones_request(admin_client):
+    """Admin is unrestricted, unlike a plain user."""
+    req_id = uuid.uuid4()
+    service = AsyncMock(spec=AgentRequestService)
+    service.request_repo = AsyncMock()
+    service.request_repo.get_request.return_value = AgentRequest(
+        id=req_id,
+        org_id=admin_client.org_id,
+        requester_id=uuid.uuid4(),  # someone else
+        title="Someone else's request",
+        description="...",
+        requested_skills=[],
+        status="PENDING",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    service.claim_request.return_value = AgentRequest(
+        id=req_id,
+        org_id=admin_client.org_id,
+        requester_id=uuid.uuid4(),
+        builder_id=admin_client.id,
+        title="Someone else's request",
+        description="...",
+        requested_skills=[],
+        status="CLAIMED",
+        claimed_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    res = await claim_request(request_id=req_id, service=service, user=admin_client)
+    assert res.status == "CLAIMED"
 
 
 @pytest.mark.asyncio

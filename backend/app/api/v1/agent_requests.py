@@ -21,7 +21,7 @@ router = APIRouter()
 async def create_request(
     request: AgentRequestCreate,
     service: AgentRequestService = Depends(get_agent_request_service),
-    user: CurrentUser = Depends(require_role("user", "admin")),
+    user: CurrentUser = Depends(require_role("agent_builder", "admin")),
 ):
     """Create a new agent request."""
     return await service.create_request(
@@ -44,7 +44,7 @@ async def list_requests(
     """List agent requests with optional filters."""
     # simple listing with filters
     # User can only see their own requests (enforced if user role)
-    if user.role == "user":
+    if user.role == "agent_builder":
         requester_id = user.id
 
     # Builder can see all PENDING, or their own CLAIMED/FULFILLED
@@ -69,7 +69,7 @@ async def get_request(
     if not req or req.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    if user.role == "user" and req.requester_id != user.id:
+    if user.role == "agent_builder" and req.requester_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found")
 
     return req
@@ -82,10 +82,23 @@ async def claim_request(
     service: AgentRequestService = Depends(get_agent_request_service),
     user: CurrentUser = Depends(require_builder_or_admin),
 ):
-    """Claim a pending request."""
+    """Claim a pending request.
+
+    Post role-merge: a non-admin user may only claim and build **their own**
+    request, not any request in the queue — confirmed directly as the
+    intended behavior (narrower than a general "self-claim allowed", and a
+    genuinely new rule neither the old `user` nor `agent_builder` role
+    enforced on its own). Admin is unrestricted, as before.
+    """
     req = await service.request_repo.get_request(request_id)
     if not req or req.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Request not found")
+
+    if user.role != "admin" and req.requester_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only build agents from your own requests.",
+        )
 
     try:
         return await service.claim_request(request_id, user.id)
@@ -102,14 +115,14 @@ async def claim_request(
 async def cancel_request(
     request_id: UUID,
     service: AgentRequestService = Depends(get_agent_request_service),
-    user: CurrentUser = Depends(require_role("user", "admin")),
+    user: CurrentUser = Depends(require_role("agent_builder", "admin")),
 ):
     """Cancel a request."""
     req = await service.request_repo.get_request(request_id)
     if not req or req.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    if user.role == "user" and req.requester_id != user.id:
+    if user.role == "agent_builder" and req.requester_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found")
 
     try:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,8 +30,24 @@ class AgentRepository:
         offset: int = 0,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
+        visible_to_user_id: UUID | None = None,
     ) -> list[Agent]:
         query = self._with_relations().where(Agent.org_id == org_id)
+        # `visible_to_user_id` is OR, not AND, with itself against both
+        # columns: since the agent_builder/user merge, one non-admin person
+        # can be the owner of some agents and only the assignee of others, so
+        # "mine" now means either column matching them, not both narrowing
+        # the same query. `owner_id`/`assigned_user_id` stay as separate,
+        # independent AND-style filters for any caller that genuinely wants
+        # one column only (e.g. "every agent this specific person owns,
+        # regardless of who it's assigned to").
+        if visible_to_user_id is not None:
+            query = query.where(
+                or_(
+                    Agent.owner_id == visible_to_user_id,
+                    Agent.assigned_user_id == visible_to_user_id,
+                )
+            )
         if owner_id:
             query = query.where(Agent.owner_id == owner_id)
         if assigned_user_id:
@@ -47,8 +63,16 @@ class AgentRepository:
         org_id: UUID,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
+        visible_to_user_id: UUID | None = None,
     ) -> int:
         query = select(func.count(Agent.id)).where(Agent.org_id == org_id)
+        if visible_to_user_id is not None:
+            query = query.where(
+                or_(
+                    Agent.owner_id == visible_to_user_id,
+                    Agent.assigned_user_id == visible_to_user_id,
+                )
+            )
         if owner_id:
             query = query.where(Agent.owner_id == owner_id)
         if assigned_user_id:

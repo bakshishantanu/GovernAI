@@ -37,6 +37,7 @@ class AgentRequestService:
                     payload={
                         "request_id": str(req.id),
                         "org_id": str(req.org_id),
+                        "requester_id": str(req.requester_id),
                         "status": req.status,
                         "title": req.title,
                     },
