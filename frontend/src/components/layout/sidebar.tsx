@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -13,10 +13,12 @@ import {
   DollarSign,
   Settings,
   PlayCircle,
+  Inbox,
 } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useRoleBase } from "@/lib/use-role-base";
+import { useLive } from "@/lib/use-live";
 
 /**
  * App shell sidebar, on Priya's landing design system (D-038), with the
@@ -37,13 +39,27 @@ export function Sidebar() {
   const pathname = usePathname();
   const { role } = useAuth();
   const base = useRoleBase();
+  const pendingDrafts = usePendingDraftCount();
+  const hasTicketingAgent = useHasTicketingAgent();
 
   const getNavItems = () => {
+    // "Draft Replies" is only relevant to someone who actually has an agent
+    // that can produce a draft — i.e. one built with the ticketing skill.
+    // Gated on that (not just on `pendingDrafts > 0`) so it stays visible
+    // once you own a ticketing agent even between drafts, but never shows to
+    // someone who has never touched ticketing. `/agents/` is already scoped
+    // server-side (org-wide for admin, own+assigned for a builder), so the
+    // same check works for both roles without re-deriving the scoping rule.
+    const draftsItem = hasTicketingAgent
+      ? [{ name: "Draft Replies", href: `${base}/drafts`, icon: Inbox, badge: pendingDrafts }]
+      : [];
+
     switch (role) {
       case "agent_builder":
         return [
           { name: "Overview", href: `${base}`, icon: LayoutDashboard },
           { name: "My Agents", href: `${base}/agents`, icon: Bot },
+          ...draftsItem,
           { name: "Skills", href: `${base}/skills`, icon: Puzzle },
           { name: "My Runs", href: `${base}/executions`, icon: PlayCircle },
           { name: "My Activity", href: `${base}/audit`, icon: FileText },
@@ -55,6 +71,7 @@ export function Sidebar() {
         return [
           { name: "Overview", href: `${base}`, icon: LayoutDashboard },
           { name: "All Agents", href: `${base}/agents`, icon: Bot },
+          ...draftsItem,
           { name: "Skills", href: `${base}/skills`, icon: Puzzle },
           { name: "Policies", href: `${base}/policies`, icon: ShieldCheck },
           { name: "Audit Log", href: `${base}/audit`, icon: FileText },
@@ -97,7 +114,18 @@ export function Sidebar() {
                 />
               )}
               <item.icon className="relative z-10 h-4 w-4 shrink-0" />
-              <span className="relative z-10">{item.name}</span>
+              <span className="relative z-10 flex-1">{item.name}</span>
+              {!!("badge" in item && item.badge) && (
+                <span
+                  className="relative z-10 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
+                  style={{
+                    background: isActive ? "rgba(255,255,255,0.25)" : "var(--l-orange)",
+                    color: isActive ? "#ffffff" : "#ffffff",
+                  }}
+                >
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -108,6 +136,38 @@ export function Sidebar() {
       </div>
     </aside>
   );
+}
+
+/**
+ * Whether the signed-in caller has any visible agent built with the
+ * `ticketing` skill — the gate for showing "Draft Replies" at all. Changes
+ * rarely (only when an agent is built/deleted or its skills edited), so this
+ * polls far less often than the pending-count badge. Silently `false` on
+ * failure — an API hiccup should hide the link, never crash the sidebar.
+ */
+function useHasTicketingAgent(): boolean {
+  const load = useCallback(async () => {
+    const data = await fetchApi("/agents/").catch(() => []);
+    const agents = Array.isArray(data) ? data : [];
+    return agents.some((a) => (a.skills ?? []).some((s: { id?: string }) => s?.id === "ticketing"));
+  }, []);
+  const { data } = useLive(load, 120000);
+  return data ?? false;
+}
+
+/**
+ * How many drafted replies are waiting on review — this is a queue people
+ * need to notice, so the sidebar carries a live badge rather than making
+ * someone open the page to find out. Silently 0 on failure (e.g. signed
+ * out): a broken badge should never block the rest of the sidebar.
+ */
+function usePendingDraftCount(): number {
+  const load = useCallback(async () => {
+    const data = await fetchApi("/ticket-drafts/?draft_status=PENDING_REVIEW").catch(() => []);
+    return Array.isArray(data) ? data.length : 0;
+  }, []);
+  const { data } = useLive(load, 30000);
+  return data ?? 0;
 }
 
 /**
