@@ -16,6 +16,7 @@ from app.domain.executions.models import Execution
 from app.domain.permissions.models import Permission
 from app.domain.policies.models import Policy, PolicyRule
 from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
+from app.skills.base import TrustLevel
 
 connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
 engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
@@ -52,10 +53,16 @@ async def seed_data():
         await session.flush()
         
         # 0.5. Skills bootstrap
+        #
+        # trust_level comes from the TrustLevel enum rather than a hand-written
+        # string: the API declares Literal["VERIFIED","COMMUNITY","EXPERIMENTAL"]
+        # and the runtime registry writes `skill_class.trust_level`, so a
+        # lowercase literal here silently produced rows that failed response
+        # validation and 500'd GET /skills/ for the whole list.
         skills_to_seed = [
-            SkillModel(id="ticketing", name="ticketing", display_name="Ticketing & ITSM", description="Create and resolve tickets", version="1.0", trust_level="verified"),
-            SkillModel(id="solr_search", name="solr_search", display_name="Enterprise Search", description="Full-text search over enterprise document collections", version="1.0", trust_level="verified"),
-            SkillModel(id="document_search", name="document_search", display_name="Knowledge Search", description="RAG document search", version="1.0", trust_level="verified"),
+            SkillModel(id="ticketing", name="ticketing", display_name="Ticketing & ITSM", description="Create and resolve tickets", version="1.0", trust_level=TrustLevel.VERIFIED.value),
+            SkillModel(id="solr_search", name="solr_search", display_name="Enterprise Search", description="Full-text search over enterprise document collections", version="1.0", trust_level=TrustLevel.VERIFIED.value),
+            SkillModel(id="document_search", name="document_search", display_name="Knowledge Search", description="RAG document search", version="1.0", trust_level=TrustLevel.VERIFIED.value),
         ]
         for sk in skills_to_seed:
             existing = await session.get(SkillModel, sk.id)
@@ -162,7 +169,10 @@ async def seed_data():
         passport = AgentPassport(
             id=passport_id,
             agent_id=agent.id,
-            compliance_status="COMPLIANT",
+            # "PASSED", not "COMPLIANT": the API declares
+            # Literal["PENDING","PASSED","FAILED"] and agents/service.py writes
+            # exactly those, so 'COMPLIANT' 500'd GET /agents/ for the whole list.
+            compliance_status="PASSED",
             lifecycle_state="ACTIVE",
             permissions=[],
         )
@@ -298,7 +308,11 @@ async def seed_data():
                 org_id=org_id,
                 agent_id=agent.id,
                 execution_id=exec_id,
-                event_type="llm_inference",
+                # "LLM_CALL", matching costs/service.py and the API's
+                # Literal["LLM_CALL","TOOL_CALL"]. 'llm_inference' only survived
+                # because api/v1/costs.py translates it on the way out; the
+                # stored value was still wrong.
+                event_type="LLM_CALL",
                 model="gpt-4o",
                 prompt_tokens=150,
                 completion_tokens=50,
