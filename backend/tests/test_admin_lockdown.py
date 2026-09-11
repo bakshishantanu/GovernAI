@@ -35,7 +35,9 @@ def dev_bypass_on(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def dev_bypass_off_by_default(monkeypatch):
-    monkeypatch.delenv("AUTH_ALLOW_DEV_TOKEN", raising=False)
+    # "false", not deleted: the flag is also read from backend/.env, so an
+    # explicit value keeps a developer's own .env from deciding these tests.
+    monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
 
 
 # 1. Admin Lockdown: Default role is always agent_builder, never admin
