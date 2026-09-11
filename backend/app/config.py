@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # --- Application ---
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
+    # Local-development bypass that accepts the fixed `dummy-token*` values
+    # (see domain/auth/middleware.py). Off by default, so a deployed server
+    # that sets nothing never accepts them.
+    AUTH_ALLOW_DEV_TOKEN: bool = False
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     model_config = SettingsConfigDict(

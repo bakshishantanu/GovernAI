@@ -32,8 +32,16 @@ def dev_token_allowed() -> bool:
 
     Off unless AUTH_ALLOW_DEV_TOKEN is set explicitly, so the bypass can never
     be active in a deployed environment by accident.
+
+    A real environment variable wins, including an explicit "false"; otherwise
+    backend/.env decides, via settings. Reading os.environ alone silently
+    ignored the .env line, because pydantic-settings loads .env into
+    `settings` without exporting it.
     """
-    return os.environ.get("AUTH_ALLOW_DEV_TOKEN", "").strip().lower() in {"1", "true", "yes"}
+    raw = os.environ.get("AUTH_ALLOW_DEV_TOKEN")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes"}
+    return settings.AUTH_ALLOW_DEV_TOKEN
 
 
 def get_supabase_jwt_secret() -> str:
