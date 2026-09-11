@@ -122,11 +122,11 @@ say that answers will stop being able to cite it.
 The point of the upload is asking questions and getting answers with
 citations you can check.
 
-### The honest constraint
+### Chat runs through an agent, deliberately
 
-**There is no chat endpoint.** Questions go through the existing agent
-execution flow, which is what already runs the Document Search skill. So the
-chat is a thin layer over machinery the console already has:
+**There is no separate chat endpoint, and there should not be one.** Questions
+go through the existing agent execution flow, which is what already runs the
+Document Search skill:
 
 1. The user needs an agent with the **Document Search** skill, ACTIVE.
 2. `POST /executions/` with that `agent_id` and the question as the `goal`.
@@ -134,11 +134,28 @@ chat is a thin layer over machinery the console already has:
 3. Stream the run, as `execution-stream.tsx` already does.
 4. The final answer contains citations.
 
-If a shaped `POST /documents/chat` endpoint would be better, say so and I will
-add it. It is a small piece of work, and the current route means a user has to
-create an agent before they can ask anything, which is a clumsy first
-experience. I did not add it unprompted because it duplicates the execution
-path, and duplicating it badly is worse than reusing it.
+Requiring an agent is the governance model, not friction to design around. A
+run is what constructs the `PolicyEngine`, `AuditService`, `CostService`,
+`BudgetGuard` and kill switch, every one of them keyed on `agent_id` and
+`org_id` (see `api/execution_runner.py`). A chat path that skipped the agent
+would have no passport and therefore no permission check, would write no audit
+entry, would record no cost despite spending real money on the LLM call, and
+could not be killed or budget-capped.
+
+It would also have nowhere principled to get `permitted_scopes` from. That
+value comes from the agent's skill binding; without an agent it would have to
+be hardcoded, which is exactly the "enforced structurally, not by prompt
+instruction" property the access-scope demo depends on.
+
+So the first-run experience is a UI problem, not an API one:
+
+- Let the user **pick which Document Search agent** they are talking to. A
+  small selector at the top of the chat is enough. Fetch candidates from
+  `GET /agents/` and keep the ones bound to `document_search`.
+- If they have **no** such agent, do not show an empty chat. Show a short
+  explanation plus an inline "Create a Document Search agent" action, so the
+  reason for the requirement is visible rather than feeling like a dead end.
+- Remember the last agent used, so returning to the page is one click.
 
 ### Rendering citations
 
@@ -203,8 +220,10 @@ floor and the agent should say it cannot find the answer.
 
 ## Questions for me
 
-- Want a dedicated `POST /documents/chat` so the chat does not require creating
-  an agent first?
 - Should uploads be per-user visible, or org-wide as they are now? Currently
   any document uploaded in an org is listed to, and searchable by, everyone in
   that org.
+- Should the upload form let the user choose an access scope? It is currently
+  fixed to `public`, because that is the only scope the Document Search skill
+  is registered with, and offering a scope the skill cannot read would produce
+  documents that are silently unsearchable.
