@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
+from app.config import Settings, settings
 from app.domain.auth.middleware import (
     DEV_TOKEN,
     get_current_user,
@@ -34,8 +35,13 @@ def dev_bypass_on(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def dev_bypass_off_by_default(monkeypatch):
-    """Every test starts with the bypass off unless it asks for it."""
-    monkeypatch.delenv("AUTH_ALLOW_DEV_TOKEN", raising=False)
+    """Every test starts with the bypass off unless it asks for it.
+
+    Set to "false" rather than deleted: the flag is also read from backend/.env
+    (via settings), so deleting the variable would let a developer's own .env
+    decide the outcome of these tests. An explicit environment value wins.
+    """
+    monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
 
 
 @pytest.mark.asyncio
@@ -121,6 +127,39 @@ async def test_dev_token_grants_admin_only_when_bypass_is_on(dev_bypass_on):
     user = await get_current_user(creds(DEV_TOKEN))
 
     assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_dev_bypass_honours_dotenv_when_env_var_unset(monkeypatch):
+    """AUTH_ALLOW_DEV_TOKEN=true in backend/.env must switch the bypass on.
+
+    Regression: the flag was read from os.environ only, and pydantic-settings
+    loads .env into `settings` without exporting it - so the .env line was
+    silently ignored and every dev-token request was a 401.
+    """
+    monkeypatch.delenv("AUTH_ALLOW_DEV_TOKEN", raising=False)
+    monkeypatch.setattr(settings, "AUTH_ALLOW_DEV_TOKEN", True)
+
+    user = await get_current_user(creds(DEV_TOKEN))
+
+    assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_explicit_env_false_overrides_dotenv_true(configured_secret, monkeypatch):
+    """A real environment variable still wins, so the bypass can be forced off."""
+    monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
+    monkeypatch.setattr(settings, "AUTH_ALLOW_DEV_TOKEN", True)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(creds(DEV_TOKEN))
+
+    assert exc.value.status_code == 401
+
+
+def test_dev_bypass_defaults_off():
+    """A server with neither .env line nor variable must never accept dev tokens."""
+    assert Settings.model_fields["AUTH_ALLOW_DEV_TOKEN"].default is False
 
 
 def test_missing_secret_fails_closed(monkeypatch):
