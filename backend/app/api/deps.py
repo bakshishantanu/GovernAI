@@ -34,6 +34,7 @@ from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from app.runtime.rag.ocr import build_ocr_provider_from_settings
 from app.skills.ticketing import build_jira_adapter_from_settings
 
 
@@ -154,7 +155,9 @@ async def get_document_service(
     could never make searchable.
     """
     return DocumentIngestionService(
-        repo=DocumentRepository(db), embedding_provider=embedding_provider
+        repo=DocumentRepository(db),
+        embedding_provider=embedding_provider,
+        ocr_provider=build_ocr_provider_from_settings(),
     )
 
 

@@ -39,30 +39,35 @@ def test_every_supported_office_format_is_recognised(filename, expected):
     assert detect_format(filename, None) == expected
 
 
-@pytest.mark.parametrize("filename", ["photo.png", "scan.jpg", "data.csv", "notes.doc"])
+@pytest.mark.parametrize("filename", ["photo.gif", "data.csv", "notes.doc", "archive.zip"])
 def test_unsupported_types_are_refused_by_name(filename):
-    """Still to come: images needing OCR, and the pre-2007 .doc format.
-    Until an extractor exists, an upload must be refused up front rather than
-    accepted and failed later."""
+    """.doc is the pre-2007 Word format, which is a different container
+    entirely. An upload must be refused up front rather than accepted and
+    failed later."""
     with pytest.raises(UnsupportedFileType):
         detect_format(filename, None)
 
 
+@pytest.mark.parametrize("filename", ["scan.jpg", "photo.PNG", "shot.webp"])
+def test_images_are_accepted_for_ocr(filename):
+    assert detect_format(filename, None) == "image"
+
+
 def test_the_refusal_message_names_what_is_supported():
     with pytest.raises(UnsupportedFileType) as exc:
-        detect_format("scan.png", None)
+        detect_format("data.csv", None)
     message = str(exc.value)
     assert ".pdf" in message and ".docx" in message and ".pptx" in message
 
 
-def test_a_file_that_is_not_a_pdf_reports_extraction_failure():
+async def test_a_file_that_is_not_a_pdf_reports_extraction_failure():
     with pytest.raises(ExtractionFailed):
-        extract_pdf(b"this is plainly not a pdf")
+        await extract_pdf(b"this is plainly not a pdf")
 
 
-def test_blank_pages_are_skipped_rather_than_stored_as_empty_chunks():
-    """A page with no extractable text is almost always a scanned image.
-    Storing it as an empty chunk would pollute retrieval."""
+async def test_blank_pages_are_skipped_rather_than_stored_as_empty_chunks():
+    """With no OCR provider, a page with no extractable text is skipped
+    rather than stored as an empty chunk."""
     pytest.importorskip("pypdf")
     from pypdf import PdfWriter
 
@@ -72,7 +77,7 @@ def test_blank_pages_are_skipped_rather_than_stored_as_empty_chunks():
     buffer = io.BytesIO()
     writer.write(buffer)
 
-    assert extract_pdf(buffer.getvalue()) == []
+    assert await extract_pdf(buffer.getvalue()) == []
 
 
 # --- Word ---------------------------------------------------------------

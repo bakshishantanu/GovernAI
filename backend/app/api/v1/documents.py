@@ -28,6 +28,7 @@ from app.domain.documents.service import (
 )
 from app.infrastructure.database import async_session_factory
 from app.runtime.rag.embeddings import EmbeddingProvider
+from app.runtime.rag.ocr import build_ocr_provider_from_settings
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,9 @@ async def _ingest_in_background(
     try:
         async with async_session_factory() as session:
             service = DocumentIngestionService(
-                repo=DocumentRepository(session), embedding_provider=embedding_provider
+                repo=DocumentRepository(session),
+                embedding_provider=embedding_provider,
+                ocr_provider=build_ocr_provider_from_settings(),
             )
             await service.ingest(document_id, data)
             await session.commit()

@@ -25,7 +25,18 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     LLM_PRIMARY_MODEL: str = "openai/gpt-oss-20b"
-    LLM_FALLBACK_MODEL: str = "gemini-2.5-flash"
+    # Google retires these. As of 2026-09-12 `gemini-2.5-flash`, the previous
+    # default here, is still listed by the models endpoint but answers 404 on
+    # generateContent with "no longer available to new users", so the fallback
+    # provider was dead for any recently-issued key. Verified live before
+    # changing, and worth re-checking whenever a Gemini call starts 404ing.
+    LLM_FALLBACK_MODEL: str = "gemini-3.6-flash"
+
+    # --- Document Search: OCR for scanned uploads ---
+    # Separate from the chat model because it is chosen for transcription
+    # quality on photographed pages, and can be changed without touching the
+    # agent runtime.
+    OCR_MODEL: str = "gemini-3.6-flash"
 
     # --- Ticketing skill: Jira ---
     # Left blank, the Ticketing skill falls back to its in-memory mock

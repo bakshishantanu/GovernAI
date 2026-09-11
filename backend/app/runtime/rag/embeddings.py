@@ -6,13 +6,16 @@ from abc import ABC, abstractmethod
 import httpx
 
 
-def _retry_delay_seconds(response: httpx.Response, attempt: int, base: float) -> float:
+def retry_delay_seconds(response: httpx.Response, attempt: int, base: float) -> float:
     """How long to wait before retrying a rate-limited embedding call.
 
     Prefers the server's own answer. Gemini returns it two ways: a standard
     `Retry-After` header, and a RetryInfo entry inside the error body with a
     duration like "17s". Guessing when the server has already said is how you
     end up either hammering it or sleeping far longer than needed.
+
+    Shared with the OCR client (see rag/ocr.py), which talks to the same API
+    under the same quota and needs to back off identically.
     """
     header = response.headers.get("retry-after")
     if header:
@@ -159,7 +162,7 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
 
             if attempt == self.MAX_RETRIES:
                 break
-            await asyncio.sleep(_retry_delay_seconds(response, attempt, self.BASE_BACKOFF_SECONDS))
+            await asyncio.sleep(retry_delay_seconds(response, attempt, self.BASE_BACKOFF_SECONDS))
 
         assert last_error is not None
         raise last_error

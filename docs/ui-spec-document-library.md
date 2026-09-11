@@ -66,10 +66,25 @@ type Document = {
 
 ### Status is the whole design problem
 
-Ingestion is asynchronous and **slow**. The real Apple 10-K took about
-135 seconds: 80 pages, 149 chunks, each embedded through a rate-limited API.
-The upload request returns in well under a second with `status: "PENDING"`, and
-the work happens afterwards.
+Ingestion is asynchronous and **slow**, and for scans it is very slow.
+Measured on real files:
+
+| File | Time |
+|---|---|
+| Apple 10-K, 80 text pages | ~135 s |
+| Word paper, 26 sections | ~3 s |
+| PowerPoint deck, 10 slides | ~2 s |
+| **Scanned handwritten PDF, 15 pages** | **~425 s (7 minutes)** |
+| Single scanned image | ~18 s |
+
+A scanned page costs roughly **28 seconds**, because every page is a separate
+vision-model call. The upload request itself returns in well under a second
+with `status: "PENDING"`, and the work happens afterwards.
+
+Please set expectations in the UI for scans specifically. Something like
+"Scanned pages are read one at a time and can take around 30 seconds each"
+shown once the file is detected as a scan, so a seven-minute wait is
+understood rather than assumed broken.
 
 So the flow is:
 
@@ -104,12 +119,13 @@ A refused upload returns **400** with `detail` as a plain sentence. Show it
 directly. Causes: unsupported file type, empty file, over the 25 MB limit, or
 document search not configured on the server.
 
-**Accepted: `.pdf`, `.docx`, `.pptx`.** Set
-`accept=".pdf,.docx,.pptx"` on the file input, and say so visibly near the
-control. Scanned documents and images still need OCR and are refused, so
-"Scanned documents are not supported yet" is worth stating. A user who drags
-in a `.png` gets a 400 saying the same thing, but finding out before the
-upload is better.
+**Accepted: `.pdf`, `.docx`, `.pptx`, `.jpg`, `.png`, `.webp`.** Set
+`accept=".pdf,.docx,.pptx,.jpg,.jpeg,.png,.webp"` on the file input.
+
+Scanned documents and photographs **are** supported now, via OCR. A scanned
+PDF is detected automatically: pages with no embedded text are rendered and
+transcribed, pages that already have text are not (OCR is billed per page, so
+a born-digital PDF never touches the vision model).
 
 ### Delete
 
@@ -174,7 +190,8 @@ what unit the source format actually has:
 
 | Source | Locator looks like | Why |
 |---|---|---|
-| PDF | `p.32` | It has pages |
+| PDF (text or scanned) | `p.32` | It has pages. OCR'd pages keep their real page number |
+| Single image | *(nothing, title only)* | One image is one place; "p.1" would add nothing |
 | PPTX | `slide 7` | A deck's unit is the slide, and "p.7" would be the wrong noun |
 | DOCX | `C. CNN Backbone Configuration`, `table 1` | **Word stores no page numbers at all.** Pages are produced by whatever renders the file, using the reader's paper size and fonts, so any page number would be invented. The section heading is the honest locator, and is what a reader would actually use to find the passage |
 | Seeded demo docs | *(nothing, title only)* | They have no internal structure |
@@ -225,6 +242,8 @@ Three real documents are already ingested and READY:
 | Apple FY2025 10-K (PDF) | 80 pages, 149 chunks | "How much did the company spend on research and development?" → p.50 |
 | Monkeypox Few-Shot Paper (DOCX) | 27 sections | "Which CNN backbone performed best?" → `C. CNN Backbone Configuration` |
 | Database Normalization Deck (PPTX) | 10 slides | "What is BCNF?" → `slide 7` |
+| SE Assignment (scanned handwriting, PDF) | 15 OCR'd pages | "What is SDLC?" → `p.2` |
+| Temple University Letter 1971 (scanned JPG) | 1 chunk | "What did the Framingham study find?" → title only |
 
 Worth checking all three, because they exercise the three different locator
 shapes the chip has to render.

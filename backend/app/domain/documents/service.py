@@ -26,6 +26,7 @@ from app.runtime.rag.extractors import (
     detect_format,
     extract,
 )
+from app.runtime.rag.ocr import OcrProvider
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,17 @@ class DocumentNotFound(Exception):
 
 
 class DocumentIngestionService:
-    def __init__(self, repo: DocumentRepository, embedding_provider: EmbeddingProvider | None):
+    def __init__(
+        self,
+        repo: DocumentRepository,
+        embedding_provider: EmbeddingProvider | None,
+        ocr_provider: OcrProvider | None = None,
+    ):
         self.repo = repo
         self._embeddings = embedding_provider
+        # None means scanned files cannot be read. Upload refuses them up
+        # front in that case rather than accepting one and indexing nothing.
+        self._ocr = ocr_provider
 
     async def create_upload(
         self,
@@ -72,9 +81,17 @@ class DocumentIngestionService:
                 f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB."
             )
         try:
-            detect_format(filename, mime_type)
+            fmt = detect_format(filename, mime_type)
         except UnsupportedFileType as exc:
             raise UploadRejected(str(exc)) from exc
+
+        # An image is nothing but pixels: with no OCR backend there is no
+        # possible path to text, so say so now rather than after the upload.
+        if fmt == "image" and self._ocr is None:
+            raise UploadRejected(
+                "This is an image, which needs OCR to read, and OCR is not "
+                "configured on this server."
+            )
 
         if self._embeddings is None:
             raise UploadRejected(
@@ -113,11 +130,15 @@ class DocumentIngestionService:
             document.status = "PROCESSING"
             await self.repo.flush()
 
-            pages = extract(data, document.filename or "", document.mime_type)
+            pages = await extract(
+                data, document.filename or "", document.mime_type, ocr=self._ocr
+            )
             if not pages:
                 raise ExtractionFailed(
-                    "No text could be extracted. If this is a scanned document, "
-                    "it needs OCR, which is not supported yet."
+                    "No text could be read from this document."
+                    if self._ocr is not None
+                    else "No text could be extracted. If this is a scanned document, "
+                    "it needs OCR, which is not configured on this server."
                 )
 
             chunks = chunk_pages(pages)
