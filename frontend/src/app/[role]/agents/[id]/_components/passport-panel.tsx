@@ -37,7 +37,7 @@ export function PassportPanel({ agent, budget }: { agent: Agent; budget?: Budget
 
       <h2 className="landing-display mt-5 text-base text-[var(--l-ink)]">Permissions granted</h2>
       <p className="mt-0.5 font-mono text-[10.5px] text-[var(--l-charcoal)]/45">
-        derived from skills — never hand-picked
+        derived from skills, never hand-picked
       </p>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         {agent.passport.permissions.length === 0 ? (

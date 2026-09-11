@@ -136,7 +136,7 @@ export function UserDashboard() {
 
         {runs.length === 0 ? (
           <p className="rounded-2xl border-2 border-dashed border-[var(--l-line)] bg-[var(--l-cream)] px-6 py-9 text-center text-sm text-[var(--l-charcoal)]/60">
-            No runs yet — this fills in the moment you give an agent something to do.
+            No runs yet, this fills in the moment you give an agent something to do.
           </p>
         ) : (
           <ul className="divide-y-2 divide-dashed divide-[var(--l-ink)]/10 overflow-hidden rounded-2xl border-2 border-[var(--l-line)] bg-[var(--l-cream)]">

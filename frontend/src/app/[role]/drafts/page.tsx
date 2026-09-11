@@ -164,7 +164,7 @@ export default function TicketDraftsPage() {
         <div className="rounded-2xl border-2 border-dashed border-[var(--l-line)] px-6 py-14 text-center">
           <p className="landing-display text-base text-[var(--l-ink)]">Couldn&apos;t load drafts</p>
           <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-            The request failed — check your connection and try again.
+            The request failed, check your connection and try again.
           </p>
           <button
             onClick={() => refresh()}

@@ -26,7 +26,7 @@ export function OwnerCta() {
           </h2>
           <p className="mt-6 text-lg text-[var(--l-ink)]/75 max-w-xl mx-auto leading-relaxed">
             Point GovernAI at the agents you already run. The board fills in
-            with owners, scopes and live spend — before you decide to change a
+            with owners, scopes and live spend, before you decide to change a
             single thing about how they work.
           </p>
 

@@ -30,9 +30,9 @@ const TITLE: Record<UserRole, string> = {
 
 const DESCRIPTION: Record<UserRole, string> = {
   admin:
-    "Every agent in the organisation. Each carries a passport — a stamped record of what it may do, and who let it.",
+    "Every agent in the organisation. Each carries a passport: a stamped record of what it may do, and who let it.",
   agent_builder:
-    "Agents you have built or that were handed to you. Each carries a passport — a stamped record of what it may do, and who let it.",
+    "Agents you have built or that were handed to you. Each carries a passport: a stamped record of what it may do, and who let it.",
 };
 
 const EMPTY_TITLE: Record<UserRole, string> = {
@@ -41,7 +41,7 @@ const EMPTY_TITLE: Record<UserRole, string> = {
 };
 
 const EMPTY_BODY: Record<UserRole, string> = {
-  admin: "Try a different search or filter — or issue a new one.",
+  admin: "Try a different search or filter, or issue a new one.",
   agent_builder: "Build one from a skill with New agent above.",
 };
 

@@ -127,7 +127,7 @@ export function LifecycleTrack({
         )}
         {cta && !allowed && (
           <span className="font-mono text-[11px] text-[var(--l-charcoal)]/45">
-            {cta.label} — {cta.who === "owner" ? "owner or admin only" : "admin only"}
+            {cta.label} ({cta.who === "owner" ? "owner or admin only" : "admin only"})
           </span>
         )}
       </div>

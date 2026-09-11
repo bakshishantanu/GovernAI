@@ -65,7 +65,7 @@ export function ActivityTrendChart({
         <div className="mt-4 h-[180px] animate-pulse rounded-lg bg-[var(--l-line)]/60" />
       ) : buckets.length < 2 ? (
         <p className="mt-6 text-sm text-[var(--l-charcoal)]/60">
-          Not enough activity yet to chart a trend — run an agent a few times to see one form.
+          Not enough activity yet to chart a trend, run an agent a few times to see one form.
         </p>
       ) : (
         <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">

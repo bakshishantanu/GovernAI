@@ -15,9 +15,9 @@ import { Activity, Ban, RotateCcw } from "lucide-react";
  */
 
 const LOG_SEED = [
-  { t: "12:04:31", body: "tool_call.allowed — read_ticket", tone: "ok" },
-  { t: "12:04:33", body: "llm_call — llama-3.3-70b · 1,284 tok · $0.0031", tone: "ok" },
-  { t: "12:04:36", body: "tool_call.allowed — search_tickets", tone: "ok" },
+  { t: "12:04:31", body: "tool_call.allowed: read_ticket", tone: "ok" },
+  { t: "12:04:33", body: "llm_call: llama-3.3-70b · 1,284 tok · $0.0031", tone: "ok" },
+  { t: "12:04:36", body: "tool_call.allowed: search_tickets", tone: "ok" },
 ] as const;
 
 export function KillSwitchDemo() {
@@ -62,7 +62,7 @@ export function KillSwitchDemo() {
           </h2>
           <p className="mt-5 text-[var(--l-cream)]/60 leading-relaxed max-w-md">
             Not a ticket to the platform team. Not a deploy. One control, and
-            the agent stops before its next tool call — inside a second, whether
+            the agent stops before its next tool call, inside a second, whether
             or not it is mid-run.
           </p>
           <p className="mt-4 text-[var(--l-cream)]/60 leading-relaxed max-w-md">
@@ -71,7 +71,7 @@ export function KillSwitchDemo() {
           </p>
 
           <p className="landing-hand mt-8 text-xl text-[var(--l-orange-soft)]">
-            go on — it&apos;s a demo, nothing breaks
+            go on, it&apos;s a demo, nothing breaks
           </p>
         </motion.div>
 
@@ -187,7 +187,7 @@ export function KillSwitchDemo() {
           <div className="mt-7 rounded-2xl border border-[var(--l-line-dark)] bg-black/25 p-4">
             <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-[var(--l-cream)]/40">
               <Activity className="w-3 h-3" />
-              Audit log — append only
+              Audit log: append only
             </div>
 
             <div className="mt-3 space-y-1.5 font-mono text-[11px] leading-relaxed">
@@ -210,7 +210,7 @@ export function KillSwitchDemo() {
                       className="text-[#e07a6b]"
                     >
                       <span className="opacity-60">12:04:38</span>{" "}
-                      kill_switch.activated — by p.ladha
+                      kill_switch.activated by p.ladha
                     </motion.p>
                     <motion.p
                       key="denied"
@@ -221,7 +221,7 @@ export function KillSwitchDemo() {
                       className="text-[#e07a6b]"
                     >
                       <span className="opacity-60">12:04:38</span>{" "}
-                      tool_call.denied — create_ticket_reply · agent suspended
+                      tool_call.denied: create_ticket_reply · agent suspended
                     </motion.p>
                   </>
                 )}

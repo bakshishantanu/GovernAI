@@ -27,7 +27,7 @@ export function DevTokenWarning() {
         <p className="landing-display text-sm text-[var(--l-ink)]">The dev-token auth bypass is on</p>
         <p className="mt-0.5 text-[12.5px] leading-relaxed text-[var(--l-charcoal)]/70">
           Any request with <code className="rounded bg-black/5 px-1 py-0.5 font-mono">Bearer dummy-token</code>{" "}
-          is accepted as this org's admin — real Supabase sign-in is not being checked.{" "}
+          is accepted as this org's admin, real Supabase sign-in is not being checked.{" "}
           <code className="rounded bg-black/5 px-1 py-0.5 font-mono">AUTH_ALLOW_DEV_TOKEN</code> should be off
           before this ever reaches a real deployment.
         </p>

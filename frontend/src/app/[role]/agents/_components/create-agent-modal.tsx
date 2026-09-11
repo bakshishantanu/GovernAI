@@ -141,9 +141,9 @@ export function CreateAgentModal({
             {stage === "active" ? (
               <ResultPane
                 ok
-                badge="Compliance passed — Active"
+                badge="Compliance passed: Active"
                 title={createdName}
-                message="Passport issued and the agent is live. Permissions were derived from its skills — nothing more, nothing hand-granted."
+                message="Passport issued and the agent is live. Permissions were derived from its skills, nothing more, nothing hand-granted."
                 onClose={onClose}
               />
             ) : stage === "approved" ? (
@@ -202,7 +202,7 @@ export function CreateAgentModal({
 
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--l-charcoal)]/50">
-                      Skills — at least one
+                      Skills (at least one)
                     </span>
                     <span className="font-mono text-[10.5px] text-[var(--l-charcoal)]/40">
                       permissions are derived, never hand-picked
@@ -327,7 +327,7 @@ function ResultPane({
           className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em]"
           style={{ color: ok ? "var(--l-teal)" : "var(--l-orange-deep)" }}
         >
-          {badge ?? (ok ? "Compliance passed — Approved" : "Compliance check failed — still Draft")}
+          {badge ?? (ok ? "Compliance passed: Approved" : "Compliance check failed: still Draft")}
         </p>
       </div>
       <p className="max-w-xs text-sm leading-relaxed text-[var(--l-charcoal)]/70">{message}</p>

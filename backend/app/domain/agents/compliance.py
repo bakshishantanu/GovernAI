@@ -85,7 +85,7 @@ def check_compliance(
                 Violation(
                     rule="forbidden_pair",
                     message=(
-                        f"Forbidden permission combination: '{perm_a}' with '{perm_b}' — {reason}."
+                        f"Forbidden permission combination: '{perm_a}' with '{perm_b}' ({reason})."
                     ),
                 )
             )

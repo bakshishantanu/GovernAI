@@ -31,7 +31,7 @@ function Tile({ label, value, tone }: { label: string; value: number | null; ton
           color: tone === "danger" ? "var(--l-orange-deep)" : tone === "ok" ? "var(--l-teal)" : "var(--l-ink)",
         }}
       >
-        {value === null ? "—" : value}
+        {value === null ? "-" : value}
       </p>
     </div>
   );

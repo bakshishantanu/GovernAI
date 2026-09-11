@@ -84,8 +84,8 @@ export default function AuditPage() {
         <div>
           <h1 className="landing-display text-3xl text-[var(--l-ink)]">Audit log</h1>
           <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-            Every governance decision, <strong className="text-[var(--l-ink)]">exactly as it was ruled</strong>{" "}
-            — nothing here can be edited or replayed differently.
+            Every governance decision, <strong className="text-[var(--l-ink)]">exactly as it was ruled</strong>,{" "}
+            nothing here can be edited or replayed differently.
           </p>
         </div>
         <span className="text-[11.5px] text-[var(--l-charcoal)]/40">

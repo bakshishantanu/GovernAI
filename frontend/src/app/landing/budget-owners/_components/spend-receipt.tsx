@@ -78,7 +78,7 @@ export function SpendReceipt() {
             It&apos;s an itemised bill, not an estimate.
           </h2>
           <p className="mt-5 text-[var(--l-charcoal)]/70 leading-relaxed max-w-md">
-            Every model call writes a cost row the moment it happens — tokens
+            Every model call writes a cost row the moment it happens: tokens
             in, tokens out, model, price. Spend is attributed to the agent that
             caused it, so &ldquo;what are we spending on AI&rdquo; stops being a
             finance exercise and becomes a line you can read.
@@ -218,7 +218,7 @@ export function SpendReceipt() {
           </div>
 
           <p className="landing-hand mt-6 text-xl text-[var(--l-charcoal)]/70 max-w-xs">
-            RAG researcher is at 93% of its cap — it will pause itself before it
+            RAG researcher is at 93% of its cap, it will pause itself before it
             reaches you.
           </p>
         </motion.div>

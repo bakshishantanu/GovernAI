@@ -138,7 +138,7 @@ export function CreatePolicyModal({
 
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--l-charcoal)]/50">
-                    Blocked SQL keywords — optional
+                    Blocked SQL keywords (optional)
                   </label>
                   <input
                     value={keywords}
@@ -147,7 +147,7 @@ export function CreatePolicyModal({
                     className="mt-1.5 w-full rounded-xl border-2 border-[var(--l-ink)]/15 bg-[var(--l-cream-deep)]/40 px-3.5 py-2.5 text-sm text-[var(--l-ink)] placeholder:text-[var(--l-charcoal)]/35 focus:border-[var(--l-orange)] focus:outline-none"
                   />
                   <p className="mt-1 font-mono text-[10.5px] text-[var(--l-charcoal)]/45">
-                    comma-separated — the only rule type the engine actually enforces today
+                    comma-separated, the only rule type the engine actually enforces today
                   </p>
                 </div>
 

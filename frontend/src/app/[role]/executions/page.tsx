@@ -65,7 +65,7 @@ const TITLE: Record<string, string> = {
 
 const BLURB: Record<string, string> = {
   admin: "Every execution in the organisation, newest first.",
-  user: "Everything your agents — built or handed to you — have done, newest first.",
+  user: "Everything your agents (built or handed to you) have done, newest first.",
 };
 
 export default function ExecutionsPage() {

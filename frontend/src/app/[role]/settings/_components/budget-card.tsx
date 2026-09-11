@@ -25,7 +25,7 @@ export function BudgetCard({ capUsd, windowHours }: { capUsd: number; windowHour
 
       <p className="mt-3 text-[12px] leading-relaxed text-[var(--l-charcoal)]/60">
         Every agent is auto-suspended the moment its rolling {windowHours}-hour spend crosses this
-        cap — read live from the running server's configuration, not a setting this page can change.
+        cap, read live from the running server's configuration, not a setting this page can change.
       </p>
     </motion.div>
   );

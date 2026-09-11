@@ -304,13 +304,13 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
             style={{ background: "var(--l-orange-deep)" }}
           >
             <OctagonX className="h-4 w-4" />
-            {cancelling ? "Stopping…" : "Kill switch — stop this run"}
+            {cancelling ? "Stopping…" : "Kill switch: stop this run"}
           </motion.button>
         )}
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <StatTile label="Duration" value={duration ?? "—"} />
+        <StatTile label="Duration" value={duration ?? "-"} />
         <StatTile label="Tool calls" value={String(toolCalls.length)} />
         <StatTile label="LLM calls" value={String(llmCalls.length)} />
         <StatTile label="Governance checks" value={String(toolCalls.length)} />
@@ -560,10 +560,10 @@ function LogsTab({ events, live }: { events: TimelineEvent[]; live: boolean }) {
           const time = new Date(e.at).toLocaleTimeString();
           const message =
             e.kind === "cost"
-              ? `LLM call completed — ${money(e.cost_usd)}, ${e.tokens} tokens${e.model ? ` (${e.model})` : ""}`
+              ? `LLM call completed: ${money(e.cost_usd)}, ${e.tokens} tokens${e.model ? ` (${e.model})` : ""}`
               : e.kind === "allowed"
-                ? `${e.tool} — ALLOWED${e.reason ? `: ${e.reason}` : ""}`
-                : `${e.tool} — DENIED${e.reason ? `: ${e.reason}` : ""}`;
+                ? `${e.tool}: ALLOWED${e.reason ? ` (${e.reason})` : ""}`
+                : `${e.tool}: DENIED${e.reason ? ` (${e.reason})` : ""}`;
           return (
             <motion.div
               key={e.id}
@@ -682,7 +682,7 @@ function OutputTab({
   live: boolean;
 }) {
   if (live) {
-    return <EmptyTab live waiting="The run is still going — output appears once it finishes." idle="" />;
+    return <EmptyTab live waiting="The run is still going, output appears once it finishes." idle="" />;
   }
   return (
     <div
@@ -729,7 +729,7 @@ function ArtifactsTab() {
 }
 
 function formatDuration(ms: number): string {
-  if (ms < 0) return "—";
+  if (ms < 0) return "-";
   const totalSeconds = Math.floor(ms / 1000);
   if (totalSeconds < 60) return `${totalSeconds}s`;
   const minutes = Math.floor(totalSeconds / 60);

@@ -55,7 +55,7 @@ export function AgentRunsList({ agentId }: { agentId: string }) {
           [0, 1].map((i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-[var(--l-line)]/50" />)
         ) : runs.length === 0 ? (
           <p className="py-4 text-center text-[12.5px] text-[var(--l-charcoal)]/50">
-            No runs yet — give it a goal above.
+            No runs yet, give it a goal above.
           </p>
         ) : (
           runs.map((run, i) => {

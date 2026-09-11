@@ -38,7 +38,7 @@ export default function PoliciesPage() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <h1 className="landing-display text-3xl text-[var(--l-ink)]">Policies</h1>
           <p className="mt-1 text-sm text-[var(--l-charcoal)]/60">
-            Every rule the governance gate reads before it lets a tool call through —{" "}
+            Every rule the governance gate reads before it lets a tool call through:{" "}
             <strong className="text-[var(--l-ink)]">flip a switch and it takes effect immediately</strong>.
           </p>
           <p className="mt-1 text-[11.5px] text-[var(--l-charcoal)]/40">

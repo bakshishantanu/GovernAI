@@ -67,7 +67,7 @@ export function AgentAuditFeed({ agentId }: { agentId: string }) {
                   <ShieldX className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--l-orange-deep)" }} />
                 )}
                 <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[var(--l-ink)]">
-                  {e.tool ?? "—"}
+                  {e.tool ?? "-"}
                 </span>
                 <span className="shrink-0 font-mono text-[10px] text-[var(--l-charcoal)]/40">
                   {timeAgo(e.timestamp)}

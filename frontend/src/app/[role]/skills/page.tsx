@@ -71,7 +71,7 @@ export default function SkillsPage() {
             Reusable capabilities
           </h1>
           <p className="mt-1 max-w-md text-sm text-[var(--l-charcoal)]/60">
-            A skill is a shared library, not an agent — pick one or more when
+            A skill is a shared library, not an agent, pick one or more when
             you build an agent, and its permissions come along automatically.
           </p>
           <p className="mt-1 text-[11.5px] text-[var(--l-charcoal)]/40">

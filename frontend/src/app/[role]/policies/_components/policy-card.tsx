@@ -127,7 +127,7 @@ export function PolicyCard({
 
       {!isAdmin && (
         <p className="border-t border-dashed border-[var(--l-ink)]/12 px-5 py-2.5 text-center font-mono text-[10.5px] text-[var(--l-charcoal)]/40">
-          admin only — you can see the rulebook, not change it
+          admin only: you can see the rulebook, not change it
         </p>
       )}
     </motion.div>
