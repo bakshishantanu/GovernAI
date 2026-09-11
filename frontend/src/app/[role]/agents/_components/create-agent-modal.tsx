@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Bot, FileSearch, Database, Ticket, ShieldCheck, ShieldX, Search } from "lucide-react";
+import { X, Bot, FileSearch, Ticket, ShieldCheck, ShieldX, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ApiError, fetchApi, type ApiViolation } from "@/lib/api-client";
 
@@ -10,7 +10,6 @@ const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
   document_search: FileSearch,
   solr_search: Search,
-  sql_query: Database,
 };
 
 type Skill = { id: string; display_name: string; description: string; required_permissions: string[] };
@@ -46,7 +45,10 @@ export function CreateAgentModal({
   useEffect(() => {
     if (!open) return;
     fetchApi("/skills/")
-      .then((data) => setSkills(data ?? []))
+      // sql_query is retired (replaced by solr_search/"Enterprise Search")
+      // — its DB row only survives for an existing agent's binding, it
+      // should never be offered as a choice when building a new one.
+      .then((data) => setSkills((data ?? []).filter((s: Skill) => s.id !== "sql_query")))
       .catch(() => setSkills([]));
   }, [open]);
 

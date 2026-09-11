@@ -46,8 +46,16 @@
    changing them would cost brand identity for no contrast benefit. This
    mirrors the same light/dark split already used in this project's own
    design docs (`projectoverview.html`/`threerole.html`'s paper/ink/charcoal
-   + teal-soft/amber-soft/garnet-soft dark palette). */
-.dark .landing {
+   + teal-soft/amber-soft/garnet-soft dark palette).
+
+   `:not(.landing-locked-light)` excludes the landing and login pages: they
+   carry that extra class (see their layout/page.tsx) so night mode never
+   reaches a signed-out visitor, regardless of OS preference or whatever the
+   console's own toggle was last set to — dark mode is a signed-in-only
+   feature now. The console keeps this rule (its shell div has "landing"
+   without the lock class), so the Settings toggle still works exactly as
+   before. */
+.dark .landing:not(.landing-locked-light) {
   --l-ink: #f2ede1;
   --l-charcoal: #c9c1b1;
   --l-cream: #17140f;

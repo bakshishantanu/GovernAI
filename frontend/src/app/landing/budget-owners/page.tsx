@@ -17,7 +17,7 @@ export const metadata = {
 
 export default function BudgetOwnersPage() {
   return (
-    <div className="landing">
+    <div className="landing landing-locked-light">
       <ScrollProgress />
       <OwnerNav />
       <main>

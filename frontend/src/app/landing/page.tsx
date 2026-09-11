@@ -20,7 +20,7 @@ export const metadata = {
 
 export default function LandingPage() {
   return (
-    <div className="landing">
+    <div className="landing landing-locked-light">
       <ScrollProgress />
       <LandingNav />
       <main>

@@ -28,7 +28,12 @@ export default function SkillsPage() {
 
   const load = useCallback(async () => {
     const data = await fetchApi("/skills/").catch(() => []);
-    return (Array.isArray(data) ? data : []) as Skill[];
+    const skills = (Array.isArray(data) ? data : []) as Skill[];
+    // sql_query is a retired skill (replaced by solr_search/"Enterprise
+    // Search") — the row still exists in the DB only because an existing
+    // agent is bound to it, not because it's something new to pick. Filtered
+    // here rather than deleted server-side, so that binding stays intact.
+    return skills.filter((s) => s.id !== "sql_query");
   }, []);
 
   const { data: skills, updatedAt } = useLive(load);
