@@ -5,7 +5,7 @@ import "../landing/landing.css";
 export default function LoginLayout({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`landing ${kecal.variable} ${interLanding.variable} ${caveat.variable}`}
+      className={`landing landing-locked-light ${kecal.variable} ${interLanding.variable} ${caveat.variable}`}
     >
       {children}
     </div>
