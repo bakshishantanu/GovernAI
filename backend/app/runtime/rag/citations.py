@@ -24,18 +24,27 @@ CITATION_INSTRUCTIONS = (
 )
 
 
-def build_citation(document_title: str, page_number: int | None) -> str:
+def build_citation(
+    document_title: str, page_number: int | None, locator: str | None = None
+) -> str:
     """The label a reader sees, and the exact string the model is told to cite.
 
-    Page numbers are 1-based and match what a PDF viewer shows, so a citation
-    can be checked by opening the document and turning to that page. Documents
-    with no page information (the seeded demo set, and anything retrieved
-    through the TF-IDF adapter) cite by title alone rather than inventing a
-    page that would not survive being looked up.
+    `locator` is preferred because only the extractor knows what unit the
+    format actually has: "p.32" for a PDF, "slide 7" for a deck, a section
+    heading for a Word document, which stores no page numbers at all. Citing
+    "p.7" for slide 7, or any page number for a .docx, would look checkable
+    and be wrong.
+
+    Falls back to the numeric page for chunks written before locators existed,
+    and to the title alone for documents with no location of any kind (the
+    seeded demo set, and anything from the TF-IDF adapter), rather than
+    inventing a position that would not survive being looked up.
     """
-    if page_number is None:
-        return document_title
-    return f"{document_title}, p.{page_number}"
+    if locator:
+        return f"{document_title}, {locator}"
+    if page_number is not None:
+        return f"{document_title}, p.{page_number}"
+    return document_title
 
 
 def extract_citation_ids(answer: str) -> list[str]:

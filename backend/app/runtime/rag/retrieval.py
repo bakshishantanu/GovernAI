@@ -58,17 +58,19 @@ class SearchResult:
     chunk_index: int
     text: str
     relevance_score: float
-    #: 1-based page this text came from, when the document has pages at all.
-    #: None for the seeded demo documents and anything from the TF-IDF
-    #: adapter, which have no page structure to report.
+    #: 1-based page or slide this text came from, when the format has such
+    #: numbering. None for the seeded demo documents, for Word documents
+    #: (which store no pages), and for anything from the TF-IDF adapter.
     page_number: int | None = None
+    #: How the citation names this spot: "p.32", "slide 7", a section heading.
+    locator: str | None = None
 
     @property
     def citation(self) -> str:
         """The exact label the model is told to cite for this chunk."""
         from app.runtime.rag.citations import build_citation
 
-        return build_citation(self.document_title, self.page_number)
+        return build_citation(self.document_title, self.page_number, self.locator)
 
 
 class DocumentRetriever(Protocol):

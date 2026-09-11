@@ -136,12 +136,19 @@ class DocumentIngestionService:
                         embedding=vector,
                         chunk_index=chunk.chunk_index,
                         page_number=chunk.page_number,
+                        locator=chunk.locator,
                     )
                     for chunk, vector in zip(chunks, vectors)
                 ]
             )
 
-            document.page_count = pages[-1].page_number
+            # Highest numbered page/slide seen, not len(pages): pages with no
+            # extractable text are skipped, so counting entries would report a
+            # 80-page PDF with 5 image-only pages as 75 pages. None for formats
+            # with no page numbering at all (DOCX), where the console should
+            # show section count instead of an invented page count.
+            numbered = [p.page_number for p in pages if p.page_number is not None]
+            document.page_count = max(numbered) if numbered else None
             document.chunk_count = len(chunks)
             document.status = "READY"
             document.error = None

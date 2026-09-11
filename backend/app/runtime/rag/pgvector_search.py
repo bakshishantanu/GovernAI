@@ -53,6 +53,7 @@ class PgVectorDocumentSearchAdapter:
                     text=chunk.content,
                     relevance_score=relevance_score,
                     page_number=chunk.page_number,
+                    locator=chunk.locator,
                 )
             )
         return results

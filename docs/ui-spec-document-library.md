@@ -56,7 +56,7 @@ type Document = {
   mime_type: string | null;
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED";
   error: string | null;
-  page_count: number | null;   // null until READY
+  page_count: number | null;   // null until READY, and always null for .docx
   chunk_count: number | null;  // null until READY
   access_scope: string[];
   source: string;              // "upload", or "seed" for the demo documents
@@ -88,7 +88,7 @@ no progress percentage available, so honest indeterminate progress plus
 |---|---|
 | `PENDING` | "Queued" |
 | `PROCESSING` | "Reading and indexing…" with elapsed time |
-| `READY` | "{page_count} pages, {chunk_count} sections indexed" |
+| `READY` | "{page_count} pages, {chunk_count} sections indexed". **`page_count` is null for a `.docx`** (Word stores no page numbers, see below) so fall back to "{chunk_count} sections indexed" |
 | `FAILED` | The `error` string, verbatim, in an error style |
 
 **Show `error` verbatim.** It is written to be read by the person who uploaded
@@ -104,11 +104,12 @@ A refused upload returns **400** with `detail` as a plain sentence. Show it
 directly. Causes: unsupported file type, empty file, over the 25 MB limit, or
 document search not configured on the server.
 
-**Only `.pdf` is accepted right now.** Set `accept=".pdf"` on the file input,
-and please say so visibly near the control, something like "PDF only for now;
-Word, PowerPoint and scanned documents are coming". A user who drags in a
-`.docx` gets a 400 saying the same thing, but finding out before the upload is
-better.
+**Accepted: `.pdf`, `.docx`, `.pptx`.** Set
+`accept=".pdf,.docx,.pptx"` on the file input, and say so visibly near the
+control. Scanned documents and images still need OCR and are refused, so
+"Scanned documents are not supported yet" is worth stating. A user who drags
+in a `.png` gets a 400 saying the same thing, but finding out before the
+upload is better.
 
 ### Delete
 
@@ -168,8 +169,18 @@ An answer comes back with citations inline, in square brackets:
 > Research and development spending rose year over year
 > [Apple FY2025 10-K, p.50].
 
-The format is `[<document title>, p.<page>]`, or `[<document title>]` alone for
-a document with no pages (the five seeded demo documents).
+The format is `[<document title>, <locator>]`, where the locator depends on
+what unit the source format actually has:
+
+| Source | Locator looks like | Why |
+|---|---|---|
+| PDF | `p.32` | It has pages |
+| PPTX | `slide 7` | A deck's unit is the slide, and "p.7" would be the wrong noun |
+| DOCX | `C. CNN Backbone Configuration`, `table 1` | **Word stores no page numbers at all.** Pages are produced by whatever renders the file, using the reader's paper size and fonts, so any page number would be invented. The section heading is the honest locator, and is what a reader would actually use to find the passage |
+| Seeded demo docs | *(nothing, title only)* | They have no internal structure |
+
+So a Word citation can be noticeably longer than a PDF one. Design the chip to
+truncate gracefully rather than assuming a short "p.N".
 
 Please **parse those out and render them as chips or superscripts** rather than
 leaving raw brackets in the prose. Clicking one should at minimum show which
@@ -191,7 +202,8 @@ type SearchResult = {
   chunk_id: string;        // "<document_id>#<chunk_index>"
   document_id: string;
   document_title: string;
-  page_number: number | null;
+  page_number: number | null;  // null for .docx
+  locator: string | null;      // "p.32" | "slide 7" | a heading
   text: string;            // the retrieved chunk, ~400 words
   relevance_score: number; // 0..1, higher is closer
 };
@@ -206,11 +218,16 @@ scrollable treatment.
 
 ## What to test against
 
-The Apple FY2025 10-K is already ingested and READY in the database: 80 pages,
-149 chunks. Questions that retrieve well:
+Three real documents are already ingested and READY:
 
-- "How much did the company spend on research and development?" → p.50
-- "What are the main risks to the business?" → pp.11, 13, 15
+| Document | Shape | Try asking |
+|---|---|---|
+| Apple FY2025 10-K (PDF) | 80 pages, 149 chunks | "How much did the company spend on research and development?" → p.50 |
+| Monkeypox Few-Shot Paper (DOCX) | 27 sections | "Which CNN backbone performed best?" → `C. CNN Backbone Configuration` |
+| Database Normalization Deck (PPTX) | 10 slides | "What is BCNF?" → `slide 7` |
+
+Worth checking all three, because they exercise the three different locator
+shapes the chip has to render.
 
 And one that deliberately returns nothing, which is worth designing an empty
 state for: "Who is the chief executive officer?" falls below the relevance

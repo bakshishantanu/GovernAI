@@ -13,6 +13,7 @@ def _chunk(
     index: int = 0,
     title: str = "Policy Engine Overview",
     page_number: int | None = None,
+    locator: str | None = None,
 ):
     return SimpleNamespace(
         document_id=_DOC_ID,
@@ -20,6 +21,7 @@ def _chunk(
         content=text,
         embedding=embedding,
         page_number=page_number,
+        locator=locator,
         document=SimpleNamespace(title=title),
     )
 
@@ -53,10 +55,13 @@ async def test_search_embeds_the_query_and_returns_scored_results():
     assert results[0].relevance_score == 1.0
 
 
-async def test_search_carries_the_page_number_into_the_citation():
-    """The page has to survive retrieval, or an answer cannot say where a
+async def test_search_carries_the_locator_into_the_citation():
+    """The location has to survive retrieval, or an answer cannot say where a
     fact came from - which is the whole reason chunks store one."""
-    chunk = _chunk("net sales rose", embedding=[1.0, 0.0], page_number=32, title="Apple 10 K")
+    chunk = _chunk(
+        "net sales rose", embedding=[1.0, 0.0], page_number=32, locator="p.32",
+        title="Apple 10 K",
+    )
     adapter = PgVectorDocumentSearchAdapter(
         repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])
     )
@@ -67,9 +72,42 @@ async def test_search_carries_the_page_number_into_the_citation():
     assert results[0].citation == "Apple 10 K, p.32"
 
 
-async def test_a_chunk_without_a_page_cites_by_title_alone():
-    """Seeded demo documents have no pages; inventing one would produce a
-    citation that cannot be looked up."""
+async def test_a_slide_is_cited_as_a_slide_not_a_page():
+    """The locator wins over the number, so a deck does not claim to have
+    pages it does not have."""
+    chunk = _chunk(
+        "BCNF removes the anomaly", embedding=[1.0, 0.0], page_number=7, locator="slide 7",
+        title="Normalization Deck",
+    )
+    adapter = PgVectorDocumentSearchAdapter(
+        repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])
+    )
+
+    results = await adapter.search("BCNF", permitted_scopes=frozenset({"public"}))
+
+    assert results[0].citation == "Normalization Deck, slide 7"
+
+
+async def test_a_word_section_is_cited_by_heading_with_no_page():
+    """A .docx stores no page numbers at all, so the heading is the only
+    honest locator."""
+    chunk = _chunk(
+        "We compared ResNet50", embedding=[1.0, 0.0], locator="C. CNN Backbone Configuration",
+        title="Monkeypox Paper",
+    )
+    adapter = PgVectorDocumentSearchAdapter(
+        repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])
+    )
+
+    results = await adapter.search("backbone", permitted_scopes=frozenset({"public"}))
+
+    assert results[0].page_number is None
+    assert results[0].citation == "Monkeypox Paper, C. CNN Backbone Configuration"
+
+
+async def test_a_chunk_with_no_location_at_all_cites_by_title_alone():
+    """Seeded demo documents have neither pages nor sections; inventing a
+    position would produce a citation that cannot be looked up."""
     chunk = _chunk("governance at creation time", embedding=[1.0, 0.0], title="Onboarding Guide")
     adapter = PgVectorDocumentSearchAdapter(
         repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])

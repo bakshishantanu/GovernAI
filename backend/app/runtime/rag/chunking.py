@@ -28,10 +28,14 @@ DEFAULT_OVERLAP_WORDS = 50
 @dataclass(frozen=True)
 class PagedChunk:
     text: str
-    page_number: int
+    #: None for formats with no page numbering of their own (DOCX).
+    page_number: int | None
     #: Position across the whole document, not within the page, so it stays a
     #: stable identifier for a chunk even though pages restart numbering.
     chunk_index: int
+    #: Carried straight through from the extractor: "p.32", "slide 7", or a
+    #: section heading. Splitting a page never changes where it is.
+    locator: str | None = None
 
 
 def chunk_pages(
@@ -54,7 +58,12 @@ def chunk_pages(
         while start < len(words):
             text = " ".join(words[start : start + chunk_words])
             chunks.append(
-                PagedChunk(text=text, page_number=page.page_number, chunk_index=index)
+                PagedChunk(
+                    text=text,
+                    page_number=page.page_number,
+                    chunk_index=index,
+                    locator=page.locator,
+                )
             )
             index += 1
             if start + chunk_words >= len(words):

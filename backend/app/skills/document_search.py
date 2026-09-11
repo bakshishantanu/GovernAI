@@ -47,6 +47,7 @@ class SearchDocumentsTool(BaseTool):
                     "document_id": r.document_id,
                     "document_title": r.document_title,
                     "page_number": r.page_number,
+                    "locator": r.locator,
                     "text": r.text,
                     "relevance_score": r.relevance_score,
                 }

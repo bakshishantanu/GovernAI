@@ -19,10 +19,14 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[str] = mapped_column(Vector(), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    #: 1-based page (or slide) this chunk's text came from, so an answer can
-    #: cite "p.32" instead of an opaque chunk number. Nullable because the
-    #: seeded demo documents predate uploads and have no page of their own.
+    #: 1-based page (PDF) or slide (PPTX) this chunk came from. None for
+    #: formats with no such concept: a DOCX stores no pages, they are produced
+    #: by whatever renders it, so any number here would be invented.
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: How the citation names this spot: "p.32", "slide 7", or a section
+    #: heading for formats with no pages. Rendered by the extractor, which is
+    #: the only thing that knows what unit the format actually has.
+    locator: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document: Mapped[Document] = relationship("Document", back_populates="chunks")
 

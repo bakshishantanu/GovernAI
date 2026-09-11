@@ -101,19 +101,25 @@ async def test_the_title_is_derived_from_the_filename():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "filename,size",
-    [("notes.docx", 1024), ("deck.pptx", 1024), ("scan.png", 1024)],
-)
-async def test_unsupported_types_are_refused_before_a_row_exists(filename, size):
-    """Told at upload time, not minutes later via a FAILED row."""
+@pytest.mark.parametrize("filename", ["scan.png", "photo.jpg", "notes.doc", "data.csv"])
+async def test_unsupported_types_are_refused_before_a_row_exists(filename):
+    """Told at upload time, not minutes later via a FAILED row. Images are
+    the OCR case, still to come; .doc is the pre-2007 Word format."""
     repo = FakeRepo()
     service = _service(repo)
 
     with pytest.raises(UploadRejected):
-        await _upload(service, filename=filename, size=size)
+        await _upload(service, filename=filename)
 
     assert repo.documents == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("filename", ["paper.docx", "deck.pptx", "report.pdf"])
+async def test_every_supported_format_is_accepted(filename):
+    document = await _upload(_service(), filename=filename)
+
+    assert document.status == "PENDING"
 
 
 @pytest.mark.asyncio
