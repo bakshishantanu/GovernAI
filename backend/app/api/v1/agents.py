@@ -286,6 +286,36 @@ async def update_agent(
     return Envelope(data=_with_skills(refreshed, skills))
 
 
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent(
+    agent_id: UUID,
+    user: CurrentUser = Depends(require_builder_or_admin),
+    service: AgentService = Depends(get_agent_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """Discard a DRAFT agent entirely (owner or admin only).
+
+    Only ever available in DRAFT: once an agent has been ACTIVE it can have
+    real executions, cost events, audit entries and ticket drafts, and
+    deleting it would either destroy that record or orphan it. Use the kill
+    switch / suspend for anything past DRAFT — this is only for cleaning up
+    an abandoned build.
+    """
+    agent = await service.agent_repo.get_agent(agent_id)
+    if not agent or agent.org_id != user.org_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if user.role != "admin" and agent.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this agent")
+
+    try:
+        await service.delete_agent(agent_id)
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    await db.commit()
+
+
 @router.post("/{agent_id}/kill", response_model=Envelope[AgentResponse])
 async def kill_agent(
     agent_id: UUID,

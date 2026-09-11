@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ShieldCheck, PlayCircle, Skull, RotateCcw, Loader2 } from "lucide-react";
+import { ShieldCheck, PlayCircle, Skull, RotateCcw, Loader2, Trash2 } from "lucide-react";
 import { ApiError, fetchApi, type ApiViolation } from "@/lib/api-client";
+import { useRoleBase } from "@/lib/use-role-base";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import type { Agent } from "../../_components/agent-types";
 
 const STAGES = ["DRAFT", "APPROVED", "ACTIVE"] as const;
@@ -33,9 +44,33 @@ export function LifecycleTrack({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [violations, setViolations] = useState<ApiViolation[]>([]);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+  const base = useRoleBase();
   const state = agent.passport.lifecycle_state;
   const stageIndex = STAGES.indexOf(state as (typeof STAGES)[number]);
   const broken = state === "SUSPENDED" || state === "REVOKED";
+
+  // Same rule the backend enforces (AgentService.delete_agent): a DRAFT has
+  // no executions/cost events/audit entries/ticket drafts yet, so deleting
+  // it destroys nothing real. Anything past DRAFT keeps the kill switch /
+  // suspend path instead, which preserves the record rather than erasing it.
+  const canDelete = state === "DRAFT" && (isAdmin || isOwner);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+    try {
+      await fetchApi(`/agents/${agent.id}`, { method: "DELETE" });
+      router.push(`${base}/agents`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this agent.");
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function run(action: Action, endpoint: string, method: "PATCH" | "POST") {
     setBusy(true);
@@ -112,25 +147,60 @@ export function LifecycleTrack({
           )}
         </div>
 
-        {cta && allowed && (
-          <motion.button
-            onClick={cta.action}
-            disabled={busy}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[0_3px_0_0_rgba(22,19,14,0.2)] disabled:opacity-50"
-            style={{ background: cta.danger ? "var(--l-orange-deep)" : "var(--l-ink)" }}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <cta.icon className="h-4 w-4" />}
-            {cta.label}
-          </motion.button>
-        )}
-        {cta && !allowed && (
-          <span className="font-mono text-[11px] text-[var(--l-charcoal)]/45">
-            {cta.label} — {cta.who === "owner" ? "owner or admin only" : "admin only"}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[12.5px] font-semibold text-[var(--l-charcoal)]/55 transition-colors hover:text-[var(--l-orange-deep)] disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete draft
+            </button>
+          )}
+
+          {cta && allowed && (
+            <motion.button
+              onClick={cta.action}
+              disabled={busy}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-[0_3px_0_0_rgba(22,19,14,0.2)] disabled:opacity-50"
+              style={{ background: cta.danger ? "var(--l-orange-deep)" : "var(--l-ink)" }}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <cta.icon className="h-4 w-4" />}
+              {cta.label}
+            </motion.button>
+          )}
+          {cta && !allowed && (
+            <span className="font-mono text-[11px] text-[var(--l-charcoal)]/45">
+              {cta.label} ({cta.who === "owner" ? "owner or admin only" : "admin only"})
+            </span>
+          )}
+        </div>
       </div>
+
+      <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete &ldquo;{agent.name}&rdquo;?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the draft passport and its skill bindings. It has never run,
+              so there is no execution history or audit trail to lose — but this cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Delete draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {error && (
         <motion.p

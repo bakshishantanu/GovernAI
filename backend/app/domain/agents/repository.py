@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.domain.agent_requests.models import AgentRequest
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
 from app.domain.auth.models import Profile
+from app.domain.permissions.models import Permission
 
 
 class AgentRepository:
@@ -99,6 +101,33 @@ class AgentRepository:
             select(AgentSkill.skill_id).where(AgentSkill.agent_id == agent_id)
         )
         return list(result.scalars().all())
+
+    async def delete_agent(self, agent: Agent) -> None:
+        """Hard-deletes a DRAFT agent and everything scoped only to it.
+
+        The service only ever calls this for a DRAFT agent, which is why it's
+        safe: nothing but a draft's own passport/skills/permissions can exist
+        yet — no executions, cost events, audit entries or ticket drafts,
+        since none of those can be created before an agent is ever ACTIVE.
+        Deletes in FK-safe order inside the caller's transaction (committed
+        by the route, same as every other write here).
+        """
+        if agent.passport is not None:
+            await self.session.execute(
+                delete(Permission).where(Permission.passport_id == agent.passport.id)
+            )
+        await self.session.execute(delete(AgentSkill).where(AgentSkill.agent_id == agent.id))
+        # A fulfilled request points back at the agent it produced
+        # (agent_requests.agent_id) — null that out first rather than leaving
+        # a request that names an agent that no longer exists.
+        await self.session.execute(
+            update(AgentRequest).where(AgentRequest.agent_id == agent.id).values(agent_id=None)
+        )
+        if agent.passport is not None:
+            await self.session.execute(
+                delete(AgentPassport).where(AgentPassport.id == agent.passport.id)
+            )
+        await self.session.execute(delete(Agent).where(Agent.id == agent.id))
 
     async def list_active_agents_with_skill(self, skill_id: str) -> list[Agent]:
         """Every ACTIVE agent, across every org, with the given skill bound.

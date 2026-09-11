@@ -155,6 +155,37 @@ async def test_activate_agent_activates_approved_agent():
     assert activated.passport.lifecycle_state == "ACTIVE"
 
 
+async def test_delete_agent_rejects_missing_agent():
+    service, agent_repo, _, _ = _service()
+    agent_repo.get_agent.return_value = None
+
+    with pytest.raises(ValueError):
+        await service.delete_agent(uuid4())
+
+    agent_repo.delete_agent.assert_not_awaited()
+
+
+async def test_delete_agent_rejects_non_draft():
+    service, agent_repo, _, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    agent_repo.get_agent.return_value = agent
+
+    with pytest.raises(InvalidStateTransitionError):
+        await service.delete_agent(agent.id)
+
+    agent_repo.delete_agent.assert_not_awaited()
+
+
+async def test_delete_agent_deletes_draft():
+    service, agent_repo, _, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="DRAFT")
+    agent_repo.get_agent.return_value = agent
+
+    await service.delete_agent(agent.id)
+
+    agent_repo.delete_agent.assert_awaited_once_with(agent)
+
+
 async def test_create_agent_with_request_and_assigned_user():
     service, agent_repo, skill_repo, perm_repo = _service()
     skill_repo.get_skill.return_value = _skill("ticket:read")

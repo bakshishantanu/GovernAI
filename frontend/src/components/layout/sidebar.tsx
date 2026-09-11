@@ -19,6 +19,7 @@ import { fetchApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useRoleBase } from "@/lib/use-role-base";
 import { useLive } from "@/lib/use-live";
+import { useNotifications } from "@/lib/use-notifications";
 
 /**
  * App shell sidebar, on Priya's landing design system (D-038), with the
@@ -39,7 +40,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const { role } = useAuth();
   const base = useRoleBase();
-  const pendingDrafts = usePendingDraftCount();
+  // Same source as the header bell (lib/use-notifications.ts) — one shared
+  // hook rather than two copies of the same fetch-and-map logic, even
+  // though each mounted instance still polls independently.
+  const { notifications } = useNotifications();
+  const pendingDrafts = notifications.length;
   const hasTicketingAgent = useHasTicketingAgent();
 
   const getNavItems = () => {
@@ -153,21 +158,6 @@ function useHasTicketingAgent(): boolean {
   }, []);
   const { data } = useLive(load, 120000);
   return data ?? false;
-}
-
-/**
- * How many drafted replies are waiting on review — this is a queue people
- * need to notice, so the sidebar carries a live badge rather than making
- * someone open the page to find out. Silently 0 on failure (e.g. signed
- * out): a broken badge should never block the rest of the sidebar.
- */
-function usePendingDraftCount(): number {
-  const load = useCallback(async () => {
-    const data = await fetchApi("/ticket-drafts/?draft_status=PENDING_REVIEW").catch(() => []);
-    return Array.isArray(data) ? data.length : 0;
-  }, []);
-  const { data } = useLive(load, 30000);
-  return data ?? 0;
 }
 
 /**
