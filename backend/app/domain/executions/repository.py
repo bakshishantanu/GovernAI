@@ -24,18 +24,22 @@ class ExecutionRepository:
         return result.scalar_one_or_none()
 
     async def list_executions_for_org(
-        self, 
+        self,
         org_id: UUID,
         builder_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
     ) -> list[Execution]:
         from app.domain.agents.models import Agent
+
         stmt = (
             select(Execution)
             .options(selectinload(Execution.steps))
             .join(Agent, Execution.agent_id == Agent.id)
             .where(Execution.org_id == org_id)
         )
+        # OR, not AND-via-two-elifs: a merged user can be the owner of some
+        # agents and only the assignee of others, and must see executions for
+        # both. Callers pass their own id as both parameters, landing here.
         if builder_id and assigned_user_id:
             stmt = stmt.where(
                 or_(Agent.owner_id == builder_id, Agent.assigned_user_id == assigned_user_id)
@@ -44,7 +48,7 @@ class ExecutionRepository:
             stmt = stmt.where(Agent.owner_id == builder_id)
         elif assigned_user_id:
             stmt = stmt.where(Agent.assigned_user_id == assigned_user_id)
-            
+
         stmt = stmt.order_by(Execution.started_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

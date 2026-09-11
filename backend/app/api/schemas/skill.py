@@ -27,6 +27,15 @@ class SkillResponse(BaseModel):
     tools: list[ToolResponse]
     required_permissions: list[str] = []
 
+    @field_validator("trust_level", mode="before")
+    @classmethod
+    def _normalise_trust_level(cls, value):
+        """Case-insensitive: `trust_level` is a free-text column, and an
+        earlier hand-written seed wrote it lower-case ("verified") while the
+        skill classes write it upper-case. A lower-case row used to 500 the
+        entire skills list."""
+        return value.strip().upper() if isinstance(value, str) else value
+
     @field_validator("required_permissions", mode="before")
     @classmethod
     def extract_permissions(cls, v: Any) -> list[str]:

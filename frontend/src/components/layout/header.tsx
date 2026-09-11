@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { logout } from "@/app/auth/actions";
-import { LogOut, User, Bell, ShieldCheck } from "lucide-react";
+import { LogOut, User, Bell } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/lib/auth-context";
-import { UserRole } from "@/lib/types";
 import { fetchApi } from "@/lib/api-client";
+import { useRoleBase } from "@/lib/use-role-base";
 
 /**
  * App shell header, on Priya's design system (D-038).
@@ -27,16 +27,35 @@ import { fetchApi } from "@/lib/api-client";
  * purely because the tab was hidden. A plain keyed remount (this version)
  * animates in on its own schedule without gating on anything exiting, so
  * real information is never held hostage by a decorative transition.
+ *
+ * No role switcher here anymore — which console you land on is decided
+ * purely by the email you registered/signed in with (admin-listed emails
+ * get `/admin`, everyone else gets `/user`; see `[role]/layout.tsx`), not
+ * by anything chosen in the UI.
+ *
+ * The profile icon used to be a plain, unclickable div — decoration with no
+ * behavior behind it. It's a real link to Settings now (same destination
+ * the sidebar's own identity card links to), showing real initials when a
+ * real name/email is known rather than a generic person icon.
  */
 export function Header() {
-  const { role, userName, switchRole } = useAuth();
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [initials, setInitials] = useState<string | null>(null);
+  const base = useRoleBase();
 
   useEffect(() => {
     let cancelled = false;
     fetchApi("/auth/settings")
       .then((data) => {
-        if (!cancelled) setOrgName(data?.organization?.name ?? null);
+        if (cancelled) return;
+        setOrgName(data?.organization?.name ?? null);
+        const display: string | undefined = data?.user?.full_name || data?.user?.email;
+        if (display) {
+          const parts = display.trim().split(/\s+/);
+          setInitials(
+            (parts.length >= 2 ? parts[0][0] + parts[1][0] : display.slice(0, 2)).toUpperCase()
+          );
+        }
       })
       .catch(() => {
         /* header still renders; the chip just stays a loading state */
@@ -46,66 +65,17 @@ export function Header() {
     };
   }, []);
 
-  const getRoleBadge = (r: UserRole) => {
-    switch (r) {
-      case "admin":
-        return "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
-      case "agent_builder":
-        return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
-      case "user":
-        return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
-    }
-  };
-
-  const getRoleLabel = (r: UserRole) => {
-    switch (r) {
-      case "admin":
-        return "Admin";
-      case "agent_builder":
-        return "Agent Builder";
-      case "user":
-        return "User";
-    }
-  };
-
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-[var(--l-line)] bg-[var(--l-cream)]/90 px-6 backdrop-blur-md">
-      <div className="flex items-center gap-3">
-        <motion.span
-          key={orgName ?? "loading"}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.25 }}
-          className="rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
-        >
-          {orgName ?? "Loading organisation…"}
-        </motion.span>
-
-        {/* Role Simulator / Quick Switcher */}
-        <div className="hidden sm:flex items-center bg-[var(--l-cream-deep)] rounded-lg p-0.5 border border-[var(--l-line)] text-xs">
-          <span className="text-[11px] font-medium text-[var(--l-charcoal)]/70 px-2 flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-[var(--l-charcoal)]/60" />
-            Role:
-          </span>
-          {(["admin", "agent_builder", "user"] as UserRole[]).map((r) => {
-            const isActive = role === r;
-            return (
-              <button
-                key={r}
-                type="button"
-                onClick={() => switchRole(r)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  isActive
-                    ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-semibold"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                }`}
-              >
-                {getRoleLabel(r)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <motion.span
+        key={orgName ?? "loading"}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
+        className="rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
+      >
+        {orgName ?? "Loading organisation…"}
+      </motion.span>
 
       <div className="flex items-center gap-1.5">
         <ThemeToggle />
@@ -116,17 +86,13 @@ export function Header() {
 
         <div className="mx-2 h-4 w-px bg-[var(--l-line)]" />
 
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-medium text-[var(--l-ink)]">{userName}</span>
-            <span className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 border rounded ${getRoleBadge(role)}`}>
-              {getRoleLabel(role)}
-            </span>
-          </div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[var(--l-charcoal)]/70">
-            <User className="h-4 w-4" />
-          </div>
-        </div>
+        <Link
+          href={`${base}/settings`}
+          title="Your account"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--l-cream-deep)] text-[10.5px] font-semibold text-[var(--l-charcoal)]/70 transition-colors hover:bg-[var(--l-yellow-pale)] hover:text-[var(--l-ink)]"
+        >
+          {initials ?? <User className="h-4 w-4" />}
+        </Link>
 
         <form action={logout}>
           <motion.button

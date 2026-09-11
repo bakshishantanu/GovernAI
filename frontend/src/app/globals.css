@@ -133,3 +133,68 @@
     @apply font-sans;
   }
 }
+/* ---------------------------------------------------------------------------
+   Browser surfaces.
+
+   Selection, the caret, scrollbars, focus rings and the numerals in live data
+   all ship with defaults that belong to no design system — they are the parts
+   of the page nobody draws, and the fastest way a careful interface gives
+   itself away as assembled rather than built. These pull them onto the D-038
+   palette. Scoped to `.landing`, which the console shell already wraps
+   everything in, so nothing leaks into surfaces that have not opted in.
+   ------------------------------------------------------------------------- */
+
+.landing ::selection {
+  background: var(--l-yellow-pale);
+  color: var(--l-ink);
+}
+
+.landing {
+  caret-color: var(--l-orange);
+  scrollbar-color: var(--l-line) transparent;
+  scrollbar-width: thin;
+}
+
+.landing ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+.landing ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.landing ::-webkit-scrollbar-thumb {
+  background: var(--l-line);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+.landing ::-webkit-scrollbar-thumb:hover {
+  background: rgba(22, 19, 14, 0.28);
+  background-clip: content-box;
+}
+
+/* One ring, on the accent, only for keyboard users. The default two-tone
+   browser ring reads as a bug against a cream ground. */
+.landing :focus-visible {
+  outline: 2px solid var(--l-orange);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Figures that update in place must not reflow as they change: lining
+   tabular numerals keep every digit the same width, so a count ticking
+   9 -> 10 does not shove its own label sideways. */
+.gv-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

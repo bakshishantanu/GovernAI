@@ -1,24 +1,26 @@
 from __future__ import annotations
-import asyncio
+
 from unittest.mock import AsyncMock
 from uuid import uuid4
+
 import pytest
+
 from app.api.deps import (
     MockFallbackProvider,
-    get_llm_service,
-    get_agent_service,
-    get_execution_service,
     get_agent_request_service,
-    get_policy_engine,
+    get_agent_service,
     get_audit_service,
+    get_budget_guard,
     get_cost_service,
     get_embedding_provider,
-    get_skill_registry,
+    get_execution_service,
     get_kill_switch_service,
-    get_budget_guard,
+    get_llm_service,
+    get_policy_engine,
+    get_skill_registry,
 )
-from app.infrastructure.event_bus import EventBus, Event
-from app.api.schemas.agent import AgentResponse, AgentCreate
+from app.api.schemas.agent import AgentCreate, AgentResponse
+from app.infrastructure.event_bus import Event, EventBus
 
 
 @pytest.mark.asyncio
@@ -98,6 +100,7 @@ def test_agent_schemas_include_request_and_assigned_user():
     assert create_payload.assigned_user_id == user_id
 
     from datetime import datetime, timezone
+
     resp = AgentResponse(
         id=uuid4(),
         org_id=uuid4(),

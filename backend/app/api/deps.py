@@ -6,6 +6,8 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.domain.agent_requests.repository import AgentRequestRepository
+from app.domain.agent_requests.service import AgentRequestService
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.agents.repository import AgentRepository
 from app.domain.agents.service import AgentService
@@ -21,19 +23,16 @@ from app.domain.policies.engine import PolicyEngine
 from app.domain.policies.repository import PolicyRepository
 from app.domain.skills.registry import SkillRegistry
 from app.domain.skills.repository import SkillRepository
-from app.infrastructure.database import get_db
-from app.infrastructure.event_bus import event_bus
-from app.domain.agents.kill_switch import KillSwitchService
-from app.domain.agent_requests.repository import AgentRequestRepository
-from app.domain.agent_requests.service import AgentRequestService
 from app.domain.ticket_drafts.repository import TicketDraftRepository
 from app.domain.ticket_drafts.service import TicketDraftService
-from app.skills.ticketing import build_jira_adapter_from_settings
+from app.infrastructure.database import get_db
+from app.infrastructure.event_bus import event_bus
 from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
 from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
+from app.skills.ticketing import build_jira_adapter_from_settings
 
 
 class MockFallbackProvider(LLMProvider):
@@ -80,9 +79,14 @@ async def get_agent_service(db: AsyncSession = Depends(get_db)) -> AgentService:
     return AgentService(agent_repo=agent_repo, perm_repo=perm_repo, skill_repo=skill_repo)
 
 
+async def get_agent_repository(db: AsyncSession = Depends(get_db)) -> AgentRepository:
+    return AgentRepository(db)
+
+
 async def get_execution_service(db: AsyncSession = Depends(get_db)) -> ExecutionService:
     exec_repo = ExecutionRepository(db)
     return ExecutionService(exec_repo=exec_repo)
+
 
 async def get_agent_request_service(db: AsyncSession = Depends(get_db)) -> AgentRequestService:
     repo = AgentRequestRepository(db)
@@ -102,7 +106,15 @@ async def get_policy_engine(db: AsyncSession = Depends(get_db)) -> PolicyEngine:
     agent_repo = AgentRepository(db)
     perm_repo = PermissionRepository(db)
     policy_repo = PolicyRepository(db)
-    return PolicyEngine(agent_repo=agent_repo, perm_repo=perm_repo, policy_repo=policy_repo)
+    # The audit repo is what a RATE_LIMIT rule counts recent calls from. Without
+    # it that rule denies rather than passes, so it is wired in here as well as
+    # in execution_runner - the two places an engine is built.
+    return PolicyEngine(
+        agent_repo=agent_repo,
+        perm_repo=perm_repo,
+        policy_repo=policy_repo,
+        audit_repo=AuditRepository(db),
+    )
 
 
 async def get_audit_service(db: AsyncSession = Depends(get_db)) -> AuditService:
@@ -117,6 +129,10 @@ async def get_cost_repository(db: AsyncSession = Depends(get_db)) -> CostReposit
 async def get_cost_service(db: AsyncSession = Depends(get_db)) -> CostService:
     repo = CostRepository(db)
     return CostService(cost_repo=repo, event_bus=event_bus)
+
+
+async def get_cost_repository(db: AsyncSession = Depends(get_db)) -> CostRepository:
+    return CostRepository(db)
 
 
 def get_embedding_provider() -> EmbeddingProvider | None:

@@ -9,10 +9,8 @@ interface AuthContextType {
   user: any | null;
   userEmail: string | null;
   userName: string | null;
-  switchRole: (newRole: UserRole) => void;
   isAdmin: boolean;
-  isBuilder: boolean;
-  isUser: boolean;
+  isAgentBuilder: boolean;
   isLoaded: boolean;
 }
 
@@ -27,53 +25,25 @@ export function AuthProvider({
   initialRole?: UserRole;
   initialUser?: any | null;
 }) {
-  const [role, setRoleState] = useState<UserRole>(() => {
-    if (typeof window !== "undefined") {
-      const savedRole = localStorage.getItem("govern_ai_role") as UserRole | null;
-      if (savedRole && ["admin", "agent_builder", "user"].includes(savedRole)) {
-        return savedRole;
-      }
-    }
-    return initialRole;
-  });
+  // The role is decided server-side (see `[role]/layout.tsx`), purely from
+  // the signed-in account's own email — there is no manual switch anymore.
+  // Registering/signing in with an email on the admin list lands on the
+  // admin console; every other email lands on the user console.
+  const [role] = useState<UserRole>(initialRole);
   const [user, setUser] = useState<any | null>(initialUser);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user: supaUser } }) => {
-      if (supaUser) {
-        setUser(supaUser);
-        const savedRole = localStorage.getItem("govern_ai_role") as UserRole | null;
-        if (!savedRole) {
-          const rawRole = (supaUser.app_metadata?.role || supaUser.user_metadata?.role || "user") as string;
-          if (rawRole === "admin" || rawRole === "agent_builder" || rawRole === "user") {
-            setRoleState(rawRole);
-          } else {
-            setRoleState("user");
-          }
-        }
-      }
+      if (supaUser) setUser(supaUser);
       setIsLoaded(true);
     }).catch(() => {
       setIsLoaded(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        const currentSaved = localStorage.getItem("govern_ai_role") as UserRole | null;
-        if (!currentSaved) {
-          const rawRole = (session.user.app_metadata?.role || session.user.user_metadata?.role || "user") as string;
-          if (rawRole === "admin" || rawRole === "agent_builder" || rawRole === "user") {
-            setRoleState(rawRole);
-          } else {
-            setRoleState("user");
-          }
-        }
-      } else {
-        setUser(null);
-      }
+      setUser(session?.user ?? null);
     });
 
     return () => {
@@ -81,25 +51,16 @@ export function AuthProvider({
     };
   }, []);
 
-  const switchRole = (newRole: UserRole) => {
-    setRoleState(newRole);
-    localStorage.setItem("govern_ai_role", newRole);
-    document.cookie = `govern_ai_role=${newRole}; path=/; max-age=31536000; SameSite=Lax`;
-    window.dispatchEvent(new CustomEvent("govern-ai-role-change", { detail: newRole }));
-  };
-
-  const userEmail = user?.email || (role === "admin" ? "admin@govern.ai" : role === "agent_builder" ? "builder@govern.ai" : "user@govern.ai");
-  const userName = user?.user_metadata?.full_name || (role === "admin" ? "Admin Operator" : role === "agent_builder" ? "Lead Builder" : "Standard User");
+  const userEmail = user?.email || (role === "admin" ? "admin@govern.ai" : "user@govern.ai");
+  const userName = user?.user_metadata?.full_name || (role === "admin" ? "Admin Operator" : "Standard User");
 
   const value: AuthContextType = {
     role,
     user,
     userEmail,
     userName,
-    switchRole,
     isAdmin: role === "admin",
-    isBuilder: role === "agent_builder" || role === "admin",
-    isUser: role === "user",
+    isAgentBuilder: role === "agent_builder",
     isLoaded,
   };
 

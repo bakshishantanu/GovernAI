@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from uuid import UUID
 
@@ -7,12 +8,41 @@ import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient, PyJWKClientError
+from sqlalchemy import select
 
 from app.api.schemas.auth import CurrentUser
 from app.config import settings
-from app.domain.auth.role_rules import resolve_role
+from app.domain.auth.models import Profile
+from app.domain.auth.role_rules import role_for_email
+from app.infrastructure.database import async_session_factory
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
+
+
+async def profile_is_admin(user_id: UUID) -> bool:
+    """Whether this user's `profiles` row says 'admin'.
+
+    Uses its own short-lived session rather than the request's: this runs for
+    every authenticated request, including the long-lived SSE streams, and
+    borrowing the request session would pin a pooled connection for as long
+    as a browser tab stays open.
+
+    Fails closed. If the lookup errors, the answer is "not an admin" - an
+    unreachable database must never be the reason someone gets admin.
+    """
+    try:
+        async with async_session_factory() as session:
+            role = await session.scalar(select(Profile.role).where(Profile.id == user_id))
+    except Exception:
+        logger.warning("profiles lookup failed for %s; treating as non-admin", user_id)
+        return False
+    return role == "admin"
+
+#: Lazily built, then reused — see get_jwks_client below.
+_jwks_client: PyJWKClient | None = None
+
 
 # The literal token that unlocks the local-development bypass below.
 DEV_TOKEN = "dummy-token"
@@ -21,7 +51,9 @@ DEV_TOKENS = {
     DEV_TOKEN: ("admin", UUID("11111111-1111-1111-1111-111111111111")),
     "dummy-token-admin": ("admin", UUID("11111111-1111-1111-1111-111111111111")),
     "dummy-token-builder": ("agent_builder", UUID("22222222-2222-2222-2222-222222222222")),
-    "dummy-token-user": ("user", UUID("22222222-2222-2222-2222-222222222222")),
+    # "dummy-token-user" kept as an alias so old dev sessions and test
+    # fixtures keep working; "user" itself is retired (D-057).
+    "dummy-token-user": ("agent_builder", UUID("22222222-2222-2222-2222-222222222222")),
 }
 
 _jwks_client: PyJWKClient | None = None
@@ -119,7 +151,9 @@ def decode_supabase_token(token: str) -> dict:
             raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
     if last_error is not None:
-        raise HTTPException(status_code=401, detail=f"Could not validate credentials: {str(last_error)}")
+        raise HTTPException(
+            status_code=401, detail=f"Could not validate credentials: {str(last_error)}"
+        )
 
     raise HTTPException(
         status_code=503,
@@ -163,9 +197,15 @@ async def get_current_user(
     user_metadata = payload.get("user_metadata", {})
     full_name = user_metadata.get("full_name") or payload.get("name")
     app_metadata = payload.get("app_metadata", {})
-    raw_role = app_metadata.get("role")
 
-    role = resolve_role(email, raw_role)
+    # Admin comes from exactly two places: the ADMIN_EMAILS list, or an
+    # 'admin' row in `profiles` (what scripts/promote_to_admin.py sets).
+    # Never from app_metadata.role - that is claim data a project admin
+    # edits by hand in the Supabase dashboard, with nothing in this codebase
+    # keeping it in sync. A listed email needs no database round trip.
+    role = role_for_email(email)
+    if role != "admin" and await profile_is_admin(user_id):
+        role = "admin"
 
     org_id_str = app_metadata.get("org_id")
     if org_id_str:

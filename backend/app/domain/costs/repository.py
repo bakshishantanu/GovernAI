@@ -29,21 +29,25 @@ class CostRepository:
         self,
         org_id: UUID,
         builder_id: UUID | None = None,
+        since: datetime | None = None,
         assigned_user_id: UUID | None = None,
     ) -> list[dict]:
         from app.domain.agents.models import Agent
 
         # Returns totals grouped by agent, model, and execution
-        query = (
-            select(
-                CostEvent.agent_id,
-                CostEvent.model,
-                CostEvent.execution_id,
-                func.sum(CostEvent.cost_usd).label("total_cost_usd"),
-            )
-            .where(CostEvent.org_id == org_id)
-        )
+        query = select(
+            CostEvent.agent_id,
+            CostEvent.model,
+            CostEvent.execution_id,
+            func.sum(CostEvent.cost_usd).label("total_cost_usd"),
+        ).where(CostEvent.org_id == org_id)
 
+        if since is not None:
+            query = query.where(CostEvent.timestamp >= since)
+
+        # OR, not owner-only: a non-admin sees spend for agents they own OR
+        # are assigned (agent_builder's Costs access merged into user). Callers
+        # pass their own id as both, which lands on the first branch below.
         if builder_id or assigned_user_id:
             query = query.outerjoin(Agent, CostEvent.agent_id == Agent.id)
             if builder_id and assigned_user_id:
@@ -106,6 +110,19 @@ class CostRepository:
         query = query.order_by(CostEvent.timestamp.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def get_totals_for_execution(self, execution_id: UUID) -> tuple[float, int]:
+        """(total cost, total tokens) for one run -- summed in the database for
+        the same reason as get_total_cost_for_agent below: cheap regardless of
+        how many LLM calls the run made."""
+        result = await self.session.execute(
+            select(
+                func.coalesce(func.sum(CostEvent.cost_usd), 0.0),
+                func.coalesce(func.sum(CostEvent.total_tokens), 0),
+            ).where(CostEvent.execution_id == execution_id)
+        )
+        cost, tokens = result.one()
+        return float(cost), int(tokens)
 
     async def get_total_cost_for_agent(self, agent_id: UUID, since: datetime) -> float:
         """Total USD spent by one agent since `since`.

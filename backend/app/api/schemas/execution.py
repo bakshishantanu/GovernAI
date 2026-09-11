@@ -50,6 +50,12 @@ class ExecutionResponse(BaseModel):
     # for runs with no human actor (e.g. the Jira webhook).
     triggered_by_id: UUID | None = None
     steps: list[ExecutionStepResponse] = []
+    # Populated only by get_execution_detail, which loads them from
+    # CostRepository -- absent (None) on list/create responses rather than
+    # silently 0, so the frontend can tell "not computed" from "genuinely
+    # free".
+    total_cost_usd: float | None = None
+    total_tokens: int | None = None
 
 
 class ExecutionTimelineResponse(BaseModel):

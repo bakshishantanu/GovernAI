@@ -1,16 +1,20 @@
-"""The org-wide live feed: one SSE stream per signed-in user, scoped by role,
-so the console never needs a manual refresh anywhere.
+"""The org-wide live feed (FRD-12's other half): one SSE stream per signed-in
+user, scoped by role, so the console never needs a manual refresh anywhere.
 
-`/executions/{id}/stream` (in `executions.py`) already proves the pattern for
+`/executions/{id}/stream` (in `executions.py`) already proved the pattern for
 one run. This is the same `sse.stream()` plumbing pointed at every event a
 user is allowed to see rather than one execution's slice of them.
 
-Scoping, per role:
-- ``admin`` — every event in their org. Unscoped by design.
+Scoping, per role (two roles, `agent_builder` standardized as the name over
+the earlier "user" — D-057):
+- ``admin`` — every event in their org. Unscoped by design (FRD-01).
 - ``agent_builder`` — events for agents they built (owner) or that were
-  handed to them (assigned) — can be both, so this is an OR, not two
-  separate cases — plus only their own requests (matches
-  `agent_requests.py`'s existing claim restriction).
+  handed to them (assigned) — a merged agent_builder can be both, so this is
+  an OR, not two separate cases — plus only their own requests. Post-merge,
+  an agent_builder builds only their own agent requests (see
+  `agent_requests.py`'s claim restriction), so the request queue they watch
+  is their own, matching `list_requests`'s existing `role == "agent_builder"`
+  restriction, which already had exactly this behavior and needed no change.
 
 Agent ownership can change mid-connection — a request gets claimed, an agent
 gets handed over — so the allowed agent-id set is refreshed on every
@@ -21,9 +25,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_agent_repository
 from app.api.schemas.auth import CurrentUser
 from app.api.sse import SSE_HEADERS, format_sse
 from app.api.sse import stream as sse_stream
@@ -64,10 +67,9 @@ def is_event_visible(
     """Pure scoping rule, kept separate from the route so it is unit-testable
     without a database, an event bus, or an HTTP client.
 
-    Positive match only, same rule as the per-execution stream
-    (`executions.py`): an event that cannot be positively placed in this
-    org, or this user's slice of it, is dropped rather than guessed into
-    view.
+    Positive match only, same rule as the per-execution stream (`executions.py`):
+    an event that cannot be positively placed in this org, or this user's
+    slice of it, is dropped rather than guessed into view.
     """
     if event.payload.get("org_id") != org_id:
         return False
@@ -87,16 +89,14 @@ def is_event_visible(
 @router.get("/stream")
 async def stream_global_events(
     current_user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    agent_repo: AgentRepository = Depends(get_agent_repository),
 ):
     """One live SSE feed of everything this user is allowed to see, org-wide."""
-    agent_repo = AgentRepository(db)
-
     org_id = str(current_user.org_id)
     user_id = str(current_user.id)
     role = current_user.role
 
-    # Populated for a non-admin caller only; admin never consults it.
+    # Populated for a non-admin user only; admin never consults it.
     allowed_agent_ids: set[str] = set()
 
     async def refresh_scope() -> None:
@@ -131,8 +131,8 @@ async def stream_global_events(
 
     async def on_heartbeat() -> tuple[str | None, bool]:
         # Ownership/handover can change mid-connection (a request gets
-        # claimed, an agent gets handed over) -- re-resolve rather than
-        # trust a snapshot taken at connect time.
+        # claimed, an agent gets handed over) — re-resolve rather than trust
+        # a snapshot taken at connect time.
         await refresh_scope()
         return None, True  # never closes on its own; the client disconnects
 

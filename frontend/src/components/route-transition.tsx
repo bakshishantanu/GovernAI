@@ -16,16 +16,30 @@ export function RouteTransition() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(true);
   const isFirstRun = useRef(true);
+  const prevPathname = useRef(pathname);
+  // A ref, deliberately not state and deliberately not cleared by a returned
+  // effect cleanup: role resolution can bounce the pathname (e.g. "/" ->
+  // "/admin") within the same MIN_VISIBLE_MS window, re-firing this effect
+  // while shouldShow is now false. A cleanup function tied to the pathname
+  // dependency runs on *every* re-fire regardless of that run's outcome —
+  // including React 18 Strict Mode's dev-only double-invoke of a fresh
+  // effect — and would cancel the still-pending hide timer moments after it
+  // was set, with nothing left to reschedule it once isFirstRun is already
+  // consumed. This component lives at the root layout for the app's whole
+  // lifetime and never unmounts, so skipping cleanup here is safe.
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isFirstRun.current) {
-      isFirstRun.current = false;
-    } else {
-      setVisible(true);
-    }
+    const cameFromLogin = prevPathname.current?.startsWith("/login");
+    prevPathname.current = pathname;
+    const shouldShow = isFirstRun.current || cameFromLogin;
+    isFirstRun.current = false;
 
-    const t = setTimeout(() => setVisible(false), MIN_VISIBLE_MS);
-    return () => clearTimeout(t);
+    if (!shouldShow) return;
+
+    setVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setVisible(false), MIN_VISIBLE_MS);
   }, [pathname]);
 
   return (

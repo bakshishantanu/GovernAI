@@ -15,12 +15,30 @@ from app.domain.documents.models import Document, DocumentChunk
 from app.domain.executions.models import Execution
 from app.domain.permissions.models import Permission
 from app.domain.policies.models import Policy, PolicyRule
-from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
-from app.skills.base import TrustLevel
+from app.domain.skills.models import SkillPermission
+from app.domain.skills.registry import SkillRegistry
+from app.domain.skills.repository import SkillRepository
 
 connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
 engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def derive_permissions(session, passport_id: uuid.UUID, skill_ids: list[str]) -> None:
+    """Grant a passport the union of its skills' declared permissions.
+
+    The same rule AgentService.create_agent applies, so a seeded agent and a
+    console-built one hold permission sets derived the same way. Hand-writing
+    them here is what let the seed disagree with the product (D-043): four
+    permissions on one agent, none on any other.
+    """
+    if not skill_ids:
+        return
+    rows = await session.execute(
+        select(SkillPermission.permission).where(SkillPermission.skill_id.in_(skill_ids))
+    )
+    for permission in sorted(set(rows.scalars().all())):
+        session.add(Permission(id=uuid.uuid4(), passport_id=passport_id, permission=permission))
 
 
 async def seed_data():
@@ -51,25 +69,19 @@ async def seed_data():
                 p.role = role
 
         await session.flush()
-        
-        # 0.5. Skills bootstrap
-        #
-        # trust_level comes from the TrustLevel enum rather than a hand-written
-        # string: the API declares Literal["VERIFIED","COMMUNITY","EXPERIMENTAL"]
-        # and the runtime registry writes `skill_class.trust_level`, so a
-        # lowercase literal here silently produced rows that failed response
-        # validation and 500'd GET /skills/ for the whole list.
-        skills_to_seed = [
-            SkillModel(id="ticketing", name="ticketing", display_name="Ticketing & ITSM", description="Create and resolve tickets", version="1.0", trust_level=TrustLevel.VERIFIED.value),
-            SkillModel(id="solr_search", name="solr_search", display_name="Enterprise Search", description="Full-text search over enterprise document collections", version="1.0", trust_level=TrustLevel.VERIFIED.value),
-            SkillModel(id="document_search", name="document_search", display_name="Knowledge Search", description="RAG document search", version="1.0", trust_level=TrustLevel.VERIFIED.value),
-        ]
-        for sk in skills_to_seed:
-            existing = await session.get(SkillModel, sk.id)
-            if not existing:
-                session.add(sk)
-        await session.flush()
 
+        # 0.5. Skills bootstrap — from the registry, not by hand.
+        #
+        # The skill classes are the source of truth for what each skill's tools
+        # actually require at runtime, so seeding from anywhere else lets the
+        # two drift. The previous hand-written block created SkillModel rows
+        # with **no SkillPermission rows at all**, which is worse than it looks:
+        # permissions are derived from those rows, so a freshly seeded database
+        # produced agents with empty passports - denied on every tool call.
+        # bootstrap() also creates the ToolModel rows, and skips any skill that
+        # already exists, so it is safe to re-run.
+        await SkillRegistry(SkillRepository(session), session).bootstrap()
+        await session.flush()
 
         # 1. Policies
         policy_id = uuid.uuid4()
@@ -118,7 +130,10 @@ async def seed_data():
             builder_id=builder_id,
             agent_id=None,
             title="Sales Analytics & Reporting Bot",
-            description="Searches enterprise knowledge base and compliance docs to compile weekly digests.",
+            description=(
+                "Searches enterprise knowledge base and compliance docs to compile "
+                "weekly digests."
+            ),
             requested_skills=["solr_search"],
             status="CLAIMED",
             claimed_at=datetime.now(timezone.utc),
@@ -142,7 +157,7 @@ async def seed_data():
             status="FULFILLED",
             claimed_at=datetime.now(timezone.utc),
             fulfilled_at=datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
         session.add(req_fulfilled)
         await session.flush()
@@ -178,17 +193,11 @@ async def seed_data():
         )
         session.add(passport)
 
-        permissions = [
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:read"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="ticket:create"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="solr:search:knowledge_base"),
-            Permission(id=uuid.uuid4(), passport_id=passport_id, permission="solr:search:compliance_docs"),
-        ]
-        session.add_all(permissions)
-
         # AgentSkills (ticketing and solr_search)
         session.add(AgentSkill(agent_id=agent.id, skill_id="ticketing"))
         session.add(AgentSkill(agent_id=agent.id, skill_id="solr_search"))
+
+        await derive_permissions(session, passport_id, ["ticketing", "solr_search"])
 
         # Agent 2: Self-initiated build by builder (no user assignment, in draft)
         agent_draft_id = uuid.uuid4()
@@ -200,19 +209,23 @@ async def seed_data():
             request_id=None,
             name="Document Search Specialist",
             description="Semantic search over internal knowledge bases and SOP documents.",
-            status="DRAFT"
+            status="DRAFT",
         )
         session.add(agent_draft)
 
         passport_draft_id = uuid.uuid4()
-        session.add(AgentPassport(
-            id=passport_draft_id,
-            agent_id=agent_draft_id,
-            compliance_status="PENDING",
-            lifecycle_state="DRAFT",
-            permissions=[]
-        ))
+        session.add(
+            AgentPassport(
+                id=passport_draft_id,
+                agent_id=agent_draft_id,
+                compliance_status="PENDING",
+                lifecycle_state="DRAFT",
+                permissions=[],
+            )
+        )
         session.add(AgentSkill(agent_id=agent_draft_id, skill_id="document_search"))
+
+        await derive_permissions(session, passport_draft_id, ["document_search"])
 
         # 4. Documents
         doc_id_1 = uuid.uuid4()
@@ -284,7 +297,6 @@ async def seed_data():
                 timestamp=datetime.now(timezone.utc),
             )
         )
-
 
         session.add(
             AuditEvent(

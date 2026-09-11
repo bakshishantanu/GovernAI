@@ -1,16 +1,22 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.config import Settings, settings
+from app.domain.auth import middleware as auth_middleware
 from app.domain.auth.middleware import (
     DEV_TOKEN,
     get_current_user,
     get_supabase_jwt_secret,
 )
+
+# Captured before the autouse fixture below swaps it out for every test.
+REAL_PROFILE_IS_ADMIN = auth_middleware.profile_is_admin
 
 # 32+ bytes, so PyJWT does not warn about a short HMAC key.
 TEST_SECRET = "test-signing-secret-long-enough-for-hs256"
@@ -44,12 +50,35 @@ def dev_bypass_off_by_default(monkeypatch):
     monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
 
 
+@pytest.fixture(autouse=True)
+def no_admin_profiles(monkeypatch):
+    """Every test starts with no admin rows in `profiles`, and never touches a
+    real database: get_current_user's profile lookup is replaced here. Tests
+    that need a promoted admin set `no_admin_profiles[user_id] = "admin"`."""
+    profile_roles: dict = {}
+
+    async def fake_profile_is_admin(user_id):
+        return profile_roles.get(user_id) == "admin"
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", fake_profile_is_admin)
+    return profile_roles
+
+
+def signed_token(secret: str, user_id: str, email: str, app_metadata: dict | None = None):
+    payload = {"sub": user_id, "email": email, "app_metadata": app_metadata or {}}
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
 @pytest.mark.asyncio
 async def test_valid_token(configured_secret):
     user_id = str(uuid4())
     org_id = str(uuid4())
 
-    payload = {"sub": user_id, "app_metadata": {"role": "admin", "org_id": org_id}}
+    payload = {
+        "sub": user_id,
+        "email": "admin@governai.com",
+        "app_metadata": {"org_id": org_id},
+    }
     token = jwt.encode(payload, configured_secret, algorithm="HS256")
 
     user = await get_current_user(creds(token))
@@ -57,6 +86,27 @@ async def test_valid_token(configured_secret):
     assert str(user.id) == user_id
     assert str(user.org_id) == org_id
     assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_app_metadata_role_cannot_promote(configured_secret):
+    """The escalation this model closes: `app_metadata.role` is hand-set
+    config a project admin edits in the Supabase dashboard, with nothing
+    keeping it in sync with who someone is. It used to be able to make
+    someone an admin. Now only the email list or the `profiles` row can
+    (the row is what promote_to_admin.py sets); an unlisted email with no
+    admin row stays agent_builder no matter what the token claims."""
+    payload = {
+        "sub": str(uuid4()),
+        "email": "outsider@example.com",
+        "app_metadata": {"role": "admin"},
+    }
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "agent_builder"
+    assert user.is_admin is False
 
 
 @pytest.mark.asyncio
@@ -72,16 +122,22 @@ async def test_missing_sub_rejects(configured_secret):
 
 
 @pytest.mark.asyncio
-async def test_user_role_preserved_and_has_builder_permissions(configured_secret):
+async def test_legacy_user_role_claim_resolves_to_agent_builder(configured_secret):
+    """A token still carrying the retired "user" role name does not keep it:
+    two roles only now, and the surviving name is agent_builder (D-057)."""
     user_id = str(uuid4())
     org_id = str(uuid4())
-    payload = {"sub": user_id, "app_metadata": {"role": "user", "org_id": org_id}}
+    payload = {
+        "sub": user_id,
+        "email": "someone@company.com",
+        "app_metadata": {"role": "user", "org_id": org_id},
+    }
     token = jwt.encode(payload, configured_secret, algorithm="HS256")
 
     user = await get_current_user(creds(token))
 
     assert str(user.id) == user_id
-    assert user.role == "user"
+    assert user.role == "agent_builder"
     assert user.is_builder is True
 
 
@@ -196,11 +252,12 @@ async def test_admin_email_allowlist_promotes_to_admin(configured_secret, monkey
 
 
 @pytest.mark.asyncio
-async def test_dummy_token_user_grants_user_role(dev_bypass_on):
-    """dummy-token-user grants role='user' with non-admin builder permissions."""
+async def test_dummy_token_user_grants_builder_role(dev_bypass_on):
+    """dummy-token-user is kept as an alias, but "user" itself is retired
+    (D-057) -- it resolves to the surviving agent_builder role."""
     user = await get_current_user(creds("dummy-token-user"))
 
-    assert user.role == "user"
+    assert user.role == "agent_builder"
     assert user.is_builder is True
     assert user.is_admin is False
     assert user.email is None
@@ -230,6 +287,7 @@ async def test_full_name_extracted_from_user_metadata(configured_secret):
 async def test_jwks_asymmetric_token_decoding(monkeypatch):
     """Verify ES256/RS256 tokens decoded via JWKS signing key without requiring secret."""
     from unittest.mock import MagicMock
+
     from cryptography.hazmat.primitives.asymmetric import rsa
 
     # Generate a throwaway RSA private key for testing asymmetric signing
@@ -237,7 +295,11 @@ async def test_jwks_asymmetric_token_decoding(monkeypatch):
     public_key = private_key.public_key()
 
     user_id = str(uuid4())
-    payload = {"sub": user_id, "email": "engineer@company.com", "app_metadata": {"role": "agent_builder"}}
+    payload = {
+        "sub": user_id,
+        "email": "engineer@company.com",
+        "app_metadata": {"role": "agent_builder"},
+    }
     token = jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": "test-key-id"})
 
     mock_jwks_client = MagicMock()
@@ -248,7 +310,9 @@ async def test_jwks_asymmetric_token_decoding(monkeypatch):
     monkeypatch.setattr("app.domain.auth.middleware.get_jwks_client", lambda: mock_jwks_client)
     # Ensure SUPABASE_JWT_SECRET is unset to guarantee asymmetric path was used
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
-    monkeypatch.setattr("app.domain.auth.middleware.settings.SUPABASE_JWT_SECRET", "", raising=False)
+    monkeypatch.setattr(
+        "app.domain.auth.middleware.settings.SUPABASE_JWT_SECRET", "", raising=False
+    )
 
     user = await get_current_user(creds(token))
 
@@ -256,3 +320,180 @@ async def test_jwks_asymmetric_token_decoding(monkeypatch):
     assert user.role == "agent_builder"
     assert user.email == "engineer@company.com"
 
+
+
+# --- real-world regression: Supabase's asymmetric (ES256) signing keys ---
+#
+# Found live 2026-09-10: a genuinely signed-in real account's every API call
+# was failing with "Invalid token: The specified alg value is not allowed",
+# because this Supabase project signs access tokens with ES256 (its current
+# default for new projects, verified against a real JWKS endpoint), while
+# this middleware only ever tried HS256 against a shared secret. These tests
+# pin the fix (`decode_supabase_token`'s JWKS-first, HS256-fallback path)
+# against a real EC keypair and a mocked JWKS client, so this exact failure
+# mode cannot silently return.
+
+
+@pytest.fixture
+def es256_keypair():
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    return private_key, private_key.public_key()
+
+
+@pytest.fixture
+def mock_jwks_client(monkeypatch, es256_keypair):
+    """Stands in for a real call to Supabase's JWKS endpoint, returning this
+    test's own EC public key instead of hitting the network."""
+    _, public_key = es256_keypair
+
+    class _FakeJWKClient:
+        def get_signing_key_from_jwt(self, token):
+            return SimpleNamespace(key=public_key)
+
+    monkeypatch.setattr(
+        "app.domain.auth.middleware.get_jwks_client", lambda: _FakeJWKClient()
+    )
+
+
+@pytest.mark.asyncio
+async def test_es256_token_verified_against_jwks(mock_jwks_client, es256_keypair):
+    """The actual bug: a real Supabase session's ES256-signed token must
+    authenticate, not 401 with 'alg value is not allowed'."""
+    private_key, _ = es256_keypair
+    user_id = str(uuid4())
+    payload = {"sub": user_id, "email": "admin@governai.com"}
+    token = jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": "test-kid"})
+
+    user = await get_current_user(creds(token))
+
+    assert str(user.id) == user_id
+    assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_es256_token_with_wrong_key_rejected(mock_jwks_client):
+    """A token signed by a *different* private key than the one the (mocked)
+    JWKS endpoint serves must still be rejected -- the fallback to HS256
+    must not accidentally accept it under the wrong algorithm either."""
+    other_key = ec.generate_private_key(ec.SECP256R1())
+    token = jwt.encode(
+        {"sub": str(uuid4())}, other_key, algorithm="ES256", headers={"kid": "test-kid"}
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(creds(token))
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_hs256_token_still_works_when_jwks_has_no_matching_key(
+    configured_secret, monkeypatch
+):
+    """Legacy HS256-signed tokens (an older Supabase project, or this
+    project's own dev-signed test tokens) must keep working via the fallback
+    -- the JWKS lookup failing to place the token is not itself a rejection."""
+    from jwt import PyJWKClientError
+
+    class _FakeJWKClientNoMatch:
+        def get_signing_key_from_jwt(self, token):
+            raise PyJWKClientError("no matching key found")
+
+    monkeypatch.setattr(
+        "app.domain.auth.middleware.get_jwks_client", lambda: _FakeJWKClientNoMatch()
+    )
+
+    payload = {"sub": str(uuid4()), "email": "admin@governai.com"}
+    token = jwt.encode(payload, configured_secret, algorithm="HS256")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "admin"
+
+
+# --- Admins promoted in the profiles table (option (b)) ----------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_profile_row_grants_admin(configured_secret, no_admin_profiles):
+    """promote_to_admin.py sets profiles.role = 'admin'; that must count even
+    for an email that is on no list."""
+    user_id = uuid4()
+    no_admin_profiles[user_id] = "admin"
+    token = signed_token(configured_secret, str(user_id), "promoted@company.com")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_listed_admin_email_skips_the_profile_lookup(configured_secret, monkeypatch):
+    """An allowlisted email is already admin: no database round trip."""
+    monkeypatch.setenv("ADMIN_EMAILS", "boss@company.com")
+    calls = []
+
+    async def counting_lookup(user_id):
+        calls.append(user_id)
+        return False
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", counting_lookup)
+    token = signed_token(configured_secret, str(uuid4()), "boss@company.com")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "admin"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_dev_tokens_skip_the_profile_lookup(dev_bypass_on, monkeypatch):
+    async def must_not_run(user_id):
+        raise AssertionError("dev tokens have fixed roles; no lookup expected")
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", must_not_run)
+
+    user = await get_current_user(creds("dummy-token-builder"))
+
+    assert user.role == "agent_builder"
+
+
+class _FakeSession:
+    def __init__(self, role=None, error=None):
+        self.role, self.error = role, error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def scalar(self, _statement):
+        if self.error:
+            raise self.error
+        return self.role
+
+
+@pytest.mark.parametrize(
+    ("stored_role", "expected"),
+    [("admin", True), ("agent_builder", False), (None, False)],
+)
+@pytest.mark.asyncio
+async def test_profile_is_admin_reads_the_role(monkeypatch, stored_role, expected):
+    monkeypatch.setattr(
+        auth_middleware, "async_session_factory", lambda: _FakeSession(role=stored_role)
+    )
+
+    assert await REAL_PROFILE_IS_ADMIN(uuid4()) is expected
+
+
+@pytest.mark.asyncio
+async def test_profile_lookup_failure_never_grants_admin(monkeypatch):
+    """Fail closed: a database error means "not promoted", never "admin"."""
+    monkeypatch.setattr(
+        auth_middleware,
+        "async_session_factory",
+        lambda: _FakeSession(error=ConnectionError("database unreachable")),
+    )
+
+    assert await REAL_PROFILE_IS_ADMIN(uuid4()) is False

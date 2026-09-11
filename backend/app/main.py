@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+import app.domain.agent_requests.models  # noqa: F401
+
 # Import every domain's ORM models so SQLAlchemy's mapper registry knows
 # about all tables at startup, regardless of which routers are wired up.
 # Without this, a cross-domain foreign key (e.g. agents.owner_id ->
@@ -19,7 +21,6 @@ import app.domain.audit.models  # noqa: F401
 import app.domain.auth.models  # noqa: F401
 import app.domain.costs.models  # noqa: F401
 import app.domain.documents.models  # noqa: F401
-import app.domain.agent_requests.models  # noqa: F401
 import app.domain.executions.models  # noqa: F401
 import app.domain.permissions.models  # noqa: F401
 import app.domain.policies.models  # noqa: F401

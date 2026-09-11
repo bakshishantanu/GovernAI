@@ -14,7 +14,6 @@ from app.api.schemas.policy import (
     PolicyRuleCreate,
     PolicyRuleResponse,
 )
-from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.domain.policies.models import Policy, PolicyRule
 from app.domain.policies.repository import PolicyRepository

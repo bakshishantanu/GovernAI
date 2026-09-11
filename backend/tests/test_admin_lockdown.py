@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
 import jwt
 import pytest
 from fastapi import HTTPException
@@ -9,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.domain.auth import middleware as auth_middleware
 from app.domain.auth.middleware import get_current_user
 from app.domain.auth.models import Profile
 from app.domain.auth.rbac import require_admin
@@ -39,6 +41,19 @@ def dev_bypass_off_by_default(monkeypatch):
     monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
 
 
+@pytest.fixture(autouse=True)
+def profile_roles(monkeypatch):
+    """Stand-in for the `profiles` table, so get_current_user never reaches a
+    real database. Maps user id -> role; empty means no one is promoted."""
+    roles: dict = {}
+
+    async def fake_profile_is_admin(user_id):
+        return roles.get(user_id) == "admin"
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", fake_profile_is_admin)
+    return roles
+
+
 # 1. Admin Lockdown: Default role is always agent_builder, never admin
 @pytest.mark.asyncio
 async def test_jwt_default_role_is_agent_builder(configured_secret):
@@ -58,9 +73,11 @@ async def test_jwt_unknown_role_defaults_to_agent_builder(configured_secret):
 
 # 2. Dev token: dummy-token-user is supported when dev bypass is on, rejected when off
 @pytest.mark.asyncio
-async def test_dummy_token_user_is_user_when_bypass_on(dev_bypass_on):
+async def test_dummy_token_user_is_agent_builder_when_bypass_on(dev_bypass_on):
+    """The "dummy-token-user" name is kept so old dev sessions keep working,
+    but the role it grants is agent_builder -- "user" is retired (D-057)."""
     user = await get_current_user(creds("dummy-token-user"))
-    assert user.role == "user"
+    assert user.role == "agent_builder"
 
 
 @pytest.mark.asyncio
@@ -128,3 +145,24 @@ async def test_promote_script_idempotent_if_already_admin():
 
     assert mock_profile.role == "admin"
     mock_session.commit.assert_not_awaited()
+
+
+# 5. A promoted admin is actually an admin (option (b)).
+@pytest.mark.asyncio
+async def test_promoted_profile_is_admin_without_being_on_the_email_list(
+    configured_secret, profile_roles
+):
+    """promote_to_admin.py is the supported way to make an admin, and it works
+    by setting profiles.role. That row must be honoured even though the email
+    is on no list -- otherwise the script reports SUCCESS and changes nothing."""
+    user_id = uuid4()
+    token = jwt.encode(
+        {"sub": str(user_id), "email": "promoted@company.com"},
+        configured_secret,
+        algorithm="HS256",
+    )
+    assert (await get_current_user(creds(token))).role == "agent_builder"
+
+    profile_roles[user_id] = "admin"
+
+    assert (await get_current_user(creds(token))).role == "admin"

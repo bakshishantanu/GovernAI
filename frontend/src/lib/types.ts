@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "agent_builder" | "user";
+export type UserRole = "admin" | "agent_builder";
 
 export type AgentRequestStatus = "PENDING" | "CLAIMED" | "FULFILLED" | "CANCELLED";
 
@@ -43,6 +43,27 @@ export interface Agent {
     permissions?: string[];
   };
   skills?: Array<{ id?: string; name?: string } | string>;
+}
+
+export type TicketDraftStatus = "PENDING_REVIEW" | "POSTED" | "REJECTED";
+
+// Matches what GET /ticket-drafts/ actually returns (app/api/schemas/ticket_draft.py) —
+// agent_name and ticket_url are resolved server-side so this page never has to
+// join agents or guess at a Jira base URL client-side.
+export interface TicketDraft {
+  id: string;
+  org_id: string;
+  agent_id: string;
+  agent_name?: string | null;
+  execution_id: string | null;
+  ticket_id: string;
+  ticket_url?: string | null;
+  body: string;
+  status: TicketDraftStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
 }
 
 // Matches what GET /executions/{id} actually returns, confirmed against a live

@@ -10,7 +10,8 @@ estimated, sampled or filled in.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -34,6 +35,20 @@ from app.domain.costs.repository import CostRepository
 from app.domain.governance.budget import BUDGET_WINDOW, resolve_cap
 
 router = APIRouter(prefix="/costs", tags=["costs"])
+
+CostWindow = Literal["24h", "7d", "30d", "all"]
+
+_WINDOW_DELTAS: dict[str, timedelta] = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
+
+
+def _since_for(window: CostWindow) -> datetime | None:
+    delta = _WINDOW_DELTAS.get(window)
+    return datetime.now(timezone.utc) - delta if delta else None
+
 
 #: The cost service writes `event_type="llm_inference"`, but the shared schema
 #: declares Literal["LLM_CALL", "TOOL_CALL"]. Until the stored vocabulary and
@@ -111,17 +126,25 @@ async def list_costs(
 @router.get("/summary", response_model=Envelope[CostSummaryResponse])
 async def cost_summary(
     user: CurrentUser = Depends(require_builder_or_admin),
+    window: CostWindow = Query("all", description="24h, 7d, 30d, or all (default)"),
     repo: CostRepository = Depends(get_cost_repo),
 ):
     """Total spend for the organisation, broken down by agent and by model.
 
     The grouping is done by the database; this only pivots the already-small
-    grouped result into the shape the dashboard reads.
+    grouped result into the shape the dashboard reads. `window` narrows the
+    same query rather than requiring a second endpoint — the design canvas's
+    own open question ("no time control") resolved as one query param rather
+    than a separate aggregation path, since the shape of the answer never
+    changes, only how far back it looks.
     """
     builder_id = user.id if user.is_builder else None
     assigned_user_id = user.id if user.is_builder else None
     rows = await repo.get_costs_summary(
-        user.org_id, builder_id=builder_id, assigned_user_id=assigned_user_id
+        user.org_id,
+        builder_id=builder_id,
+        assigned_user_id=assigned_user_id,
+        since=_since_for(window),
     )
 
     total = 0.0
@@ -146,6 +169,7 @@ async def cost_summary(
             total_cost_usd=round(total, 6),
             by_agent={k: round(v, 6) for k, v in by_agent.items()},
             by_model={k: round(v, 6) for k, v in by_model.items()},
+            window=window,
         )
     )
 

@@ -6,7 +6,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_agent_service, get_db, get_kill_switch_service
+from app.api.deps import (
+    get_agent_service,
+    get_audit_service,
+    get_db,
+    get_kill_switch_service,
+)
 from app.api.schemas.agent import (
     AgentCreate,
     AgentResponse,
@@ -23,6 +28,7 @@ from app.domain.agents.service import (
     InvalidStateTransitionError,
     SkillNotFoundError,
 )
+from app.domain.audit.service import AuditService
 from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.domain.skills.models import SkillModel
@@ -62,12 +68,13 @@ async def create_agent(
     payload: AgentCreate,
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession | None = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new agent draft."""
     assigned_user_id = payload.assigned_user_id
     if payload.request_id and not assigned_user_id:
         from app.domain.agent_requests.repository import AgentRequestRepository
+
         req_repo = AgentRequestRepository(service.agent_repo.session)
         req = await req_repo.get_request(payload.request_id)
         if req:
@@ -99,15 +106,19 @@ async def list_agents(
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """List agents. Admin sees all in org. Builder sees own + assigned."""
-    owner_id = None
-    assigned_user_id = None
-    if user.is_builder:
-        owner_id = user.id
-        assigned_user_id = user.id
+    """List agents. Admin sees every agent in the org. A user sees agents they
+    built (owner) or that were handed to them (assigned) — the two are not
+    mutually exclusive for the same person, so this is an OR, not a role
+    branch."""
+    owner_id = user.id if user.is_builder else None
+    assigned_user_id = user.id if user.is_builder else None
 
     agents = await service.agent_repo.list_agents_by_org(
-        user.org_id, limit=limit, offset=offset, owner_id=owner_id, assigned_user_id=assigned_user_id
+        user.org_id,
+        limit=limit,
+        offset=offset,
+        owner_id=owner_id,
+        assigned_user_id=assigned_user_id,
     )
     count = await service.agent_repo.count_agents_by_org(
         user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
@@ -134,7 +145,10 @@ async def get_agent(
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    if user.is_builder and agent.owner_id != user.id and agent.assigned_user_id != user.id:
+    # 404 rather than 403 outside the caller's scope: a 403 would confirm the
+    # agent exists. Owner or assignee (not a role branch — the same person
+    # can be either, or both, for different agents).
+    if user.role != "admin" and user.id not in (agent.owner_id, agent.assigned_user_id):
         raise HTTPException(status_code=404, detail="Agent not found")
 
     skills = await _skills_for(db, [agent.id])
@@ -146,24 +160,53 @@ async def submit_agent_for_review(
     agent_id: UUID,
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession | None = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Submit a draft agent for governance review."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    if user.is_builder and agent.owner_id != user.id:
+
+    # Build actions (submit/activate/edit) are an owner-only privilege, not
+    # widened to "or assigned" — being handed an agent to *use* is not the
+    # same as being allowed to edit its definition.
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to submit this agent")
 
     try:
         await service.submit_for_review(agent_id)
+        # FRD-02: an audit event after every compliance attempt, not only the
+        # refusals. A log that records what was stopped and not what was let
+        # through cannot answer "who approved this agent, and when".
+        await audit.log_compliance_passed(user.org_id, user.id, agent_id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except InvalidStateTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ComplianceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        await audit.log_compliance_failed(user.org_id, user.id, agent_id, e.violations)
+
+        # Commit the FAILED verdict and the audit row before reporting them. The
+        # service writes compliance_status and compliance_checked_at on the way
+        # out; without a commit here the session is discarded with the exception
+        # and the passport would still read PENDING, so the console could never
+        # show that a check had been run and refused - and an audit trail that
+        # records only successes is worse than none.
+        if isinstance(db, AsyncSession):
+            await db.commit()
+
+        # Every violation, not just the first: FRD-02 requires the builder be
+        # shown what is wrong, and an agent told only "no" cannot be fixed by
+        # whoever built it. `message` keeps the response readable to any client
+        # that only reads `detail.message`.
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "This agent does not pass the compliance check.",
+                "violations": [{"rule": v.rule, "message": v.message} for v in e.violations],
+            },
+        )
 
     # Reload agent to get the updated status
     updated_agent = await service.agent_repo.get_agent(agent_id)
@@ -176,14 +219,14 @@ async def activate_agent(
     agent_id: UUID,
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
-    db: AsyncSession | None = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Activate an approved agent."""
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    if user.is_builder and agent.owner_id != user.id:
+
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to activate this agent")
 
     try:
@@ -218,8 +261,8 @@ async def update_agent(
     agent = await service.agent_repo.get_agent(agent_id)
     if not agent or agent.org_id != user.org_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-        
-    if user.is_builder and agent.owner_id != user.id:
+
+    if user.role != "admin" and agent.owner_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this agent")
 
     if payload.skills is not None:

@@ -22,6 +22,25 @@ class PassportResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("compliance_status", "lifecycle_state", mode="before")
+    @classmethod
+    def _normalise_legacy_status(cls, value):
+        """Accept the vocabulary older rows were written with.
+
+        These are free-text columns, not database enums, so whatever wrote a
+        row is what comes back. Seeded databases still hold
+        `compliance_status="COMPLIANT"` from an earlier seed script, and one
+        such row used to fail validation for the *whole* response — a single
+        legacy agent 500'd the entire agents list rather than rendering. The
+        writers now agree on this vocabulary; this keeps a database that
+        predates that from taking the page down.
+        """
+        if not isinstance(value, str):
+            return value
+        normalised = value.strip().upper()
+        # "COMPLIANT" was the old name for a passport that passed its check.
+        return "PASSED" if normalised == "COMPLIANT" else normalised
+
     @field_validator("permissions", mode="before")
     @classmethod
     def _extract_permission_strings(cls, value):
