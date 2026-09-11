@@ -14,12 +14,11 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
-    ADMIN_EMAILS: str = ""
 
     # --- Role assignment ---
-    # Comma-separated email addresses. Role is decided by which list a signed-in
-    # user's email appears on, not by anything client-supplied - an email not on
-    # either list gets the least-privileged role, "user".
+    # Comma-separated email addresses. Role is decided by whether a signed-in
+    # user's email appears on this list, not by anything client-supplied - any
+    # other email gets the one remaining role, "agent_builder".
     ADMIN_EMAILS: str = "admin@governai.com"
 
     # --- LLM Providers ---
