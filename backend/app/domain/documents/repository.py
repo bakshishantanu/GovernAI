@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import cast, select
+from sqlalchemy import cast, delete, select
 from sqlalchemy.dialects.postgresql import JSONB, array
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,6 +25,45 @@ class DocumentRepository:
             .options(selectinload(Document.chunks))
         )
         return result.scalar_one_or_none()
+
+    async def get_document_meta(self, document_id: UUID) -> Document | None:
+        """The row without its chunks.
+
+        Deliberately separate from get_document: a 120-page upload has a few
+        hundred chunks, each carrying a 768-float vector, and loading all of
+        them only to read a status field is wasteful enough to notice.
+        """
+        result = await self.session.execute(select(Document).where(Document.id == document_id))
+        return result.scalar_one_or_none()
+
+    async def list_documents(self, org_id: UUID) -> list[Document]:
+        """Newest first, without chunks (see get_document_meta)."""
+        result = await self.session.execute(
+            select(Document).where(Document.org_id == org_id).order_by(Document.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def add_chunks(self, chunks: list[DocumentChunk]) -> None:
+        self.session.add_all(chunks)
+
+    async def delete_document(self, document_id: UUID) -> bool:
+        """Remove a document and its chunks. Returns whether it existed.
+
+        Chunks go first: there is a foreign key from document_chunks to
+        documents and no ON DELETE CASCADE on it, so deleting the parent first
+        fails.
+        """
+        document = await self.get_document_meta(document_id)
+        if document is None:
+            return False
+        await self.session.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+        )
+        await self.session.delete(document)
+        return True
+
+    async def flush(self) -> None:
+        await self.session.flush()
 
     async def search_chunks(self, embedding: list[float], limit: int = 5) -> list[DocumentChunk]:
         # Using pgvector cosine distance

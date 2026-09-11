@@ -8,13 +8,18 @@ _DOC_ID = uuid.uuid4()
 
 
 def _chunk(
-    text: str, embedding: list[float], index: int = 0, title: str = "Policy Engine Overview"
+    text: str,
+    embedding: list[float],
+    index: int = 0,
+    title: str = "Policy Engine Overview",
+    page_number: int | None = None,
 ):
     return SimpleNamespace(
         document_id=_DOC_ID,
         chunk_index=index,
         content=text,
         embedding=embedding,
+        page_number=page_number,
         document=SimpleNamespace(title=title),
     )
 
@@ -46,6 +51,34 @@ async def test_search_embeds_the_query_and_returns_scored_results():
     assert results[0].chunk_id == f"{_DOC_ID}#0"
     assert results[0].document_title == "Policy Engine Overview"
     assert results[0].relevance_score == 1.0
+
+
+async def test_search_carries_the_page_number_into_the_citation():
+    """The page has to survive retrieval, or an answer cannot say where a
+    fact came from - which is the whole reason chunks store one."""
+    chunk = _chunk("net sales rose", embedding=[1.0, 0.0], page_number=32, title="Apple 10 K")
+    adapter = PgVectorDocumentSearchAdapter(
+        repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])
+    )
+
+    results = await adapter.search("net sales", permitted_scopes=frozenset({"public"}))
+
+    assert results[0].page_number == 32
+    assert results[0].citation == "Apple 10 K, p.32"
+
+
+async def test_a_chunk_without_a_page_cites_by_title_alone():
+    """Seeded demo documents have no pages; inventing one would produce a
+    citation that cannot be looked up."""
+    chunk = _chunk("governance at creation time", embedding=[1.0, 0.0], title="Onboarding Guide")
+    adapter = PgVectorDocumentSearchAdapter(
+        repo=_repo([chunk]), embedding_provider=_embeddings([1.0, 0.0])
+    )
+
+    results = await adapter.search("governance", permitted_scopes=frozenset({"public"}))
+
+    assert results[0].page_number is None
+    assert results[0].citation == "Onboarding Guide"
 
 
 async def test_search_passes_permitted_scopes_and_embedding_to_the_repo():

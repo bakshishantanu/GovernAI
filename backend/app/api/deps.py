@@ -15,6 +15,8 @@ from app.domain.audit.repository import AuditRepository
 from app.domain.audit.service import AuditService
 from app.domain.costs.repository import CostRepository
 from app.domain.costs.service import CostService
+from app.domain.documents.repository import DocumentRepository
+from app.domain.documents.service import DocumentIngestionService
 from app.domain.executions.repository import ExecutionRepository
 from app.domain.executions.service import ExecutionService
 from app.domain.governance.budget import BudgetGuard
@@ -139,6 +141,21 @@ def get_embedding_provider() -> EmbeddingProvider | None:
     if not settings.GEMINI_API_KEY:
         return None
     return GeminiEmbeddingProvider(api_key=settings.GEMINI_API_KEY)
+
+
+async def get_document_service(
+    db: AsyncSession = Depends(get_db),
+    embedding_provider: EmbeddingProvider | None = Depends(get_embedding_provider),
+) -> DocumentIngestionService:
+    """Uploading, listing and ingesting documents.
+
+    The embedding provider is None when GEMINI_API_KEY is unset, and the
+    service refuses the upload in that case rather than accepting a file it
+    could never make searchable.
+    """
+    return DocumentIngestionService(
+        repo=DocumentRepository(db), embedding_provider=embedding_provider
+    )
 
 
 async def get_skill_registry(
