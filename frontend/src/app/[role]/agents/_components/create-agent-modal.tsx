@@ -15,14 +15,15 @@ const SKILL_ICON: Record<string, LucideIcon> = {
 
 type Skill = { id: string; display_name: string; description: string; required_permissions: string[] };
 
-type Stage = "form" | "submitting" | "approved" | "violation";
+type Stage = "form" | "submitting" | "active" | "approved" | "violation";
 
 /**
- * Draft a new passport. Two real backend calls, not one: POST /agents/
- * creates the DRAFT with derived permissions, then PATCH
- * /agents/{id}/submit runs the actual compliance check. A failure there is
- * shown as the real violation string from the backend — the agent still
- * exists, just stuck in DRAFT, exactly as the spec says it should.
+ * Draft a new passport and put it to work. Three real backend calls: POST
+ * /agents/ creates the DRAFT with derived permissions, PATCH
+ * /agents/{id}/submit runs the actual compliance check, and on a pass PATCH
+ * /agents/{id}/activate makes it live. A compliance failure is shown as the
+ * real violation strings from the backend — the agent still exists, just
+ * stuck in DRAFT, and is never activated.
  */
 export function CreateAgentModal({
   open,
@@ -86,14 +87,26 @@ export function CreateAgentModal({
 
       try {
         await fetchApi(`/agents/${created.id}/submit`, { method: "PATCH" });
-        setStage("approved");
-        onCreated();
       } catch (err) {
         setViolation(err instanceof Error ? err.message : "Compliance check failed.");
         setViolations(err instanceof ApiError ? err.violations : []);
         setStage("violation");
         onCreated(); // it still exists, in DRAFT — the roster should show it
+        return;
       }
+
+      // Passed compliance: activate straight away, so building an agent ends
+      // with a working agent rather than one parked at APPROVED waiting for a
+      // click. The owner is allowed to do this (see PATCH /agents/{id}/activate).
+      // If activation alone fails, the agent is still approved and the result
+      // pane says so, rather than claiming it is live.
+      try {
+        await fetchApi(`/agents/${created.id}/activate`, { method: "PATCH" });
+        setStage("active");
+      } catch {
+        setStage("approved");
+      }
+      onCreated();
     } catch (err) {
       setViolation(err instanceof Error ? err.message : "Could not create the agent.");
       setViolations([]);
@@ -123,11 +136,19 @@ export function CreateAgentModal({
             className="fixed left-1/2 top-1/2 z-50 w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border-2 border-[var(--l-ink)] bg-[var(--l-cream)] shadow-2xl"
             style={{ maxHeight: "88vh" }}
           >
-            {stage === "approved" ? (
+            {stage === "active" ? (
+              <ResultPane
+                ok
+                badge="Compliance passed — Active"
+                title={createdName}
+                message="Passport issued and the agent is live. Permissions were derived from its skills — nothing more, nothing hand-granted."
+                onClose={onClose}
+              />
+            ) : stage === "approved" ? (
               <ResultPane
                 ok
                 title={createdName}
-                message="Passport approved. Permissions were derived from its skills — nothing more, nothing hand-granted."
+                message="Passport approved, but activation did not go through. Open the agent and press Activate."
                 onClose={onClose}
               />
             ) : stage === "violation" ? (
@@ -268,12 +289,15 @@ export function CreateAgentModal({
 
 function ResultPane({
   ok,
+  badge,
   title,
   message,
   violations = [],
   onClose,
 }: {
   ok: boolean;
+  /** Overrides the default passed/failed label under the title. */
+  badge?: string;
   title: string;
   message: string;
   /** Every rule that was broken, not just the first — FRD-02. */
@@ -301,7 +325,7 @@ function ResultPane({
           className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em]"
           style={{ color: ok ? "var(--l-teal)" : "var(--l-orange-deep)" }}
         >
-          {ok ? "Compliance passed — Approved" : "Compliance check failed — still Draft"}
+          {badge ?? (ok ? "Compliance passed — Approved" : "Compliance check failed — still Draft")}
         </p>
       </div>
       <p className="max-w-xs text-sm leading-relaxed text-[var(--l-charcoal)]/70">{message}</p>

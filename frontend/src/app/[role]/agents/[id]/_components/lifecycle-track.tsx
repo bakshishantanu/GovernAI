@@ -21,10 +21,13 @@ type Action = "submit" | "activate" | "kill" | "reactivate";
 export function LifecycleTrack({
   agent,
   isAdmin,
+  isOwner,
   onChanged,
 }: {
   agent: Agent;
   isAdmin: boolean;
+  /** Whether the signed-in user owns this agent (agent.owner_id). */
+  isOwner: boolean;
   onChanged: (agent: Agent) => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -51,16 +54,19 @@ export function LifecycleTrack({
     }
   }
 
+  // `who` mirrors the backend's own checks: submit and activate are the
+  // owner's (or an admin's) to do; kill and reactivate are admin-only.
   const cta =
     state === "DRAFT"
-      ? { label: "Submit for review", icon: ShieldCheck, action: () => run("submit", `/agents/${agent.id}/submit`, "PATCH"), adminOnly: false }
+      ? { label: "Submit for review", icon: ShieldCheck, action: () => run("submit", `/agents/${agent.id}/submit`, "PATCH"), who: "owner" as const }
       : state === "APPROVED"
-      ? { label: "Activate", icon: PlayCircle, action: () => run("activate", `/agents/${agent.id}/activate`, "PATCH"), adminOnly: true }
+      ? { label: "Activate", icon: PlayCircle, action: () => run("activate", `/agents/${agent.id}/activate`, "PATCH"), who: "owner" as const }
       : state === "ACTIVE"
-      ? { label: "Kill switch", icon: Skull, action: () => run("kill", `/agents/${agent.id}/kill`, "POST"), adminOnly: true, danger: true }
+      ? { label: "Kill switch", icon: Skull, action: () => run("kill", `/agents/${agent.id}/kill`, "POST"), who: "admin" as const, danger: true }
       : state === "SUSPENDED"
-      ? { label: "Reactivate", icon: RotateCcw, action: () => run("reactivate", `/agents/${agent.id}/reactivate`, "POST"), adminOnly: true }
+      ? { label: "Reactivate", icon: RotateCcw, action: () => run("reactivate", `/agents/${agent.id}/reactivate`, "POST"), who: "admin" as const }
       : null;
+  const allowed = cta !== null && (isAdmin || (cta.who === "owner" && isOwner));
 
   return (
     <div className="rounded-2xl border-2 border-[var(--l-ink)]/90 bg-[var(--l-cream)] p-5 shadow-[0_4px_0_0_rgba(22,19,14,0.12)]">
@@ -106,7 +112,7 @@ export function LifecycleTrack({
           )}
         </div>
 
-        {cta && (!cta.adminOnly || isAdmin) && (
+        {cta && allowed && (
           <motion.button
             onClick={cta.action}
             disabled={busy}
@@ -119,9 +125,9 @@ export function LifecycleTrack({
             {cta.label}
           </motion.button>
         )}
-        {cta && cta.adminOnly && !isAdmin && (
+        {cta && !allowed && (
           <span className="font-mono text-[11px] text-[var(--l-charcoal)]/45">
-            {cta.label} — admin only
+            {cta.label} — {cta.who === "owner" ? "owner or admin only" : "admin only"}
           </span>
         )}
       </div>

@@ -25,6 +25,7 @@ export function AgentDetail({ id }: { id: string }) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [budget, setBudget] = useState<Budget | undefined>(undefined);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [myId, setMyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -40,7 +41,11 @@ export function AgentDetail({ id }: { id: string }) {
       })
       .catch(() => {});
     fetchApi("/auth/me")
-      .then((me) => !cancelled && setIsAdmin(me?.role === "admin"))
+      .then((me) => {
+        if (cancelled) return;
+        setIsAdmin(me?.role === "admin");
+        setMyId(me?.id ?? null);
+      })
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -99,7 +104,12 @@ export function AgentDetail({ id }: { id: string }) {
         </p>
       </motion.div>
 
-      <LifecycleTrack agent={agent} isAdmin={isAdmin} onChanged={setAgent} />
+      <LifecycleTrack
+        agent={agent}
+        isAdmin={isAdmin}
+        isOwner={myId !== null && myId === agent.owner_id}
+        onChanged={setAgent}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
