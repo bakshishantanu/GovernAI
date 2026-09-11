@@ -8,11 +8,15 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.config import Settings, settings
+from app.domain.auth import middleware as auth_middleware
 from app.domain.auth.middleware import (
     DEV_TOKEN,
     get_current_user,
     get_supabase_jwt_secret,
 )
+
+# Captured before the autouse fixture below swaps it out for every test.
+REAL_PROFILE_IS_ADMIN = auth_middleware.profile_is_admin
 
 # 32+ bytes, so PyJWT does not warn about a short HMAC key.
 TEST_SECRET = "test-signing-secret-long-enough-for-hs256"
@@ -46,6 +50,25 @@ def dev_bypass_off_by_default(monkeypatch):
     monkeypatch.setenv("AUTH_ALLOW_DEV_TOKEN", "false")
 
 
+@pytest.fixture(autouse=True)
+def no_admin_profiles(monkeypatch):
+    """Every test starts with no admin rows in `profiles`, and never touches a
+    real database: get_current_user's profile lookup is replaced here. Tests
+    that need a promoted admin set `no_admin_profiles[user_id] = "admin"`."""
+    profile_roles: dict = {}
+
+    async def fake_profile_is_admin(user_id):
+        return profile_roles.get(user_id) == "admin"
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", fake_profile_is_admin)
+    return profile_roles
+
+
+def signed_token(secret: str, user_id: str, email: str, app_metadata: dict | None = None):
+    payload = {"sub": user_id, "email": email, "app_metadata": app_metadata or {}}
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
 @pytest.mark.asyncio
 async def test_valid_token(configured_secret):
     user_id = str(uuid4())
@@ -70,8 +93,9 @@ async def test_app_metadata_role_cannot_promote(configured_secret):
     """The escalation this model closes: `app_metadata.role` is hand-set
     config a project admin edits in the Supabase dashboard, with nothing
     keeping it in sync with who someone is. It used to be able to make
-    someone an admin. Email decides now, and an unlisted email stays
-    agent_builder no matter what the token claims."""
+    someone an admin. Now only the email list or the `profiles` row can
+    (the row is what promote_to_admin.py sets); an unlisted email with no
+    admin row stays agent_builder no matter what the token claims."""
     payload = {
         "sub": str(uuid4()),
         "email": "outsider@example.com",
@@ -385,3 +409,91 @@ async def test_hs256_token_still_works_when_jwks_has_no_matching_key(
     user = await get_current_user(creds(token))
 
     assert user.role == "admin"
+
+
+# --- Admins promoted in the profiles table (option (b)) ----------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_profile_row_grants_admin(configured_secret, no_admin_profiles):
+    """promote_to_admin.py sets profiles.role = 'admin'; that must count even
+    for an email that is on no list."""
+    user_id = uuid4()
+    no_admin_profiles[user_id] = "admin"
+    token = signed_token(configured_secret, str(user_id), "promoted@company.com")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "admin"
+
+
+@pytest.mark.asyncio
+async def test_listed_admin_email_skips_the_profile_lookup(configured_secret, monkeypatch):
+    """An allowlisted email is already admin: no database round trip."""
+    monkeypatch.setenv("ADMIN_EMAILS", "boss@company.com")
+    calls = []
+
+    async def counting_lookup(user_id):
+        calls.append(user_id)
+        return False
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", counting_lookup)
+    token = signed_token(configured_secret, str(uuid4()), "boss@company.com")
+
+    user = await get_current_user(creds(token))
+
+    assert user.role == "admin"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_dev_tokens_skip_the_profile_lookup(dev_bypass_on, monkeypatch):
+    async def must_not_run(user_id):
+        raise AssertionError("dev tokens have fixed roles; no lookup expected")
+
+    monkeypatch.setattr(auth_middleware, "profile_is_admin", must_not_run)
+
+    user = await get_current_user(creds("dummy-token-builder"))
+
+    assert user.role == "agent_builder"
+
+
+class _FakeSession:
+    def __init__(self, role=None, error=None):
+        self.role, self.error = role, error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def scalar(self, _statement):
+        if self.error:
+            raise self.error
+        return self.role
+
+
+@pytest.mark.parametrize(
+    ("stored_role", "expected"),
+    [("admin", True), ("agent_builder", False), (None, False)],
+)
+@pytest.mark.asyncio
+async def test_profile_is_admin_reads_the_role(monkeypatch, stored_role, expected):
+    monkeypatch.setattr(
+        auth_middleware, "async_session_factory", lambda: _FakeSession(role=stored_role)
+    )
+
+    assert await REAL_PROFILE_IS_ADMIN(uuid4()) is expected
+
+
+@pytest.mark.asyncio
+async def test_profile_lookup_failure_never_grants_admin(monkeypatch):
+    """Fail closed: a database error means "not promoted", never "admin"."""
+    monkeypatch.setattr(
+        auth_middleware,
+        "async_session_factory",
+        lambda: _FakeSession(error=ConnectionError("database unreachable")),
+    )
+
+    assert await REAL_PROFILE_IS_ADMIN(uuid4()) is False

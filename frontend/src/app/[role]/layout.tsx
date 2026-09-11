@@ -2,9 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AuthProvider } from "@/lib/auth-context";
-import { createClient } from "@/lib/supabase/server";
-import { UserRole } from "@/lib/types";
-import { roleForEmail, roleForSlug, slugForRole } from "@/lib/role-slug";
+import { roleForSlug, slugForRole } from "@/lib/role-slug";
+import { resolveSignedInRole } from "@/lib/server-role";
 import "../landing/landing.css";
 
 /**
@@ -17,11 +16,11 @@ import "../landing/landing.css";
  * page re-rendering by client state — the change this layout exists to make.
  * (A third prefix, `/builder`, existed briefly for the `agent_builder` role;
  * that role merged into `user`.) The role that actually renders is resolved
- * here, on the server, purely from the signed-in account's own email
- * (mirroring the backend's own `role_rules.py`) — there is no manual
- * override of any kind anymore (the dev role-switcher and its cookie were
- * removed). Registering/signing in with an email on the admin list lands on
- * `/admin`; every other email lands on `/user`. If the URL disagrees with
+ * here, on the server, by `resolveSignedInRole` (lib/server-role.ts): the
+ * admin email list, or an 'admin' row in `profiles` as reported by the
+ * backend — there is no manual override of any kind anymore (the dev
+ * role-switcher and its cookie were removed). An admin lands on `/admin`;
+ * everyone else lands on `/user`. If the URL disagrees with
  * that, this redirects to the URL that matches — a user cannot land on
  * `/admin` by typing it, they just bounce to `/user`. Still a display
  * concern first and foremost: every endpoint re-derives the role from the
@@ -38,19 +37,9 @@ export default async function RoleLayout({
   const urlRole = roleForSlug(roleSlug);
   if (!urlRole) notFound();
 
-  let user = null;
-  let resolvedRole: UserRole | null = null;
-
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      user = data.user;
-      resolvedRole = roleForEmail(user.email);
-    }
-  } catch {
-    // No strong signal either way — fall through and trust the URL.
-  }
+  // Signed out (or the lookup failed): no strong signal either way, so the
+  // role is null and the URL is trusted below.
+  const { user, role: resolvedRole } = await resolveSignedInRole();
 
   if (resolvedRole && resolvedRole !== urlRole) {
     redirect(`/${slugForRole(resolvedRole)}`);

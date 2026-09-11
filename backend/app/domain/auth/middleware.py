@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from uuid import UUID
 
@@ -7,12 +8,37 @@ import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient, PyJWKClientError
+from sqlalchemy import select
 
 from app.api.schemas.auth import CurrentUser
 from app.config import settings
+from app.domain.auth.models import Profile
 from app.domain.auth.role_rules import role_for_email
+from app.infrastructure.database import async_session_factory
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
+
+
+async def profile_is_admin(user_id: UUID) -> bool:
+    """Whether this user's `profiles` row says 'admin'.
+
+    Uses its own short-lived session rather than the request's: this runs for
+    every authenticated request, including the long-lived SSE streams, and
+    borrowing the request session would pin a pooled connection for as long
+    as a browser tab stays open.
+
+    Fails closed. If the lookup errors, the answer is "not an admin" - an
+    unreachable database must never be the reason someone gets admin.
+    """
+    try:
+        async with async_session_factory() as session:
+            role = await session.scalar(select(Profile.role).where(Profile.id == user_id))
+    except Exception:
+        logger.warning("profiles lookup failed for %s; treating as non-admin", user_id)
+        return False
+    return role == "admin"
 
 #: Lazily built, then reused — see get_jwks_client below.
 _jwks_client: PyJWKClient | None = None
@@ -172,12 +198,14 @@ async def get_current_user(
     full_name = user_metadata.get("full_name") or payload.get("name")
     app_metadata = payload.get("app_metadata", {})
 
-    # Role is decided by email, not by app_metadata.role - that field is
-    # arbitrary claim data a project admin sets by hand, with nothing in
-    # this codebase keeping it in sync with who someone actually is.
-    # role_for_email is the one source of truth (see role_rules.py); an
-    # unlisted email always gets "agent_builder", never something higher.
+    # Admin comes from exactly two places: the ADMIN_EMAILS list, or an
+    # 'admin' row in `profiles` (what scripts/promote_to_admin.py sets).
+    # Never from app_metadata.role - that is claim data a project admin
+    # edits by hand in the Supabase dashboard, with nothing in this codebase
+    # keeping it in sync. A listed email needs no database round trip.
     role = role_for_email(email)
+    if role != "admin" and await profile_is_admin(user_id):
+        role = "admin"
 
     org_id_str = app_metadata.get("org_id")
     if org_id_str:

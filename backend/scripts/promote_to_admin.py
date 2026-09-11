@@ -37,12 +37,15 @@ async def promote(user_id: UUID) -> None:
         old_role = profile.role
         profile.role = "admin"
 
-        # Attempt to also update Supabase auth.users raw_app_meta_data if possible
+        # profiles.role above is what grants admin (see profile_is_admin in
+        # app/domain/auth/middleware.py). The backend ignores app_metadata.role;
+        # this mirror is kept only so the Supabase dashboard shows the same thing.
         try:
             await session.execute(
                 text(
                     "UPDATE auth.users "
-                    "SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '{\"role\": \"admin\"}'::jsonb "
+                    "SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) "
+                    "|| '{\"role\": \"admin\"}'::jsonb "
                     "WHERE id = :uid"
                 ),
                 {"uid": str(user_id)},
