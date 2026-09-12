@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.config import settings
 from app.domain.costs.service import PRICING_TIERS, CostService
 
 
@@ -56,12 +57,37 @@ async def test_gemini_model_is_priced_not_free():
     assert recorded_event.cost_usd == pytest.approx(0.30 + 2.50)
 
 
+@pytest.mark.asyncio
+async def test_current_gemini_fallback_model_is_priced_not_free():
+    """gemini-3.6-flash shipped as LLM_FALLBACK_MODEL on 2026-09-12 with no
+    pricing entry, silently pricing every fallback call at $0.00 - not just a
+    wrong dashboard number, but a governance hole, since BudgetGuard sums
+    these same rows and can never cap spend on a model priced at $0.00."""
+    repo = AsyncMock()
+    bus = AsyncMock()
+    service = CostService(cost_repo=repo, event_bus=bus)
+
+    await service.record_llm_cost(
+        org_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        model="gemini-3.6-flash",
+        prompt_tokens=1_000_000,
+        completion_tokens=1_000_000,
+    )
+
+    recorded_event = repo.record_cost.await_args.args[0]
+    assert recorded_event.cost_usd == pytest.approx(0.75 + 3.75)
+
+
 def test_both_real_providers_have_a_pricing_entry():
-    """LLM_PRIMARY_MODEL and LLM_FALLBACK_MODEL's defaults, named directly so
-    this fails loudly if either default model name ever changes without the
-    pricing table being updated to match."""
-    assert "openai/gpt-oss-20b" in PRICING_TIERS
-    assert "gemini-2.5-flash" in PRICING_TIERS
+    """Reads the live settings rather than hardcoding the model names, so
+    this actually fails when either model is switched without updating the
+    pricing table - a hardcoded name would stay true while the real value
+    moved out from under it, which is exactly how gemini-3.6-flash shipped
+    unpriced on 2026-09-12."""
+    assert settings.LLM_PRIMARY_MODEL in PRICING_TIERS
+    assert settings.LLM_FALLBACK_MODEL in PRICING_TIERS
 
 
 @pytest.mark.asyncio
