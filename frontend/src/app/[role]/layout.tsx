@@ -51,7 +51,17 @@ export default async function RoleLayout({
   return (
     <AuthProvider initialRole={initialRole} initialUser={user}>
       <SidebarProvider>
-        <div className="landing relative flex min-h-screen overflow-hidden text-[var(--l-ink)]">
+        {/* `overflow-clip`, not `overflow-hidden`: the decorative blobs below are
+            deliberately positioned partly outside this box (e.g. `-right-40`) to
+            bleed off-screen. `overflow: hidden` still clips them visually at rest,
+            but it remains a real scroll container - found live, any programmatic
+            scroll into this box (a focus-trapped dialog, `scrollIntoView`, even a
+            browser-automation click that scrolls its target into view) can set its
+            `scrollLeft` away from 0 and shift the entire shell, exposing ~160px of
+            blob and cutting the same amount off the opposite edge. `overflow: clip`
+            keeps the identical visual clip but is not a scroll container at all, so
+            `scrollLeft` can never move. */}
+        <div className="landing relative flex min-h-screen overflow-clip text-[var(--l-ink)]">
           {/* Ambient colour wash — the console has been cream-only since D-038;
               this borrows the landing/login pages' own layered-blob technique
               (see landing.css's .landing-blob) at low opacity so the whole
