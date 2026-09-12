@@ -129,7 +129,16 @@ class AuditService:
         tool: str,
         allowed: bool,
         reason: str = "",
+        metadata: dict | None = None,
     ):
+        """Record one governed tool call.
+
+        `metadata` is whatever the tool judged worth keeping about this
+        particular call (see BaseTool.audit_metadata). For retrieval that is
+        the chunks it returned, which is the only place they are persisted:
+        without it the console can say a search was allowed but not what it
+        found, so nobody can check whether an answer was grounded.
+        """
         event = AuditEvent(
             id=uuid.uuid4(),
             org_id=org_id,
@@ -141,6 +150,7 @@ class AuditService:
             tool=tool,
             policy_decision="ALLOW" if allowed else "DENY",
             reason=reason,
+            metadata_json=metadata,
             timestamp=datetime.now(timezone.utc),
         )
         await self.audit_repo.record_event(event)
@@ -155,6 +165,10 @@ class AuditService:
                     "org_id": str(org_id),
                     "tool": tool,
                     "reason": reason,
+                    # Carried on the live event too, so a run being watched
+                    # shows its sources as they arrive rather than only after
+                    # the timeline is re-fetched.
+                    "metadata": metadata,
                 },
             )
         )

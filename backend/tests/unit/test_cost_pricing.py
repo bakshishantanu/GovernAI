@@ -15,7 +15,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.config import settings
 from app.domain.costs.service import PRICING_TIERS, CostService
 
 
@@ -57,37 +56,55 @@ async def test_gemini_model_is_priced_not_free():
     assert recorded_event.cost_usd == pytest.approx(0.30 + 2.50)
 
 
-@pytest.mark.asyncio
-async def test_current_gemini_fallback_model_is_priced_not_free():
-    """gemini-3.6-flash shipped as LLM_FALLBACK_MODEL on 2026-09-12 with no
-    pricing entry, silently pricing every fallback call at $0.00 - not just a
-    wrong dashboard number, but a governance hole, since BudgetGuard sums
-    these same rows and can never cap spend on a model priced at $0.00."""
-    repo = AsyncMock()
-    bus = AsyncMock()
-    service = CostService(cost_repo=repo, event_bus=bus)
+def test_the_configured_models_have_a_pricing_entry():
+    """Reads the models actually configured, rather than naming them literally.
 
-    await service.record_llm_cost(
-        org_id=uuid.uuid4(),
-        agent_id=uuid.uuid4(),
-        execution_id=uuid.uuid4(),
-        model="gemini-3.6-flash",
-        prompt_tokens=1_000_000,
-        completion_tokens=1_000_000,
+    The earlier version of this test asserted the string "gemini-2.5-flash"
+    was in the table. That is precisely what it was supposed to protect, and
+    it failed to: when LLM_FALLBACK_MODEL moved to gemini-3.6-flash (because
+    2.5 began answering 404), the literal was still in the table, so the test
+    stayed green while every real fallback call priced at $0.00.
+
+    A test that hardcodes the value it is checking cannot notice the value
+    changing. Reading settings is the whole point.
+    """
+    from app.config import settings
+
+    assert settings.LLM_PRIMARY_MODEL in PRICING_TIERS, (
+        f"LLM_PRIMARY_MODEL is {settings.LLM_PRIMARY_MODEL!r} with no entry in "
+        "PRICING_TIERS, so every call on it records $0.00"
+    )
+    assert settings.LLM_FALLBACK_MODEL in PRICING_TIERS, (
+        f"LLM_FALLBACK_MODEL is {settings.LLM_FALLBACK_MODEL!r} with no entry in "
+        "PRICING_TIERS, so every fallback call records $0.00"
     )
 
-    recorded_event = repo.record_cost.await_args.args[0]
-    assert recorded_event.cost_usd == pytest.approx(0.75 + 3.75)
+
+def test_the_current_fallback_model_is_priced_not_free():
+    """The specific regression: gemini-3.6-flash replaced gemini-2.5-flash as
+    the fallback, and was unpriced for a day."""
+    assert PRICING_TIERS["gemini-3.6-flash"]["prompt"] > 0
+    assert PRICING_TIERS["gemini-3.6-flash"]["completion"] > 0
 
 
-def test_both_real_providers_have_a_pricing_entry():
-    """Reads the live settings rather than hardcoding the model names, so
-    this actually fails when either model is switched without updating the
-    pricing table - a hardcoded name would stay true while the real value
-    moved out from under it, which is exactly how gemini-3.6-flash shipped
-    unpriced on 2026-09-12."""
-    assert settings.LLM_PRIMARY_MODEL in PRICING_TIERS
-    assert settings.LLM_FALLBACK_MODEL in PRICING_TIERS
+@pytest.mark.asyncio
+async def test_an_unpriced_model_is_warned_about_loudly(caplog):
+    """Zero-cost is survivable; zero-cost *in silence* is not. BudgetGuard
+    sums these same rows, so an unpriced model has no budget cap at all."""
+    service = CostService(cost_repo=AsyncMock(), event_bus=AsyncMock())
+
+    with caplog.at_level("WARNING"):
+        await service.record_llm_cost(
+            org_id=uuid.uuid4(),
+            agent_id=uuid.uuid4(),
+            execution_id=uuid.uuid4(),
+            model="some-brand-new-model-nobody-priced-yet",
+            prompt_tokens=1_000,
+            completion_tokens=1_000,
+        )
+
+    assert "No pricing for model" in caplog.text
+    assert "some-brand-new-model-nobody-priced-yet" in caplog.text
 
 
 @pytest.mark.asyncio

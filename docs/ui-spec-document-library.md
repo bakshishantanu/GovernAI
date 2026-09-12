@@ -1,8 +1,12 @@
 # UI spec: Document library and RAG chat
 
-Backend for this is merged in `feat/document-upload-rag`. Every endpoint below
-exists and works today. This document is the contract; nothing here needs a
-backend change to build against.
+**This supersedes the version dated earlier. The file-type list, the citation
+format, and the chat-endpoint decision have all changed. See "What changed" at
+the bottom if you already started building.**
+
+Backend for this is merged to `main`. Every endpoint below exists and works
+today. This document is the contract; nothing here needs a backend change to
+build against.
 
 Base URL is the same one the console already uses (`NEXT_PUBLIC_API_URL`), and
 every request needs the usual `Authorization: Bearer <token>` header. Responses
@@ -110,8 +114,12 @@ no progress percentage available, so honest indeterminate progress plus
 the file, and it is the only thing distinguishing a failure from a file still
 being processed. The most common one is worth recognising:
 
+> "No text could be read from this document."
+
+and, only on a server with no OCR configured:
+
 > "No text could be extracted. If this is a scanned document, it needs OCR,
-> which is not supported yet."
+> which is not configured on this server."
 
 ### Upload rejections
 
@@ -209,33 +217,62 @@ string it was given. It is verified server-side, but a model can still write
 something that matches no document. **Render an unmatched citation as plain
 text rather than a broken chip.** Do not throw.
 
-### The tool result, if you show retrieval detail
+### The sources panel
 
-When the run streams its tool calls, `search_documents` returns:
+**Correction to an earlier version of this spec:** it implied the retrieved
+chunks came back on the execution stream. They did not. The stream carried
+only "search_documents was ALLOWED", with no arguments and no result, so a
+sources panel was not buildable. That is fixed now, and here is where the data
+actually lives.
+
+Every governed tool call is recorded as an audit event, and a retrieval call
+now carries its sources in that event's `metadata`. You get it in two places,
+both of which the console already consumes:
+
+- **Live**, on the execution SSE stream, in the `audit.tool.allowed` event
+  payload under `metadata`.
+- **After the fact**, from `GET /executions/{id}/timeline`, on the audit event
+  whose `tool` is `"search_documents"`, under `metadata`.
 
 ```ts
-type SearchResult = {
-  citation: string;        // "Apple FY2025 10-K, p.50" — what the model cites
-  chunk_id: string;        // "<document_id>#<chunk_index>"
-  document_id: string;
-  document_title: string;
-  page_number: number | null;  // null for .docx
-  locator: string | null;      // "p.32" | "slide 7" | a heading
-  text: string;            // the retrieved chunk, ~400 words
-  relevance_score: number; // 0..1, higher is closer
+type SearchAuditMetadata = {
+  query: string;            // what the model actually searched for,
+                            // which is often not the user's wording
+  sources: {
+    citation: string;       // "Apple FY2025 10-K, p.50"
+    chunk_id: string;       // "<document_id>#<chunk_index>"
+    document_id: string;
+    document_title: string;
+    page_number: number | null;   // null for .docx
+    locator: string | null;       // "p.32" | "slide 7" | a heading
+    relevance_score: number;      // 0..1, higher is closer
+    preview: string;              // first 320 chars of the chunk
+    truncated: boolean;           // true when the chunk was longer
+  }[];
 };
 ```
 
-A "sources" panel showing these under the answer would be a genuinely good
-addition: it shows the user what the model actually read, which is the whole
-governance story. `text` is a paragraph or so, so it wants a collapsed or
-scrollable treatment.
+Two things worth designing for:
+
+**`sources` can be an empty array.** That is not missing data: it means the
+search ran and found nothing above the relevance floor. Showing "no sources
+found" is meaningful, because an answer given with zero sources is exactly the
+one a reviewer should distrust.
+
+**`preview` is capped at 320 characters** and `truncated` says whether there
+was more. The full chunk is not duplicated into the audit record; it stays in
+`document_chunks` and is addressable by `chunk_id`. So the panel can show the
+snippet immediately, and "show full passage" would need a follow-up fetch.
+
+Showing `query` is worth it on its own. The model rephrases the user's
+question before searching, and seeing that rephrasing explains a surprising
+answer more often than anything else on the screen.
 
 ---
 
 ## What to test against
 
-Three real documents are already ingested and READY:
+Five real documents are already ingested and READY, covering every format:
 
 | Document | Shape | Try asking |
 |---|---|---|
@@ -245,8 +282,9 @@ Three real documents are already ingested and READY:
 | SE Assignment (scanned handwriting, PDF) | 15 OCR'd pages | "What is SDLC?" → `p.2` |
 | Temple University Letter 1971 (scanned JPG) | 1 chunk | "What did the Framingham study find?" → title only |
 
-Worth checking all three, because they exercise the three different locator
-shapes the chip has to render.
+Worth checking all five, because between them they exercise every locator
+shape the citation chip has to render: `p.N`, `slide N`, a long section
+heading, and title-only.
 
 And one that deliberately returns nothing, which is worth designing an empty
 state for: "Who is the chief executive officer?" falls below the relevance
@@ -263,3 +301,38 @@ floor and the agent should say it cannot find the answer.
   fixed to `public`, because that is the only scope the Document Search skill
   is registered with, and offering a scope the skill cannot read would produce
   documents that are silently unsearchable.
+
+---
+
+## What changed since the earlier version
+
+If you already have a copy of this spec, these are the parts that moved. The
+rest is unchanged.
+
+**1. File types.** It previously said "Only `.pdf` is accepted right now" with
+`accept=".pdf"`. Word, PowerPoint and images are all supported now, and
+scanned documents work via OCR. The accept attribute should be
+`".pdf,.docx,.pptx,.jpg,.jpeg,.png,.webp"`.
+
+**2. Citation format.** It previously said citations are always
+`[<title>, p.<page>]`. That is only true for PDFs. A deck cites `slide 7`, and
+a Word document cites a section heading such as
+`C. CNN Backbone Configuration`, which can be long. **A chip sized for a short
+"p.32" will break on a heading**, so plan for truncation.
+
+**3. There is no chat endpoint, and there will not be one.** The earlier
+version offered to add `POST /documents/chat` and called the
+create-an-agent-first requirement "clumsy". That was wrong: requiring an agent
+is the governance model, since a run is what creates the permission check, the
+audit entry, the cost record and the kill switch. Build an agent selector plus
+an inline "create one" action instead. The reasoning is in Part 2.
+
+**4. `SearchResult` gained a `locator` field**, and that is the field that
+actually drives the citation. `page_number` is now null for `.docx`.
+
+**5. `page_count` is always null for `.docx`**, so a "{page_count} pages"
+label would render "null pages". Fall back to chunk count.
+
+**6. Timings are much longer than stated.** It previously said ~135 seconds. A
+scanned document takes up to ~425 seconds, roughly 28 seconds per scanned
+page. A progress UI designed for two minutes will look broken at seven.
