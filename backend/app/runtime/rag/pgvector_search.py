@@ -41,7 +41,14 @@ class PgVectorDocumentSearchAdapter:
         results = []
         for chunk in chunks:
             distance = _cosine_distance(query_embedding, chunk.embedding)
-            relevance_score = round(1.0 - distance, 4)
+            # chunk.embedding comes back from pgvector as a numpy array, so
+            # `distance` (and `1.0 - distance`) is a numpy scalar even though
+            # this function is typed to return float - round() on a numpy
+            # scalar returns another numpy scalar, not a native float, and
+            # that silently isn't JSON-serializable downstream (the tool
+            # result fed to the LLM, and the audit_metadata sources list are
+            # both json.dumps'd). float() here is the actual type boundary.
+            relevance_score = round(float(1.0 - distance), 4)
             if relevance_score < self._min_relevance_score:
                 continue
             results.append(

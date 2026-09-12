@@ -2,6 +2,23 @@ import { BookText } from "lucide-react";
 import type { LibraryDocument } from "@/lib/document-types";
 
 /**
+ * The model writes "smart" Unicode punctuation - a non-breaking hyphen
+ * (U+2011) in "Few‑Shot", a narrow no-break space (U+202F) before a unit -
+ * that is invisible to a reader but not to a `===`/`startsWith` comparison
+ * against a document title that only ever contains plain ASCII "-" and " ".
+ * Found live: a real, correctly-titled citation silently failed to match and
+ * rendered as raw bracketed text instead of a chip. Folding both sides to
+ * plain ASCII punctuation before comparing (case already handled below)
+ * makes the match robust to whichever variant the model happens to use.
+ */
+function normalizeForMatch(s: string): string {
+  return s
+    .replace(/[‐-―−]/g, "-")
+    .replace(/[  -   ]/g, " ")
+    .toLowerCase();
+}
+
+/**
  * A citation's locator is format-dependent - "p.32" for a PDF, "slide 7" for
  * a deck, or a full section heading for a Word doc (which can itself contain
  * a comma, e.g. "C. CNN Backbone Configuration, table 1") - so splitting on
@@ -13,14 +30,19 @@ function matchCitation(
   raw: string,
   documents: LibraryDocument[],
 ): { doc: LibraryDocument; locator: string | null } | null {
-  const trimmed = raw.trim();
+  const trimmed = normalizeForMatch(raw.trim());
   for (const doc of documents) {
-    if (trimmed.toLowerCase() === doc.title.toLowerCase()) {
+    const title = normalizeForMatch(doc.title);
+    if (trimmed === title) {
       return { doc, locator: null };
     }
-    const prefix = `${doc.title}, `;
-    if (trimmed.toLowerCase().startsWith(prefix.toLowerCase())) {
-      return { doc, locator: trimmed.slice(prefix.length).trim() || null };
+    const prefix = `${title}, `;
+    if (trimmed.startsWith(prefix)) {
+      // Slice the ORIGINAL raw string by the normalized prefix's length:
+      // both sides are folded to the same ASCII punctuation set and neither
+      // normalization changes string length, so the offset lines up, and the
+      // locator keeps its original characters instead of the normalized ones.
+      return { doc, locator: raw.trim().slice(prefix.length).trim() || null };
     }
   }
   return null;
