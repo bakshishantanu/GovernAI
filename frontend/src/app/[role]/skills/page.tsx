@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, Puzzle } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
 import { useLive } from "@/lib/use-live";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { timeAgo } from "@/lib/time-ago";
 import { SkillCard } from "./_components/skill-card";
 import { SkillDetailModal } from "./_components/skill-detail-modal";
@@ -38,7 +39,13 @@ export default function SkillsPage() {
 
   const { data: skills, updatedAt } = useLive(load);
   const loading = skills === null;
-  const asDeck = (skills?.length ?? 0) <= DECK_LIMIT;
+  // The fan's overlapping, rotated cards assume desktop-width cards - on a
+  // phone-width viewport two overlapping cards eat more than the visible
+  // width between them, hiding text behind the card in front (confirmed
+  // live at 375px). Below `sm`, always hand off to the plain grid
+  // regardless of DECK_LIMIT - the grid already has a 2-column mobile size.
+  const isDesktopWidth = useMediaQuery("(min-width: 640px)");
+  const asDeck = isDesktopWidth && (skills?.length ?? 0) <= DECK_LIMIT;
 
   function scroll(dir: 1 | -1) {
     // `behavior: "smooth"` was tried first and never moved scrollLeft at

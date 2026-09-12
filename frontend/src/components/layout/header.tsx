@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { logout } from "@/app/auth/actions";
-import { LogOut, User } from "lucide-react";
+import { LogOut, Menu, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { fetchApi } from "@/lib/api-client";
 import { useRoleBase } from "@/lib/use-role-base";
+import { useSidebar } from "@/lib/sidebar-context";
 
 /**
  * App shell header, on Priya's design system (D-038).
@@ -43,6 +44,7 @@ export function Header() {
   const [orgName, setOrgName] = useState<string | null>(null);
   const [initials, setInitials] = useState<string | null>(null);
   const base = useRoleBase();
+  const { openMobile } = useSidebar();
 
   useEffect(() => {
     let cancelled = false;
@@ -67,18 +69,29 @@ export function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-[var(--l-line)] bg-[var(--l-cream)]/90 px-6 backdrop-blur-md">
-      <motion.span
-        key={orgName ?? "loading"}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.25 }}
-        className="rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
-      >
-        {orgName ?? "Loading organisation…"}
-      </motion.span>
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-[var(--l-line)] bg-[var(--l-cream)]/90 px-3 backdrop-blur-md sm:px-6">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={openMobile}
+          title="Open menu"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--l-charcoal)]/60 transition-colors hover:bg-[var(--l-cream-deep)] hover:text-[var(--l-ink)] md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
 
-      <div className="flex items-center gap-1.5">
+        <motion.span
+          key={orgName ?? "loading"}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          className="truncate rounded-full bg-[var(--l-cream-deep)] px-3 py-1.5 text-sm font-medium text-[var(--l-charcoal)]/70"
+        >
+          {orgName ?? "Loading organisation…"}
+        </motion.span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
         <ThemeToggle />
 
         <NotificationBell />
