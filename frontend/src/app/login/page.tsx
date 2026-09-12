@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { login, signup, signInWithOAuth } from "../auth/actions";
+import { login, signup, signInWithOAuth, forgotPassword } from "../auth/actions";
 import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { PASSWORD_REQUIREMENTS, isPasswordValid } from "@/lib/password-policy";
 
@@ -45,6 +45,8 @@ function GithubIcon() {
 
 function LoginForm() {
   const [isLogin, setIsLogin] = useState(true);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
@@ -65,7 +67,28 @@ function LoginForm() {
     } else if (error) {
       setErrorMessage(`Authentication error: ${error}`);
     }
+
+    if (searchParams.get("message") === "password_reset_success") {
+      setSuccessMessage("Password updated. Sign in with your new password.");
+    }
   }, [searchParams]);
+
+  function handleForgotSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await forgotPassword(formData);
+      if (res?.error) {
+        setErrorMessage(res.error);
+      } else if (res?.success) {
+        setSuccessMessage(res.success);
+        setForgotEmail("");
+      }
+    });
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -147,12 +170,14 @@ function LoginForm() {
               GovernAI
             </span>
             <h1 className="landing-display text-2xl text-[var(--l-charcoal)] leading-none">
-              {isLogin ? "Sign in to GovernAI" : "Create an account"}
+              {showForgot ? "Reset your password" : isLogin ? "Sign in to GovernAI" : "Create an account"}
             </h1>
             <p className="text-sm text-[var(--l-charcoal)]/55 mt-2.5">
-              {isLogin
-                ? "Enter your details to proceed."
-                : "Sign up to start managing agents."}
+              {showForgot
+                ? "Enter your email and we'll send you a reset link."
+                : isLogin
+                  ? "Enter your details to proceed."
+                  : "Sign up to start managing agents."}
             </p>
           </div>
 
@@ -168,6 +193,52 @@ function LoginForm() {
             </div>
           )}
 
+          {showForgot ? (
+            <form onSubmit={handleForgotSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[var(--l-charcoal)]/80">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="name@company.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="w-full bg-[var(--l-cream)] border border-[var(--l-line)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--l-charcoal)] placeholder-[var(--l-charcoal)]/35 focus:outline-none focus:border-[var(--l-orange)] focus:ring-2 focus:ring-[var(--l-orange)]/20 transition-colors"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isPending}
+                className="group w-full mt-2 inline-flex items-center justify-center gap-2 py-2.5 bg-[var(--l-orange)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full text-sm shadow-[0_5px_0_0_var(--l-orange-deep)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_0_var(--l-orange-deep)] transition-transform"
+              >
+                {isPending ? "Sending..." : "Send reset link"}
+                {!isPending && (
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                )}
+              </button>
+
+              <div className="text-center text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgot(false);
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                    setForgotEmail("");
+                  }}
+                  className="text-[var(--l-charcoal)]/55 hover:text-[var(--l-orange)] transition-colors"
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </form>
+          ) : (
+          <>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div className="space-y-1.5">
@@ -241,6 +312,22 @@ function LoginForm() {
                   </motion.ul>
                 )}
               </AnimatePresence>
+
+              {isLogin && (
+                <div className="text-right mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgot(true);
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="text-[12.5px] text-[var(--l-charcoal)]/55 hover:text-[var(--l-orange)] transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
@@ -316,6 +403,8 @@ function LoginForm() {
                 : "Already have an account? Sign in"}
             </button>
           </div>
+          </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-[var(--l-ink)]/45">

@@ -8,6 +8,7 @@ import { OrgCard } from "./_components/org-card";
 import { BudgetCard } from "./_components/budget-card";
 import { QuickLinksCard } from "./_components/quick-links-card";
 import { DevTokenWarning } from "./_components/dev-token-warning";
+import { ChangePasswordCard } from "./_components/change-password-card";
 import type { SettingsResponse } from "./_components/settings-types";
 
 /**
@@ -74,6 +75,8 @@ export default function SettingsPage() {
           </div>
 
           <BudgetCard capUsd={data.budget_cap_usd} windowHours={data.budget_window_hours} />
+
+          <ChangePasswordCard email={data.user.email} />
 
           <QuickLinksCard role={data.user.role} />
         </>

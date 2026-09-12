@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { logout } from "@/app/auth/actions";
-import { LogOut, User, Bell } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { fetchApi } from "@/lib/api-client";
 import { useRoleBase } from "@/lib/use-role-base";
 
@@ -80,9 +81,7 @@ export function Header() {
       <div className="flex items-center gap-1.5">
         <ThemeToggle />
 
-        <button className="rounded-full p-2 text-[var(--l-charcoal)]/60 transition-colors hover:bg-[var(--l-cream-deep)] hover:text-[var(--l-ink)]">
-          <Bell className="h-4 w-4" />
-        </button>
+        <NotificationBell />
 
         <div className="mx-2 h-4 w-px bg-[var(--l-line)]" />
 

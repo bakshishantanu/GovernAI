@@ -9,7 +9,7 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:800
  * so createClient() falls back to a placeholder host,
  * "https://dummy.supabase.co", inside src/lib/supabase/client.ts.
  */
-const SUPABASE_CONFIGURED = Boolean(
+export const SUPABASE_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 )
 
@@ -112,6 +112,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     throw new ApiError(errorMsg, res.status, violations)
   }
 
-  const payload = await res.json()
+  // A 204 (e.g. DELETE /agents/{id}, DELETE /policies/{id}) has no body at
+  // all — res.json() throws on it. Read as text first and only parse when
+  // there's actually something there, rather than assuming every success
+  // response carries a JSON envelope.
+  const text = await res.text()
+  if (!text) return undefined
+  const payload = JSON.parse(text)
   return payload && typeof payload === 'object' && 'data' in payload ? payload.data : payload
 }

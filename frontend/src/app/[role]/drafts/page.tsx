@@ -137,7 +137,7 @@ export default function TicketDraftsPage() {
             key={tab.label}
             onClick={() => setFilter(tab.value)}
             className="relative rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
-            style={{ color: filter === tab.value ? "#ffffff" : "var(--l-charcoal)" }}
+            style={{ color: filter === tab.value ? "var(--l-cream)" : "var(--l-charcoal)" }}
           >
             {filter === tab.value && (
               <motion.span

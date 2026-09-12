@@ -65,6 +65,32 @@ export async function signup(formData: FormData) {
   return { success: "Account created! Please check your email to confirm or log in directly." };
 }
 
+export async function forgotPassword(formData: FormData) {
+  const email = formData.get("email") as string;
+
+  if (!email) {
+    return { error: "Email is required." };
+  }
+
+  const headerList = await headers();
+  const origin =
+    headerList.get("origin") ||
+    (headerList.get("host") ? `http://${headerList.get("host")}` : "http://localhost:3000");
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+  });
+
+  // Supabase does not report whether the address has an account, and
+  // neither should this: saying so either way would let someone probe for
+  // which emails are registered.
+  if (error) {
+    return { error: error.message };
+  }
+  return { success: "If an account exists for that email, a reset link is on its way." };
+}
+
 export async function signInWithOAuth(provider: "google" | "github") {
   const headerList = await headers();
   const origin =
