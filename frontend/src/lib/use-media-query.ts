@@ -1,30 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
- * Tracks a CSS media query in React state, kept in sync via the
- * `MediaQueryList` change event rather than a resize listener (fires only
- * when the query's truth value actually flips, not on every pixel of a
- * drag-resize).
+ * Tracks a CSS media query, via `useSyncExternalStore` rather than a
+ * `useState`+effect pair.
  *
- * The initial value is read lazily in `useState`'s own initializer (same
- * pattern as `loadCollapsed`/`loadSeen` elsewhere in this app) rather than
- * defaulting to `false` and correcting in an effect - `window` genuinely
- * isn't there during SSR, but by the time this ever renders on the client
- * it is, so there's no reason to render one extra "wrong" frame first.
+ * A lazy `useState(() => window.matchMedia(query).matches)` initializer was
+ * tried first and caused a real hydration mismatch: React requires the
+ * client's FIRST render (the one hydration diffs against the server's HTML)
+ * to match the server exactly, and that first render happens synchronously
+ * during hydration itself - by then `window` already exists, so the
+ * initializer read the browser's real width immediately while the server
+ * (which has no viewport to know) had always rendered `false`. Correcting
+ * it via `setState` in a `useEffect` fixed the mismatch but is exactly the
+ * pattern `react-hooks/set-state-in-effect` flags, for good reason (a
+ * pointless extra render). `useSyncExternalStore`'s `getServerSnapshot` is
+ * the API actually designed for "a value this can't know during SSR, but
+ * needs correctly on the client without a wasted render" - React accounts
+ * for it during hydration natively rather than this being a workaround.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia(query).matches
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    },
+    [query],
   );
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+  const getServerSnapshot = useCallback(() => false, []);
 
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
-
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

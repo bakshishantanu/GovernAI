@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -43,6 +43,21 @@ import { useMediaQuery } from "@/lib/use-media-query";
 
 const COLLAPSED_KEY = "governai:sidebarCollapsed";
 
+/**
+ * Modeled as a tiny external store (subscribe/snapshot/server-snapshot),
+ * read via `useSyncExternalStore` below, rather than `useState` seeded from
+ * a lazy initializer that reads `localStorage` directly. That pattern (still
+ * used for the "notification seen" set elsewhere in this app) caused a real
+ * hydration mismatch here specifically because this value gates
+ * `effectiveCollapsed`, which controls actual layout classes on the very
+ * first paint - the server always assumes `false` (no localStorage to read),
+ * but the client's first hydration render read the real, possibly-`true`
+ * stored value immediately, producing different markup than the server sent.
+ * `getServerSnapshot` below is what makes the first client render agree with
+ * the server on purpose.
+ */
+const collapsedListeners = new Set<() => void>();
+
 function loadCollapsed(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -52,11 +67,30 @@ function loadCollapsed(): boolean {
   }
 }
 
+function writeCollapsed(next: boolean) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+  } catch {
+    // Storage unavailable - the toggle still works for this tab via the
+    // listener notification below, it just won't be remembered next visit.
+  }
+  collapsedListeners.forEach((listener) => listener());
+}
+
+function subscribeToCollapsed(listener: () => void) {
+  collapsedListeners.add(listener);
+  return () => collapsedListeners.delete(listener);
+}
+
+function getServerCollapsed() {
+  return false;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { role } = useAuth();
   const base = useRoleBase();
-  const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const collapsed = useSyncExternalStore(subscribeToCollapsed, loadCollapsed, getServerCollapsed);
   const { mobileOpen, closeMobile } = useSidebar();
   // The collapse-to-rail preference is desktop-only by design (mobile gets a
   // full-width drawer instead, never a squeezed icon rail) - `collapsed`
@@ -73,16 +107,7 @@ export function Sidebar() {
   }, [pathname]);
 
   function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
-      } catch {
-        // Storage unavailable - the toggle still works, it just won't be
-        // remembered on the next visit.
-      }
-      return next;
-    });
+    writeCollapsed(!collapsed);
   }
   // Same source as the header bell (lib/use-notifications.ts) — one shared
   // hook rather than two copies of the same fetch-and-map logic, even
