@@ -46,7 +46,13 @@ export function SkillCard({
       animate={{ opacity: 1, y: 0, rotate: tilt }}
       transition={{ duration: 0.5, delay: Math.min(index, 8) * 0.12, ease: "easeOut" }}
       whileHover={still ? undefined : { rotate: 0, y: -8, scale: 1.03, zIndex: 20 }}
-      className="relative w-64 shrink-0 cursor-default"
+      // Flat (grid) mode has to fill its grid cell rather than carry the
+      // deck's fixed 256px card width - fixed-width + shrink-0 is exactly
+      // what the deck's horizontal-scroll track wants, but inside a
+      // 2-column mobile grid it overflows each cell and the "flat" cards
+      // end up overlapping anyway, just without the rotation. Confirmed
+      // live at 375px: the grid branch was rendering, the overlap was this.
+      className={flat ? "relative w-full cursor-default" : "relative w-64 shrink-0 cursor-default"}
       style={flat ? undefined : { zIndex: 10 - index }}
     >
       <div
