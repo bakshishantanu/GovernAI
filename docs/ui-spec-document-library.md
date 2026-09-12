@@ -1,8 +1,12 @@
 # UI spec: Document library and RAG chat
 
-Backend for this is merged in `feat/document-upload-rag`. Every endpoint below
-exists and works today. This document is the contract; nothing here needs a
-backend change to build against.
+**This supersedes the version dated earlier. The file-type list, the citation
+format, and the chat-endpoint decision have all changed. See "What changed" at
+the bottom if you already started building.**
+
+Backend for this is merged to `main`. Every endpoint below exists and works
+today. This document is the contract; nothing here needs a backend change to
+build against.
 
 Base URL is the same one the console already uses (`NEXT_PUBLIC_API_URL`), and
 every request needs the usual `Authorization: Bearer <token>` header. Responses
@@ -110,8 +114,12 @@ no progress percentage available, so honest indeterminate progress plus
 the file, and it is the only thing distinguishing a failure from a file still
 being processed. The most common one is worth recognising:
 
+> "No text could be read from this document."
+
+and, only on a server with no OCR configured:
+
 > "No text could be extracted. If this is a scanned document, it needs OCR,
-> which is not supported yet."
+> which is not configured on this server."
 
 ### Upload rejections
 
@@ -235,7 +243,7 @@ scrollable treatment.
 
 ## What to test against
 
-Three real documents are already ingested and READY:
+Five real documents are already ingested and READY, covering every format:
 
 | Document | Shape | Try asking |
 |---|---|---|
@@ -245,8 +253,9 @@ Three real documents are already ingested and READY:
 | SE Assignment (scanned handwriting, PDF) | 15 OCR'd pages | "What is SDLC?" → `p.2` |
 | Temple University Letter 1971 (scanned JPG) | 1 chunk | "What did the Framingham study find?" → title only |
 
-Worth checking all three, because they exercise the three different locator
-shapes the chip has to render.
+Worth checking all five, because between them they exercise every locator
+shape the citation chip has to render: `p.N`, `slide N`, a long section
+heading, and title-only.
 
 And one that deliberately returns nothing, which is worth designing an empty
 state for: "Who is the chief executive officer?" falls below the relevance
@@ -263,3 +272,38 @@ floor and the agent should say it cannot find the answer.
   fixed to `public`, because that is the only scope the Document Search skill
   is registered with, and offering a scope the skill cannot read would produce
   documents that are silently unsearchable.
+
+---
+
+## What changed since the earlier version
+
+If you already have a copy of this spec, these are the parts that moved. The
+rest is unchanged.
+
+**1. File types.** It previously said "Only `.pdf` is accepted right now" with
+`accept=".pdf"`. Word, PowerPoint and images are all supported now, and
+scanned documents work via OCR. The accept attribute should be
+`".pdf,.docx,.pptx,.jpg,.jpeg,.png,.webp"`.
+
+**2. Citation format.** It previously said citations are always
+`[<title>, p.<page>]`. That is only true for PDFs. A deck cites `slide 7`, and
+a Word document cites a section heading such as
+`C. CNN Backbone Configuration`, which can be long. **A chip sized for a short
+"p.32" will break on a heading**, so plan for truncation.
+
+**3. There is no chat endpoint, and there will not be one.** The earlier
+version offered to add `POST /documents/chat` and called the
+create-an-agent-first requirement "clumsy". That was wrong: requiring an agent
+is the governance model, since a run is what creates the permission check, the
+audit entry, the cost record and the kill switch. Build an agent selector plus
+an inline "create one" action instead. The reasoning is in Part 2.
+
+**4. `SearchResult` gained a `locator` field**, and that is the field that
+actually drives the citation. `page_number` is now null for `.docx`.
+
+**5. `page_count` is always null for `.docx`**, so a "{page_count} pages"
+label would render "null pages". Fall back to chunk count.
+
+**6. Timings are much longer than stated.** It previously said ~135 seconds. A
+scanned document takes up to ~425 seconds, roughly 28 seconds per scanned
+page. A progress UI designed for two minutes will look broken at seven.
