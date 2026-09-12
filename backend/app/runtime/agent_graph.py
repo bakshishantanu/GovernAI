@@ -19,6 +19,16 @@ from app.skills.base import BaseTool
 TOOL_EXECUTION_TIMEOUT_SECONDS = 30.0
 
 
+def _json_default(obj: object) -> object:
+    # Tool results can carry numpy scalars (e.g. a similarity/relevance
+    # score) that json.dumps doesn't know how to encode; numpy scalars all
+    # expose .item() to unwrap to the equivalent native Python type.
+    to_native = getattr(obj, "item", None)
+    if callable(to_native):
+        return to_native()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[dict], operator.add]
     steps: int
@@ -103,7 +113,11 @@ def build_agent_graph(
                 )
 
             results.append(
-                {"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result)}
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": json.dumps(result, default=_json_default),
+                }
             )
 
         return {"messages": results}
