@@ -66,7 +66,7 @@ async def test_allowed_call_executes_the_tool_and_audits_success():
 
     assert result == {"echoed": "hi"}
     audit_service.log_tool_call.assert_awaited_once_with(
-        _ORG_ID, _AGENT_ID, _EXECUTION_ID, "echo", True, "All policies passed"
+        _ORG_ID, _AGENT_ID, _EXECUTION_ID, "echo", True, "All policies passed", None
     )
 
 
@@ -274,3 +274,70 @@ async def test_a_failed_audit_write_does_not_fake_a_tool_failure():
 
     assert result == {"ok": True}, "the real result must survive a logging failure"
     assert tool.runs == 1, "and the tool must not be run twice"
+
+
+class _ToolWithAuditMetadata(BaseTool):
+    """A tool that records something about its own call, the way
+    search_documents records which chunks it returned."""
+
+    name = "retrieve"
+    description = "retrieve"
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        return {"found": True, "results": [{"citation": "Doc, p.3"}]}
+
+    def audit_metadata(self, arguments, result):
+        return {"query": arguments.get("q"), "sources": result["results"]}
+
+
+class _ToolWhoseAuditMetadataRaises(BaseTool):
+    name = "broken_audit"
+    description = "broken"
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        return {"ok": True}
+
+    def audit_metadata(self, arguments, result):
+        raise RuntimeError("summariser is broken")
+
+
+async def test_a_tools_audit_metadata_reaches_the_audit_record():
+    """Without this the run records that search_documents was ALLOWED but not
+    what it returned, so nobody can check whether an answer was grounded."""
+    audit_service = AsyncMock()
+
+    await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=audit_service,
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=_ToolWithAuditMetadata(),
+        arguments={"q": "what is BCNF"},
+    )
+
+    metadata = audit_service.log_tool_call.await_args.args[-1]
+    assert metadata["query"] == "what is BCNF"
+    assert metadata["sources"] == [{"citation": "Doc, p.3"}]
+
+
+async def test_a_broken_audit_summariser_does_not_fail_the_tool_call():
+    """The tool has already run and may have changed the outside world.
+    Losing the metadata is far less bad than reporting a successful call as
+    failed, which would make the model retry it."""
+    audit_service = AsyncMock()
+
+    result = await govern_tool(
+        policy_engine=_AllowAllPolicyEngine(),
+        audit_service=audit_service,
+        org_id=_ORG_ID,
+        agent_id=_AGENT_ID,
+        execution_id=_EXECUTION_ID,
+        tool=_ToolWhoseAuditMetadataRaises(),
+        arguments={},
+    )
+
+    assert result == {"ok": True}
+    assert audit_service.log_tool_call.await_args.args[-1] is None

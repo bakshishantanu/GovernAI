@@ -4,6 +4,15 @@ from app.runtime.rag.citations import CITATION_INSTRUCTIONS
 from app.runtime.rag.retrieval import DocumentRetriever, DocumentSearchAdapter
 from app.skills.base import BaseSkill, BaseTool, TrustLevel
 
+#: Per-source snippet kept on the audit record. Enough to recognise the
+#: passage without copying the corpus into audit_events: the full chunk is
+#: still in document_chunks, addressable by chunk_id.
+_AUDIT_PREVIEW_CHARS = 320
+
+#: Retrieval returns top_n=3 today, but a future caller could ask for more,
+#: and an unbounded audit row is how a table becomes unusable.
+_MAX_AUDITED_SOURCES = 10
+
 
 class SearchDocumentsTool(BaseTool):
     name = "search_documents"
@@ -54,6 +63,44 @@ class SearchDocumentsTool(BaseTool):
                 for r in results
             ],
         }
+
+    def audit_metadata(self, arguments: dict, result) -> dict | None:
+        """Which chunks this search actually returned, for the run's record.
+
+        "search_documents was ALLOWED" says nothing about whether the answer
+        was grounded. The sources are the evidence, and nothing else on the
+        run persists them: governance/middleware.py hands the result to the
+        model and drops it.
+
+        Stores a bounded preview rather than the whole chunk. The full text is
+        already in document_chunks and is addressable by chunk_id, so copying
+        it here would duplicate the corpus into the audit table for no gain.
+        """
+        if not isinstance(result, dict):
+            return None
+        if not result.get("found"):
+            # A search that found nothing is still worth recording. "The model
+            # answered anyway" and "the model had nothing to go on" are very
+            # different findings when reviewing a run.
+            return {"query": arguments.get("query"), "sources": []}
+
+        sources = []
+        for item in (result.get("results") or [])[:_MAX_AUDITED_SOURCES]:
+            text = item.get("text") or ""
+            sources.append(
+                {
+                    "citation": item.get("citation"),
+                    "chunk_id": item.get("chunk_id"),
+                    "document_id": item.get("document_id"),
+                    "document_title": item.get("document_title"),
+                    "page_number": item.get("page_number"),
+                    "locator": item.get("locator"),
+                    "relevance_score": item.get("relevance_score"),
+                    "preview": text[:_AUDIT_PREVIEW_CHARS],
+                    "truncated": len(text) > _AUDIT_PREVIEW_CHARS,
+                }
+            )
+        return {"query": arguments.get("query"), "sources": sources}
 
 
 class GetDocumentTool(BaseTool):

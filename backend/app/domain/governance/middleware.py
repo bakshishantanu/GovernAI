@@ -69,9 +69,19 @@ async def govern_tool(
     # audit write must not be reported to the model as a failed tool: it would
     # retry and duplicate a real action. Return the true result and make the
     # logging failure loud instead.
+    # What this tool considers worth keeping about the call (see
+    # BaseTool.audit_metadata). Guarded: a tool whose summariser raises must
+    # not turn a successful call into a failed one, and losing the metadata is
+    # far less bad than losing the audit entry.
+    metadata = None
+    try:
+        metadata = tool.audit_metadata(arguments, result)
+    except Exception:
+        logger.exception("audit_metadata failed for tool %s; recording without it", tool.name)
+
     try:
         await audit_service.log_tool_call(
-            org_id, agent_id, execution_id, tool.name, True, "All policies passed"
+            org_id, agent_id, execution_id, tool.name, True, "All policies passed", metadata
         )
     except Exception:
         logger.exception(

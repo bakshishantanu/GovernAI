@@ -217,27 +217,56 @@ string it was given. It is verified server-side, but a model can still write
 something that matches no document. **Render an unmatched citation as plain
 text rather than a broken chip.** Do not throw.
 
-### The tool result, if you show retrieval detail
+### The sources panel
 
-When the run streams its tool calls, `search_documents` returns:
+**Correction to an earlier version of this spec:** it implied the retrieved
+chunks came back on the execution stream. They did not. The stream carried
+only "search_documents was ALLOWED", with no arguments and no result, so a
+sources panel was not buildable. That is fixed now, and here is where the data
+actually lives.
+
+Every governed tool call is recorded as an audit event, and a retrieval call
+now carries its sources in that event's `metadata`. You get it in two places,
+both of which the console already consumes:
+
+- **Live**, on the execution SSE stream, in the `audit.tool.allowed` event
+  payload under `metadata`.
+- **After the fact**, from `GET /executions/{id}/timeline`, on the audit event
+  whose `tool` is `"search_documents"`, under `metadata`.
 
 ```ts
-type SearchResult = {
-  citation: string;        // "Apple FY2025 10-K, p.50" — what the model cites
-  chunk_id: string;        // "<document_id>#<chunk_index>"
-  document_id: string;
-  document_title: string;
-  page_number: number | null;  // null for .docx
-  locator: string | null;      // "p.32" | "slide 7" | a heading
-  text: string;            // the retrieved chunk, ~400 words
-  relevance_score: number; // 0..1, higher is closer
+type SearchAuditMetadata = {
+  query: string;            // what the model actually searched for,
+                            // which is often not the user's wording
+  sources: {
+    citation: string;       // "Apple FY2025 10-K, p.50"
+    chunk_id: string;       // "<document_id>#<chunk_index>"
+    document_id: string;
+    document_title: string;
+    page_number: number | null;   // null for .docx
+    locator: string | null;       // "p.32" | "slide 7" | a heading
+    relevance_score: number;      // 0..1, higher is closer
+    preview: string;              // first 320 chars of the chunk
+    truncated: boolean;           // true when the chunk was longer
+  }[];
 };
 ```
 
-A "sources" panel showing these under the answer would be a genuinely good
-addition: it shows the user what the model actually read, which is the whole
-governance story. `text` is a paragraph or so, so it wants a collapsed or
-scrollable treatment.
+Two things worth designing for:
+
+**`sources` can be an empty array.** That is not missing data: it means the
+search ran and found nothing above the relevance floor. Showing "no sources
+found" is meaningful, because an answer given with zero sources is exactly the
+one a reviewer should distrust.
+
+**`preview` is capped at 320 characters** and `truncated` says whether there
+was more. The full chunk is not duplicated into the audit record; it stays in
+`document_chunks` and is addressable by `chunk_id`. So the panel can show the
+snippet immediately, and "show full passage" would need a follow-up fetch.
+
+Showing `query` is worth it on its own. The model rephrases the user's
+question before searching, and seeing that rephrasing explains a surprising
+answer more often than anything else on the screen.
 
 ---
 
