@@ -56,12 +56,55 @@ async def test_gemini_model_is_priced_not_free():
     assert recorded_event.cost_usd == pytest.approx(0.30 + 2.50)
 
 
-def test_both_real_providers_have_a_pricing_entry():
-    """LLM_PRIMARY_MODEL and LLM_FALLBACK_MODEL's defaults, named directly so
-    this fails loudly if either default model name ever changes without the
-    pricing table being updated to match."""
-    assert "openai/gpt-oss-20b" in PRICING_TIERS
-    assert "gemini-2.5-flash" in PRICING_TIERS
+def test_the_configured_models_have_a_pricing_entry():
+    """Reads the models actually configured, rather than naming them literally.
+
+    The earlier version of this test asserted the string "gemini-2.5-flash"
+    was in the table. That is precisely what it was supposed to protect, and
+    it failed to: when LLM_FALLBACK_MODEL moved to gemini-3.6-flash (because
+    2.5 began answering 404), the literal was still in the table, so the test
+    stayed green while every real fallback call priced at $0.00.
+
+    A test that hardcodes the value it is checking cannot notice the value
+    changing. Reading settings is the whole point.
+    """
+    from app.config import settings
+
+    assert settings.LLM_PRIMARY_MODEL in PRICING_TIERS, (
+        f"LLM_PRIMARY_MODEL is {settings.LLM_PRIMARY_MODEL!r} with no entry in "
+        "PRICING_TIERS, so every call on it records $0.00"
+    )
+    assert settings.LLM_FALLBACK_MODEL in PRICING_TIERS, (
+        f"LLM_FALLBACK_MODEL is {settings.LLM_FALLBACK_MODEL!r} with no entry in "
+        "PRICING_TIERS, so every fallback call records $0.00"
+    )
+
+
+def test_the_current_fallback_model_is_priced_not_free():
+    """The specific regression: gemini-3.6-flash replaced gemini-2.5-flash as
+    the fallback, and was unpriced for a day."""
+    assert PRICING_TIERS["gemini-3.6-flash"]["prompt"] > 0
+    assert PRICING_TIERS["gemini-3.6-flash"]["completion"] > 0
+
+
+@pytest.mark.asyncio
+async def test_an_unpriced_model_is_warned_about_loudly(caplog):
+    """Zero-cost is survivable; zero-cost *in silence* is not. BudgetGuard
+    sums these same rows, so an unpriced model has no budget cap at all."""
+    service = CostService(cost_repo=AsyncMock(), event_bus=AsyncMock())
+
+    with caplog.at_level("WARNING"):
+        await service.record_llm_cost(
+            org_id=uuid.uuid4(),
+            agent_id=uuid.uuid4(),
+            execution_id=uuid.uuid4(),
+            model="some-brand-new-model-nobody-priced-yet",
+            prompt_tokens=1_000,
+            completion_tokens=1_000,
+        )
+
+    assert "No pricing for model" in caplog.text
+    assert "some-brand-new-model-nobody-priced-yet" in caplog.text
 
 
 @pytest.mark.asyncio
