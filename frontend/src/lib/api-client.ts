@@ -84,7 +84,13 @@ export class ApiError extends Error {
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
+  // A FormData body (file upload) must NOT get a Content-Type set here - the
+  // browser sets it itself, including the multipart boundary the server
+  // needs to parse the body at all. Forcing application/json on it silently
+  // breaks the upload.
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
   headers.set('Authorization', await getAuthHeader())
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
