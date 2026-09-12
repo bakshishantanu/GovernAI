@@ -18,7 +18,9 @@ class GeminiProvider(LLMProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-2.5-flash",
+        # See config.LLM_FALLBACK_MODEL: gemini-2.5-flash now 404s with
+        # "no longer available to new users", so this default was dead.
+        model: str = "gemini-3.6-flash",
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._api_key = api_key

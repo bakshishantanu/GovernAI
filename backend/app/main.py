@@ -30,6 +30,7 @@ from app.api.v1.agents import router as agents_router
 from app.api.v1.audits import router as audits_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.costs import router as costs_router
+from app.api.v1.documents import router as documents_router
 from app.api.v1.events import router as events_router
 from app.api.v1.executions import router as executions_router
 from app.api.v1.policies import router as policies_router
@@ -126,6 +127,7 @@ app.include_router(agent_requests_router, prefix="/api/v1/agent-requests", tags=
 app.include_router(events_router, prefix="/api/v1", tags=["Events"])
 app.include_router(webhooks_router, prefix="/api/v1", tags=["Webhooks"])
 app.include_router(ticket_drafts_router, prefix="/api/v1", tags=["Ticket Drafts"])
+app.include_router(documents_router, prefix="/api/v1", tags=["Documents"])
 
 
 @app.get("/health")

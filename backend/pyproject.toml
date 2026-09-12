@@ -18,6 +18,18 @@ dependencies = [
     "pyjwt[crypto]>=2.9",
     "httpx>=0.27",
     "pgvector>=0.3",
+    # Text extraction for uploaded documents. Page-aware: the extractor
+    # returns one entry per page so a citation can name the page a fact came
+    # from, which is the whole point of storing page_number on a chunk.
+    "pypdf>=5.1",
+    "python-docx>=1.1",
+    "python-pptx>=1.0",
+    # Rasterises scanned PDF pages so they can be sent to OCR. Bundles its
+    # own PDFium binary, so unlike Tesseract there is nothing to install
+    # outside pip, which matters on Windows.
+    "pypdfium2>=4.30",
+    "pillow>=10.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

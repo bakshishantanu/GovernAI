@@ -18,7 +18,13 @@ class PgVectorDocumentSearchAdapter:
         self,
         repo: DocumentRepository,
         embedding_provider: EmbeddingProvider,
-        min_relevance_score: float = 0.3,
+        # Raised from 0.3 after measuring against the seeded corpus: a genuine
+        # semantic match scores 0.59-0.66 ("how do I stop a misbehaving agent"
+        # -> Kill Switch Runbook, 0.66), while a query with no real answer in
+        # the corpus still pulled three unrelated documents at 0.44-0.49. At
+        # 0.3 those cleared the bar, so the model was handed plausible-looking
+        # noise for questions it should decline outright. 0.55 sits in the gap.
+        min_relevance_score: float = 0.55,
     ) -> None:
         self._repo = repo
         self._embeddings = embedding_provider
@@ -46,6 +52,8 @@ class PgVectorDocumentSearchAdapter:
                     chunk_index=chunk.chunk_index,
                     text=chunk.content,
                     relevance_score=relevance_score,
+                    page_number=chunk.page_number,
+                    locator=chunk.locator,
                 )
             )
         return results

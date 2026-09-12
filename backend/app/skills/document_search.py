@@ -38,9 +38,16 @@ class SearchDocumentsTool(BaseTool):
             "found": True,
             "results": [
                 {
+                    # `citation` is what CITATION_INSTRUCTIONS tells the model
+                    # to copy verbatim, so it is listed first and kept
+                    # human-readable. chunk_id stays for callers that need to
+                    # identify the exact chunk.
+                    "citation": r.citation,
                     "chunk_id": r.chunk_id,
                     "document_id": r.document_id,
                     "document_title": r.document_title,
+                    "page_number": r.page_number,
+                    "locator": r.locator,
                     "text": r.text,
                     "relevance_score": r.relevance_score,
                 }

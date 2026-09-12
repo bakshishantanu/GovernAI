@@ -19,8 +19,23 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[str] = mapped_column(Vector(), nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: 1-based page (PDF) or slide (PPTX) this chunk came from. None for
+    #: formats with no such concept: a DOCX stores no pages, they are produced
+    #: by whatever renders it, so any number here would be invented.
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: How the citation names this spot: "p.32", "slide 7", or a section
+    #: heading for formats with no pages. Rendered by the extractor, which is
+    #: the only thing that knows what unit the format actually has.
+    locator: Mapped[str | None] = mapped_column(String, nullable=True)
 
     document: Mapped[Document] = relationship("Document", back_populates="chunks")
+
+
+#: Ingestion is slower than a request: extracting ~120 pages, chunking, and
+#: embedding each chunk takes minutes, so upload returns immediately and the
+#: row moves PENDING -> PROCESSING -> READY (or FAILED, with `error` set).
+#: The console polls on this rather than holding a connection open.
+DOCUMENT_STATUSES = ("PENDING", "PROCESSING", "READY", "FAILED")
 
 
 class Document(Base):
@@ -33,5 +48,17 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
+
+    #: Upload metadata. All nullable so the pre-existing seeded rows, which
+    #: were never uploaded by anyone, stay valid without a backfill.
+    filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    uploaded_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'READY'"))
+    #: Why ingestion failed, shown to whoever uploaded it. A failed upload that
+    #: says nothing is indistinguishable from one still processing.
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
 
     chunks: Mapped[list[DocumentChunk]] = relationship("DocumentChunk", back_populates="document")
