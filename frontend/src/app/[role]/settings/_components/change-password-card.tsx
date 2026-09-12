@@ -57,9 +57,9 @@ export function ChangePasswordCard({ email }: { email: string | null }) {
     setBusy(false);
   }
 
-  function handleOpenChange(next: boolean) {
-    setOpen(next);
-    if (!next) resetForm();
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) resetForm();
   }
 
   async function handleSubmit(e: React.FormEvent) {
