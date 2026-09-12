@@ -14,6 +14,7 @@ import {
   Settings,
   PlayCircle,
   Inbox,
+  FolderOpen,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -109,6 +110,7 @@ export function Sidebar() {
           { name: "My Agents", href: `${base}/agents`, icon: Bot },
           ...draftsItem,
           { name: "Skills", href: `${base}/skills`, icon: Puzzle },
+          { name: "Documents", href: `${base}/documents`, icon: FolderOpen },
           { name: "My Runs", href: `${base}/executions`, icon: PlayCircle },
           { name: "My Activity", href: `${base}/audit`, icon: FileText },
           { name: "Costs", href: `${base}/costs`, icon: DollarSign },
@@ -121,6 +123,7 @@ export function Sidebar() {
           { name: "All Agents", href: `${base}/agents`, icon: Bot },
           ...draftsItem,
           { name: "Skills", href: `${base}/skills`, icon: Puzzle },
+          { name: "Documents", href: `${base}/documents`, icon: FolderOpen },
           { name: "Policies", href: `${base}/policies`, icon: ShieldCheck },
           { name: "Audit Log", href: `${base}/audit`, icon: FileText },
           { name: "Costs", href: `${base}/costs`, icon: DollarSign },
