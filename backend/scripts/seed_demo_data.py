@@ -170,7 +170,7 @@ async def seed_data():
             assigned_user_id=builder2_id,
             request_id=req_fulfilled_id,
             name="Support Escalation Bot",
-            description="Reads tickets and queries payroll to resolve customer disputes.",
+            description="Reads tickets and queries enterprise knowledge base to resolve customer disputes.",
             status="ACTIVE",
         )
         session.add(agent)
@@ -330,6 +330,67 @@ async def seed_data():
                 completion_tokens=50,
                 total_tokens=200,
                 cost_usd=0.0015,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+
+        # Execution 2: Enterprise Solr Search Execution
+        exec_id_2 = uuid.uuid4()
+        execution_2 = Execution(
+            id=exec_id_2,
+            agent_id=agent.id,
+            org_id=org_id,
+            goal="Search knowledge base for password reset procedure.",
+            status="COMPLETED",
+            result="Located KB-001 (Password Reset Procedure). Instructed user to navigate to IT Self-Service Portal.",
+        )
+        session.add(execution_2)
+        await session.flush()
+
+        session.add(
+            AuditEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                actor_type="agent",
+                actor_id=agent.id,
+                agent_id=agent.id,
+                execution_id=exec_id_2,
+                action="tool_call",
+                tool="search_solr",
+                policy_decision="ALLOW",
+                reason="All policies passed",
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+
+        session.add(
+            AuditEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                actor_type="agent",
+                actor_id=agent.id,
+                agent_id=agent.id,
+                execution_id=exec_id_2,
+                action="tool_call",
+                tool="search_solr",
+                policy_decision="DENY",
+                reason="Missing required permission: 'solr:search:confidential_hr'",
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+
+        session.add(
+            CostEvent(
+                id=uuid.uuid4(),
+                org_id=org_id,
+                agent_id=agent.id,
+                execution_id=exec_id_2,
+                event_type="LLM_CALL",
+                model="gpt-4o",
+                prompt_tokens=220,
+                completion_tokens=65,
+                total_tokens=285,
+                cost_usd=0.0021,
                 timestamp=datetime.now(timezone.utc),
             )
         )
