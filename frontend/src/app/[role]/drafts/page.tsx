@@ -18,7 +18,7 @@ import { DraftCard } from "./_components/draft-card";
 const TABS: { label: string; value: TicketDraftStatus | "" }[] = [
   { label: "Pending", value: "PENDING_REVIEW" },
   { label: "Posted", value: "POSTED" },
-  { label: "Rejected", value: "REJECTED" },
+  { label: "Under review", value: "UNDER_REVIEW" },
 ];
 
 type Toast = { id: number; kind: "error" | "info"; message: string };
@@ -65,13 +65,13 @@ export default function TicketDraftsPage() {
     }
   }
 
-  async function handleReject(id: string, note: string | null) {
+  async function handleEscalate(id: string, note: string | null) {
     try {
-      await fetchApi(`/ticket-drafts/${id}/reject`, {
+      await fetchApi(`/ticket-drafts/${id}/escalate`, {
         method: "POST",
         body: JSON.stringify({ note }),
       });
-      pushToast("info", "Draft rejected.");
+      pushToast("info", "Escalated for review — the requester has been notified.");
       refresh();
     } catch (e) {
       handleActionError(e);
@@ -193,7 +193,7 @@ export default function TicketDraftsPage() {
                 <DraftCard
                   draft={draft}
                   onApprove={handleApprove}
-                  onReject={handleReject}
+                  onEscalate={handleEscalate}
                 />
               </li>
             ))}

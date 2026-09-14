@@ -10,8 +10,8 @@ from fastapi import HTTPException
 from app.api.schemas.auth import CurrentUser
 from app.api.v1.ticket_drafts import (
     approve_ticket_draft,
+    escalate_ticket_draft,
     list_ticket_drafts,
-    reject_ticket_draft,
 )
 from app.domain.agents.models import Agent
 from app.domain.ticket_drafts.models import TicketDraft
@@ -205,24 +205,47 @@ def test_response_survives_missing_agent_and_unconfigured_ticketing():
 
 
 @pytest.mark.asyncio
-async def test_reject_records_the_note_and_posts_nothing():
-    from app.api.schemas.ticket_draft import TicketDraftReject
+async def test_escalate_records_the_note_and_marks_under_review():
+    from app.api.schemas.ticket_draft import TicketDraftEscalate
 
     admin = _user("admin")
     draft = _draft(uuid.uuid4())
 
     service = AsyncMock()
     service.repo.get.return_value = draft
-    service.reject.return_value = _draft(draft.agent_id, status="REJECTED")
+    service.escalate.return_value = _draft(draft.agent_id, status="UNDER_REVIEW")
 
-    await reject_ticket_draft(
+    await escalate_ticket_draft(
         draft_id=draft.id,
-        payload=TicketDraftReject(note="Tone is off"),
+        payload=TicketDraftEscalate(note="Needs a manager's call"),
         user=admin,
         db=AsyncMock(),
         service=service,
         agent_service=_agent_service([]),
     )
 
-    assert service.reject.call_args.kwargs["note"] == "Tone is off"
+    assert service.escalate.call_args.kwargs["note"] == "Needs a manager's call"
     service.approve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_escalate_without_ticketing_configured_is_service_unavailable():
+    """Mirrors approve's handling — escalating means posting to the ticket,
+    so it must fail rather than silently skip notifying the requester."""
+    admin = _user("admin")
+    draft = _draft(uuid.uuid4())
+
+    service = AsyncMock()
+    service.repo.get.return_value = draft
+    service.escalate.side_effect = TicketingNotConfigured("no backend")
+
+    with pytest.raises(HTTPException) as exc:
+        await escalate_ticket_draft(
+            draft_id=draft.id,
+            user=admin,
+            db=AsyncMock(),
+            service=service,
+            agent_service=_agent_service([]),
+        )
+
+    assert exc.value.status_code == 503

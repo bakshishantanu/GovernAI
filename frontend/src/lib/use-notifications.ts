@@ -59,7 +59,7 @@ function fromDraft(d: TicketDraft): Omit<Notification, "seen"> {
  * suspended agent) is one more fetch-and-map away, not a rewrite.
  *
  * A notification permanently leaves the list the moment its underlying
- * draft is approved or rejected (drops out of `PENDING_REVIEW` server-side).
+ * draft is approved or escalated (drops out of `PENDING_REVIEW` server-side).
  * Separately, `markSeen` gives a lighter-weight "I've looked at this" signal
  * for the badge count alone — clicking through to a notification shouldn't
  * require actually resolving the draft just to stop the bell nagging about
@@ -79,7 +79,7 @@ export function useNotifications() {
       .map(fromDraft);
 
     // Drop seen ids for drafts that are no longer pending (approved,
-    // rejected, or otherwise gone) - keeps localStorage from accumulating
+    // escalated, or otherwise gone) - keeps localStorage from accumulating
     // ids forever and lets a re-raised draft with the same id notify again.
     setSeen((prev) => {
       const stillPending = new Set(list.map((n) => n.id));

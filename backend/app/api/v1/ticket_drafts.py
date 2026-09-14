@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_agent_service, get_db, get_ticket_draft_service
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
-from app.api.schemas.ticket_draft import TicketDraftReject, TicketDraftResponse
+from app.api.schemas.ticket_draft import TicketDraftEscalate, TicketDraftResponse
 from app.config import settings
 from app.domain.agents.service import AgentService
 from app.domain.auth.middleware import get_current_user
@@ -54,7 +54,7 @@ async def list_ticket_drafts(
 
     Defaults to the pending ones, since that is the queue a reviewer acts on.
     Pass `draft_status=` (empty) to see every draft including posted and
-    rejected ones.
+    under-review ones.
     """
     agent_ids = await _visible_agent_ids(user, agent_service)
     drafts = await service.list_drafts(
@@ -95,20 +95,26 @@ async def approve_ticket_draft(
     return Envelope(data=_to_response(draft))
 
 
-@router.post("/{draft_id}/reject", response_model=Envelope[TicketDraftResponse])
-async def reject_ticket_draft(
+@router.post("/{draft_id}/escalate", response_model=Envelope[TicketDraftResponse])
+async def escalate_ticket_draft(
     draft_id: UUID,
-    payload: TicketDraftReject | None = None,
+    payload: TicketDraftEscalate | None = None,
     user: CurrentUser = Depends(require_builder_or_admin),
     db: AsyncSession = Depends(get_db),
     service: TicketDraftService = Depends(get_ticket_draft_service),
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Discard a drafted reply. Nothing is sent to the ticket."""
+    """Send a drafted reply up for higher-authority review, instead of discarding it.
+
+    Posts a fixed, reassuring reply to the real ticket (same path Approve
+    uses) so the requester knows their issue is being handled, then marks
+    the draft UNDER_REVIEW — open, not closed, but flagged for a more
+    senior reviewer.
+    """
     await _assert_may_review(draft_id, user, service, agent_service)
 
     try:
-        draft = await service.reject(
+        draft = await service.escalate(
             draft_id,
             org_id=user.org_id,
             reviewer_id=user.id,
@@ -118,6 +124,8 @@ async def reject_ticket_draft(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
     except DraftAlreadyReviewed as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except TicketingNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
     await db.commit()
     return Envelope(data=_to_response(draft))

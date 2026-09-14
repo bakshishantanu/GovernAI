@@ -45,7 +45,7 @@ export interface Agent {
   skills?: Array<{ id?: string; name?: string } | string>;
 }
 
-export type TicketDraftStatus = "PENDING_REVIEW" | "POSTED" | "REJECTED";
+export type TicketDraftStatus = "PENDING_REVIEW" | "POSTED" | "UNDER_REVIEW";
 
 // Matches what GET /ticket-drafts/ actually returns (app/api/schemas/ticket_draft.py) —
 // agent_name and ticket_url are resolved server-side so this page never has to
