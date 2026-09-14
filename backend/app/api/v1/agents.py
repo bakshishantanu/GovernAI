@@ -260,7 +260,7 @@ async def update_agent(
     quietly letting permissions drift.
     """
     agent = await service.agent_repo.get_agent(agent_id)
-    if not agent or agent.org_id != user.org_id:
+    if not agent or agent.org_id != user.org_id or agent.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     if user.role != "admin" and agent.owner_id != user.id:

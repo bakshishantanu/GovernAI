@@ -22,7 +22,7 @@ class KillSwitchService:
 
     async def suspend_agent(self, agent_id: UUID, actor_id: UUID, org_id: UUID, reason: str):
         agent = await self.agent_repo.get_agent(agent_id)
-        if not agent or agent.org_id != org_id:
+        if not agent or agent.org_id != org_id or agent.deleted_at is not None:
             raise ValueError("Agent not found")
 
         agent.status = "SUSPENDED"
@@ -43,7 +43,7 @@ class KillSwitchService:
 
     async def reactivate_agent(self, agent_id: UUID, actor_id: UUID, org_id: UUID, reason: str):
         agent = await self.agent_repo.get_agent(agent_id)
-        if not agent or agent.org_id != org_id:
+        if not agent or agent.org_id != org_id or agent.deleted_at is not None:
             raise ValueError("Agent not found")
 
         if agent.status != "SUSPENDED":

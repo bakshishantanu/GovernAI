@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.domain.agents.models import Agent, AgentPassport
+from app.domain.agents.repository import AgentRepository
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
@@ -198,6 +199,23 @@ async def test_delete_agent_deletes_active():
     await service.delete_agent(agent.id)
 
     agent_repo.delete_agent.assert_awaited_once_with(agent)
+
+
+async def test_repository_delete_agent_leaves_status_a_valid_value():
+    """Regression: delete_agent used to also set `agent.status = "DELETED"`,
+    a value `AgentStatus` (api/schemas/agent.py) has no member for — any
+    endpoint that serialized a deleted agent through `AgentResponse` would
+    500 on response validation. `deleted_at` is the one thing that should
+    mark it deleted; `status` must stay one of the real, modeled values."""
+    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    original_status = agent.status
+
+    await AgentRepository(session=None).delete_agent(agent)
+
+    assert agent.deleted_at is not None
+    assert agent.passport.lifecycle_state == "REVOKED"
+    assert agent.status == original_status
+    assert agent.status in ("DRAFT", "ACTIVE", "SUSPENDED", "REVOKED")
 
 
 async def test_create_agent_with_request_and_assigned_user():

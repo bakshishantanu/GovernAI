@@ -10,8 +10,9 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
+from app.api.schemas.agent import AgentUpdate
 from app.api.schemas.auth import CurrentUser
-from app.api.v1.agents import delete_agent
+from app.api.v1.agents import delete_agent, update_agent
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.agents.service import AgentService, InvalidStateTransitionError
 
@@ -151,3 +152,25 @@ async def test_delete_rejects_already_deleted_agent_at_the_route_as_not_found():
 
     assert exc.value.status_code == 404
     service.delete_agent.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_a_deleted_agent_as_not_found():
+    """Regression: PATCH had no `deleted_at` check at all, so a deleted
+    agent's name/description could still be silently rewritten."""
+    org_id = uuid.uuid4()
+    builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
+    agent = _agent(org_id, builder.id, lifecycle_state="REVOKED")
+    agent.deleted_at = datetime.now(timezone.utc)
+    service = _service_with(agent)
+
+    with pytest.raises(HTTPException) as exc:
+        await update_agent(
+            agent.id,
+            payload=AgentUpdate(name="New name"),
+            user=builder,
+            db=AsyncMock(),
+            service=service,
+        )
+
+    assert exc.value.status_code == 404

@@ -112,6 +112,10 @@ class AgentRepository:
 
         Only `deleted_at` is set (plus the passport flipped to REVOKED so the
         governance gate and every state-gated transition keep refusing it).
+        `agent.status` is deliberately left alone rather than set to a new
+        "DELETED" value: `AgentStatus` (api/schemas/agent.py) has no such
+        member, and `deleted_at` is already the one thing every layer needs
+        to check — a second, redundant status string just invites drift.
         Nothing is removed: the passport, skills, permissions and — for an
         agent that ran — its executions, cost events, audit entries and
         ticket drafts all stay exactly as they were, still resolvable by
@@ -119,7 +123,6 @@ class AgentRepository:
         erases the record of what it did.
         """
         agent.deleted_at = datetime.now(timezone.utc)
-        agent.status = "DELETED"
         if agent.passport is not None:
             agent.passport.lifecycle_state = "REVOKED"
 
