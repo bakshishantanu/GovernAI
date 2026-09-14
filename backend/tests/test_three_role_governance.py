@@ -256,11 +256,13 @@ async def test_builder_sees_own_and_assigned_agents(builder_user):
         offset=0,
         owner_id=builder_user.id,
         assigned_user_id=builder_user.id,
+        include_deleted=False,
     )
     service.agent_repo.count_agents_by_org.assert_awaited_once_with(
         builder_user.org_id,
         owner_id=builder_user.id,
         assigned_user_id=builder_user.id,
+        include_deleted=False,
     )
 
 # 8. Execution access: Builder can execute assigned agent even if not owner

@@ -68,6 +68,13 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )
+    # Soft-delete marker: set when the owner/admin deletes the agent from any
+    # lifecycle state. The row (and its passport, executions, cost events,
+    # audit entries and ticket drafts) is kept — only hidden from the roster —
+    # so deleting an agent never erases what it did.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     passport: Mapped[AgentPassport] = relationship(
         "AgentPassport", back_populates="agent", uselist=False

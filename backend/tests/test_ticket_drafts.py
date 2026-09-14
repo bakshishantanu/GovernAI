@@ -122,25 +122,43 @@ async def test_approving_twice_does_not_post_twice():
 
 
 @pytest.mark.asyncio
-async def test_reject_marks_rejected_and_posts_nothing():
+async def test_escalate_marks_under_review_and_posts_the_fixed_message():
     draft = _draft()
     repo = FakeRepo([draft])
     adapter = MockTicketingAdapter()
     service = TicketDraftService(repo=repo, adapter=adapter)
 
-    result = await service.reject(
-        draft.id, org_id=draft.org_id, reviewer_id=uuid.uuid4(), note="Tone is wrong"
+    result = await service.escalate(
+        draft.id, org_id=draft.org_id, reviewer_id=uuid.uuid4(), note="Needs a manager's call"
     )
 
-    assert result.status == "REJECTED"
-    assert result.review_note == "Tone is wrong"
+    assert result.status == "UNDER_REVIEW"
+    assert result.review_note == "Needs a manager's call"
     ticket = await adapter.get("TCK-1001")
-    assert ticket.replies == []
+    assert ticket.replies == [
+        "Thanks for reaching out. Your issue has been escalated to our team for further "
+        "review — it will be fixed, and we will connect with you as soon as possible. This "
+        "ticket is currently under review."
+    ]
 
 
 @pytest.mark.asyncio
-async def test_a_rejected_draft_cannot_later_be_approved():
-    draft = _draft(status="REJECTED")
+async def test_escalate_without_a_ticketing_backend_is_refused():
+    """The whole point of escalating is notifying the requester — refuse
+    rather than silently mark it UNDER_REVIEW with nothing sent."""
+    draft = _draft()
+    repo = FakeRepo([draft])
+    service = TicketDraftService(repo=repo, adapter=None)
+
+    with pytest.raises(TicketingNotConfigured):
+        await service.escalate(draft.id, org_id=draft.org_id, reviewer_id=uuid.uuid4())
+
+    assert (await repo.get(draft.id)).status == "PENDING_REVIEW"
+
+
+@pytest.mark.asyncio
+async def test_an_under_review_draft_cannot_later_be_approved():
+    draft = _draft(status="UNDER_REVIEW")
     repo = FakeRepo([draft])
     service = TicketDraftService(repo=repo, adapter=MockTicketingAdapter())
 

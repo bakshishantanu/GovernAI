@@ -52,11 +52,11 @@ export function LifecycleTrack({
   const stageIndex = STAGES.indexOf(state as (typeof STAGES)[number]);
   const broken = state === "SUSPENDED" || state === "REVOKED";
 
-  // Same rule the backend enforces (AgentService.delete_agent): a DRAFT has
-  // no executions/cost events/audit entries/ticket drafts yet, so deleting
-  // it destroys nothing real. Anything past DRAFT keeps the kill switch /
-  // suspend path instead, which preserves the record rather than erasing it.
-  const canDelete = state === "DRAFT" && (isAdmin || isOwner);
+  // Delete is a soft delete (AgentService.delete_agent): available from any
+  // lifecycle state, to the owner or an admin. The agent disappears from the
+  // roster and can never run again, but its passport, executions, cost
+  // events, audit entries and ticket drafts are left exactly as they are.
+  const canDelete = isAdmin || isOwner;
 
   async function handleDelete() {
     setDeleting(true);
@@ -156,7 +156,7 @@ export function LifecycleTrack({
               className="flex items-center gap-1.5 rounded-full px-3 py-2 text-[12.5px] font-semibold text-[var(--l-charcoal)]/55 transition-colors hover:text-[var(--l-orange-deep)] disabled:opacity-40"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete draft
+              Delete agent
             </button>
           )}
 
@@ -186,8 +186,9 @@ export function LifecycleTrack({
           <DialogHeader>
             <DialogTitle>Delete &ldquo;{agent.name}&rdquo;?</DialogTitle>
             <DialogDescription>
-              This permanently removes the draft passport and its skill bindings. It has never run,
-              so there is no execution history or audit trail to lose — but this cannot be undone.
+              This removes the agent from the roster for good — it can never run or be reactivated
+              again. Its run history, cost events, audit trail and ticket drafts are not deleted and
+              stay available under Runs, Costs, Audit Log and Draft Replies. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -196,7 +197,7 @@ export function LifecycleTrack({
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Delete draft
+              Delete agent
             </Button>
           </DialogFooter>
         </DialogContent>

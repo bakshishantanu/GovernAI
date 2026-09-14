@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-TicketDraftStatus = Literal["PENDING_REVIEW", "POSTED", "REJECTED"]
+TicketDraftStatus = Literal["PENDING_REVIEW", "POSTED", "UNDER_REVIEW"]
 
 
 class TicketDraftResponse(BaseModel):
@@ -54,5 +54,5 @@ class TicketDraftResponse(BaseModel):
         )
 
 
-class TicketDraftReject(BaseModel):
+class TicketDraftEscalate(BaseModel):
     note: str | None = None

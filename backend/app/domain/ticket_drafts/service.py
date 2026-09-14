@@ -13,7 +13,7 @@ class DraftNotFound(Exception):
 
 
 class DraftAlreadyReviewed(Exception):
-    """Raised when a draft has already been posted or rejected.
+    """Raised when a draft has already been posted or escalated.
 
     Kept distinct from DraftNotFound so the API can answer 409 rather than
     404: the draft exists, it just is not actionable any more.
@@ -22,6 +22,18 @@ class DraftAlreadyReviewed(Exception):
 
 class TicketingNotConfigured(Exception):
     """No real ticketing backend is wired up, so a draft cannot be posted."""
+
+
+#: Posted back onto the ticket the moment a draft is escalated, so the
+#: person who raised it is never left silent while it waits for a more
+#: senior reviewer. Deliberately generic and reassuring rather than
+#: apologetic or specific — the actual fix still has to come from whoever
+#: picks it up next.
+UNDER_REVIEW_MESSAGE = (
+    "Thanks for reaching out. Your issue has been escalated to our team for further review — "
+    "it will be fixed, and we will connect with you as soon as possible. This ticket is "
+    "currently under review."
+)
 
 
 class TicketDraftService:
@@ -86,14 +98,31 @@ class TicketDraftService:
             raise DraftNotFound(str(draft_id))
         return refreshed
 
-    async def reject(
+    async def escalate(
         self, draft_id: UUID, org_id: UUID, reviewer_id: UUID, note: str | None = None
     ) -> TicketDraft:
-        await self._get_actionable(draft_id, org_id)
+        """Send a drafted reply up for higher-authority review, instead of discarding it.
 
-        rejected = await self.repo.mark_reviewed(draft_id, "REJECTED", reviewer_id, note=note)
-        if not rejected:
+        Unlike the old reject (a silent discard), this still writes to the
+        ticket: a fixed, reassuring message goes out immediately so the
+        requester knows their issue is being handled, then the draft is
+        parked UNDER_REVIEW rather than closed. Same optimistic-concurrency
+        shape as approve() — the status flip is conditional on
+        PENDING_REVIEW and happens before the ticket write, so two
+        concurrent escalations cannot both post the message.
+        """
+        draft = await self._get_actionable(draft_id, org_id)
+
+        if self.adapter is None:
+            raise TicketingNotConfigured(
+                "No ticketing backend is configured, so the requester cannot be notified."
+            )
+
+        escalated = await self.repo.mark_reviewed(draft_id, "UNDER_REVIEW", reviewer_id, note=note)
+        if not escalated:
             raise DraftAlreadyReviewed(f"Draft {draft_id} is no longer pending review")
+
+        await self.adapter.add_reply(draft.ticket_id, UNDER_REVIEW_MESSAGE)
 
         refreshed = await self.repo.get(draft_id)
         if refreshed is None:  # pragma: no cover - defensive

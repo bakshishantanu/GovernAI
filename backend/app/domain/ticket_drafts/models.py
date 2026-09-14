@@ -38,8 +38,11 @@ class TicketDraft(Base):
     ticket_id: Mapped[str] = mapped_column(String(64), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
-    #: PENDING_REVIEW -> POSTED | REJECTED. A draft is only ever posted from
-    #: PENDING_REVIEW, so approving twice cannot double-post.
+    #: PENDING_REVIEW -> POSTED | UNDER_REVIEW. A draft is only ever posted
+    #: or escalated from PENDING_REVIEW, so acting on it twice cannot
+    #: double-post or double-escalate. UNDER_REVIEW means a reviewer sent it
+    #: up for higher-authority attention rather than discarding it outright —
+    #: it stays open, not closed, until someone eventually approves it.
     status: Mapped[str] = mapped_column(String(20), server_default="PENDING_REVIEW", nullable=False)
 
     #: Set when a human acts on the draft, not when the agent creates it.
@@ -47,7 +50,7 @@ class TicketDraft(Base):
         PGUUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    #: Free-text reason captured on rejection, so the audit trail says why.
+    #: Free-text reason captured on escalation, so the audit trail says why.
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

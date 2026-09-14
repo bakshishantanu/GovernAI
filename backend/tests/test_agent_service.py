@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from app.domain.agents.models import Agent, AgentPassport
+from app.domain.agents.repository import AgentRepository
 from app.domain.agents.service import (
     AgentService,
     ComplianceError,
@@ -165,9 +166,10 @@ async def test_delete_agent_rejects_missing_agent():
     agent_repo.delete_agent.assert_not_awaited()
 
 
-async def test_delete_agent_rejects_non_draft():
+async def test_delete_agent_rejects_already_deleted():
     service, agent_repo, _, _ = _service()
-    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    agent = _agent_with_passport(lifecycle_state="REVOKED")
+    agent.deleted_at = SimpleNamespace()  # any non-None sentinel
     agent_repo.get_agent.return_value = agent
 
     with pytest.raises(InvalidStateTransitionError):
@@ -184,6 +186,36 @@ async def test_delete_agent_deletes_draft():
     await service.delete_agent(agent.id)
 
     agent_repo.delete_agent.assert_awaited_once_with(agent)
+
+
+async def test_delete_agent_deletes_active():
+    """The whole point of the change: delete is no longer DRAFT-only. An
+    ACTIVE agent with real history can still be deleted (soft-deleted) by its
+    owner or an admin."""
+    service, agent_repo, _, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    agent_repo.get_agent.return_value = agent
+
+    await service.delete_agent(agent.id)
+
+    agent_repo.delete_agent.assert_awaited_once_with(agent)
+
+
+async def test_repository_delete_agent_leaves_status_a_valid_value():
+    """Regression: delete_agent used to also set `agent.status = "DELETED"`,
+    a value `AgentStatus` (api/schemas/agent.py) has no member for — any
+    endpoint that serialized a deleted agent through `AgentResponse` would
+    500 on response validation. `deleted_at` is the one thing that should
+    mark it deleted; `status` must stay one of the real, modeled values."""
+    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    original_status = agent.status
+
+    await AgentRepository(session=None).delete_agent(agent)
+
+    assert agent.deleted_at is not None
+    assert agent.passport.lifecycle_state == "REVOKED"
+    assert agent.status == original_status
+    assert agent.status in ("DRAFT", "ACTIVE", "SUSPENDED", "REVOKED")
 
 
 async def test_create_agent_with_request_and_assigned_user():

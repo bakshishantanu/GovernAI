@@ -4,13 +4,13 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowUpCircle,
   Bot,
   Check,
   ChevronDown,
   ChevronUp,
   Loader2,
   Ticket,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,23 +32,25 @@ const BODY_CLAMP_LINES = 6;
  * customer. Approve asks for a confirm step first — this posts a real
  * message to a real ticket, so a stray click must not be enough on its own
  * (see /drafts spec: "single click without confirmation" is not appropriate
- * here). Reject opens a small dialog for an optional note, since that note
- * is the audit trail for why a reply was killed.
+ * here). Escalate opens a small dialog for an optional note (the audit
+ * trail for why it needed a more senior reviewer) — it also posts to the
+ * ticket, a fixed reassuring reply, so the requester is never left wondering
+ * whether anyone saw it.
  */
 export function DraftCard({
   draft,
   onApprove,
-  onReject,
+  onEscalate,
 }: {
   draft: TicketDraft;
   onApprove: (id: string) => Promise<void>;
-  onReject: (id: string, note: string | null) => Promise<void>;
+  onEscalate: (id: string, note: string | null) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmingApprove, setConfirmingApprove] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
+  const [escalating, setEscalating] = useState(false);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const [busy, setBusy] = useState<"approve" | "escalate" | null>(null);
 
   const isPending = draft.status === "PENDING_REVIEW";
   const lineCount = draft.body.split("\n").length;
@@ -64,13 +66,13 @@ export function DraftCard({
     }
   }
 
-  async function handleReject() {
-    setBusy("reject");
+  async function handleEscalate() {
+    setBusy("escalate");
     try {
-      await onReject(draft.id, note.trim() || null);
+      await onEscalate(draft.id, note.trim() || null);
     } finally {
       setBusy(null);
-      setRejecting(false);
+      setEscalating(false);
       setNote("");
     }
   }
@@ -139,10 +141,20 @@ export function DraftCard({
         )}
       </div>
 
-      {draft.status === "REJECTED" && draft.review_note && (
-        <p className="mt-2 text-[12px] text-[var(--l-charcoal)]/60">
-          <span className="font-semibold">Reject note:</span> {draft.review_note}
-        </p>
+      {draft.status === "UNDER_REVIEW" && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-[var(--l-yellow-pale)]/40 px-2.5 py-2 text-[12px] text-[var(--l-charcoal)]/75">
+          <ArrowUpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--l-orange-deep)]" />
+          <span>
+            Escalated for higher-authority review. Still open — the requester has been told
+            their issue is under review.
+            {draft.review_note && (
+              <>
+                {" "}
+                <span className="font-semibold">Note:</span> {draft.review_note}
+              </>
+            )}
+          </span>
+        </div>
       )}
 
       {isPending && (
@@ -176,11 +188,11 @@ export function DraftCard({
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => setRejecting(true)}
+                onClick={() => setEscalating(true)}
                 disabled={busy !== null}
               >
-                <X className="h-3.5 w-3.5" />
-                Reject
+                <ArrowUpCircle className="h-3.5 w-3.5" />
+                Send to review
               </Button>
               <Button onClick={() => setConfirmingApprove(true)} disabled={busy !== null}>
                 <Check className="h-3.5 w-3.5" />
@@ -191,28 +203,30 @@ export function DraftCard({
         </div>
       )}
 
-      <Dialog open={rejecting} onOpenChange={setRejecting}>
+      <Dialog open={escalating} onOpenChange={setEscalating}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject reply to {draft.ticket_id}?</DialogTitle>
+            <DialogTitle>Send {draft.ticket_id} to higher-authority review?</DialogTitle>
             <DialogDescription>
-              Nothing is sent to Jira. An optional note is kept as the record of why this reply
-              was killed.
+              This posts a fixed reply to {draft.ticket_id} letting the requester know their
+              issue is under review and will be fixed. The ticket moves to Under review — it
+              stays open, not closed, until a more senior reviewer approves the actual fix. An
+              optional note explains why it needed escalating.
             </DialogDescription>
           </DialogHeader>
           <Textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Why is this being rejected? (optional)"
+            placeholder="Why does this need a higher-authority review? (optional)"
             rows={4}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejecting(false)} disabled={busy !== null}>
+            <Button variant="outline" onClick={() => setEscalating(false)} disabled={busy !== null}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleReject} disabled={busy !== null}>
-              {busy === "reject" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Reject draft
+            <Button onClick={handleEscalate} disabled={busy !== null}>
+              {busy === "escalate" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Send to review
             </Button>
           </DialogFooter>
         </DialogContent>

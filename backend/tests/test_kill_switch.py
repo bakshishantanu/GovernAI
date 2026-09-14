@@ -56,3 +56,42 @@ async def test_kill_switch_integration():
     decision_after = await policy_engine.evaluate(agent_id, "test_tool", {}, "test:perm")
     assert not decision_after.allowed
     assert decision_after.reason == "Agent is not ACTIVE (current state: SUSPENDED)"
+
+
+@pytest.mark.asyncio
+async def test_suspend_refuses_a_deleted_agent():
+    """Regression: a soft-deleted agent's passport is REVOKED specifically so
+    the kill switch can never move it out of that state again. Without this
+    guard, kill then reactivate would silently un-delete it."""
+    agent_repo = AsyncMock()
+    kill_switch = KillSwitchService(AsyncMock(), agent_repo, AsyncMock(), AsyncMock())
+
+    agent_id, org_id = uuid.uuid4(), uuid.uuid4()
+    agent = Agent(id=agent_id, org_id=org_id, status="REVOKED", deleted_at=object())
+    agent.passport = AgentPassport(agent_id=agent_id, lifecycle_state="REVOKED", permissions=[])
+    agent_repo.get_agent.return_value = agent
+
+    with pytest.raises(ValueError, match="not found"):
+        await kill_switch.suspend_agent(agent_id, uuid.uuid4(), org_id, "should be refused")
+
+    assert agent.status == "REVOKED"
+    assert agent.passport.lifecycle_state == "REVOKED"
+
+
+@pytest.mark.asyncio
+async def test_reactivate_refuses_a_deleted_agent():
+    """Same guard on the other half of the pair: even if something else
+    managed to flip a deleted agent to SUSPENDED, reactivate must still
+    refuse to bring it back to ACTIVE."""
+    agent_repo = AsyncMock()
+    kill_switch = KillSwitchService(AsyncMock(), agent_repo, AsyncMock(), AsyncMock())
+
+    agent_id, org_id = uuid.uuid4(), uuid.uuid4()
+    agent = Agent(id=agent_id, org_id=org_id, status="SUSPENDED", deleted_at=object())
+    agent.passport = AgentPassport(agent_id=agent_id, lifecycle_state="SUSPENDED", permissions=[])
+    agent_repo.get_agent.return_value = agent
+
+    with pytest.raises(ValueError, match="not found"):
+        await kill_switch.reactivate_agent(agent_id, uuid.uuid4(), org_id, "should be refused")
+
+    assert agent.status == "SUSPENDED"
