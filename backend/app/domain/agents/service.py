@@ -157,20 +157,19 @@ class AgentService:
         return agent.passport
 
     async def delete_agent(self, agent_id: UUID) -> None:
-        """Discard a DRAFT agent entirely. Not offered past DRAFT.
+        """Delete an agent from any lifecycle state (owner or admin only).
 
-        Once an agent has ever been ACTIVE it can have real executions, cost
-        events, audit entries and ticket drafts pointing at it — deleting it
-        would either cascade-destroy that history or orphan it. A DRAFT can
-        have none of that yet, so it's the only state this is safe for;
-        `suspend`/`revoke` (FRD-12) are the right tool for anything further
-        along, and preserve the record rather than erasing it.
+        This is a soft delete (`AgentRepository.delete_agent`): the agent
+        disappears from the roster and can never run or transition again,
+        but its passport, executions, cost events, audit entries and ticket
+        drafts are left exactly as they are. Deleting hides the agent — it
+        never erases what it did.
         """
         agent = await self.agent_repo.get_agent(agent_id)
         if not agent:
             raise ValueError("Agent not found")
-        if not agent.passport or agent.passport.lifecycle_state != "DRAFT":
-            raise InvalidStateTransitionError("Only a DRAFT agent can be deleted")
+        if agent.deleted_at is not None:
+            raise InvalidStateTransitionError("This agent has already been deleted")
         await self.agent_repo.delete_agent(agent)
 
     async def activate_agent(self, agent_id: UUID) -> Agent:

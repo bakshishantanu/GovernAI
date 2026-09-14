@@ -165,9 +165,10 @@ async def test_delete_agent_rejects_missing_agent():
     agent_repo.delete_agent.assert_not_awaited()
 
 
-async def test_delete_agent_rejects_non_draft():
+async def test_delete_agent_rejects_already_deleted():
     service, agent_repo, _, _ = _service()
-    agent = _agent_with_passport(lifecycle_state="ACTIVE")
+    agent = _agent_with_passport(lifecycle_state="REVOKED")
+    agent.deleted_at = SimpleNamespace()  # any non-None sentinel
     agent_repo.get_agent.return_value = agent
 
     with pytest.raises(InvalidStateTransitionError):
@@ -179,6 +180,19 @@ async def test_delete_agent_rejects_non_draft():
 async def test_delete_agent_deletes_draft():
     service, agent_repo, _, _ = _service()
     agent = _agent_with_passport(lifecycle_state="DRAFT")
+    agent_repo.get_agent.return_value = agent
+
+    await service.delete_agent(agent.id)
+
+    agent_repo.delete_agent.assert_awaited_once_with(agent)
+
+
+async def test_delete_agent_deletes_active():
+    """The whole point of the change: delete is no longer DRAFT-only. An
+    ACTIVE agent with real history can still be deleted (soft-deleted) by its
+    owner or an admin."""
+    service, agent_repo, _, _ = _service()
+    agent = _agent_with_passport(lifecycle_state="ACTIVE")
     agent_repo.get_agent.return_value = agent
 
     await service.delete_agent(agent.id)

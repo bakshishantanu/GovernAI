@@ -104,13 +104,28 @@ async def test_delete_allows_the_owner():
 
 
 @pytest.mark.asyncio
-async def test_delete_rejects_non_draft_agent_as_conflict():
+async def test_delete_allows_active_agent():
+    """Delete is no longer DRAFT-only: an owner can delete an ACTIVE agent."""
     org_id = uuid.uuid4()
     builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
     agent = _agent(org_id, builder.id, lifecycle_state="ACTIVE")
     service = _service_with(agent)
+    db = AsyncMock()
+
+    await delete_agent(agent.id, user=builder, service=service, db=db)
+
+    service.delete_agent.assert_awaited_once_with(agent.id)
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_already_deleted_agent_as_conflict():
+    org_id = uuid.uuid4()
+    builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
+    agent = _agent(org_id, builder.id, lifecycle_state="REVOKED")
+    service = _service_with(agent)
     service.delete_agent.side_effect = InvalidStateTransitionError(
-        "Only a DRAFT agent can be deleted"
+        "This agent has already been deleted"
     )
     db = AsyncMock()
 
@@ -119,3 +134,20 @@ async def test_delete_rejects_non_draft_agent_as_conflict():
 
     assert exc.value.status_code == 409
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_already_deleted_agent_at_the_route_as_not_found():
+    """Once `deleted_at` is set, the route's own lookup treats it as gone
+    (404) before ever calling the service — matching GET's behaviour."""
+    org_id = uuid.uuid4()
+    builder = CurrentUser(id=uuid.uuid4(), org_id=org_id, role="agent_builder")
+    agent = _agent(org_id, builder.id, lifecycle_state="REVOKED")
+    agent.deleted_at = datetime.now(timezone.utc)
+    service = _service_with(agent)
+
+    with pytest.raises(HTTPException) as exc:
+        await delete_agent(agent.id, user=builder, service=service, db=AsyncMock())
+
+    assert exc.value.status_code == 404
+    service.delete_agent.assert_not_awaited()

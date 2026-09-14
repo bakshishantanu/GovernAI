@@ -119,9 +119,10 @@ async def list_agents(
         offset=offset,
         owner_id=owner_id,
         assigned_user_id=assigned_user_id,
+        include_deleted=False,
     )
     count = await service.agent_repo.count_agents_by_org(
-        user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id
+        user.org_id, owner_id=owner_id, assigned_user_id=assigned_user_id, include_deleted=False
     )
 
     # Built explicitly so the passport and the skills are both included; one
@@ -142,7 +143,7 @@ async def get_agent(
 ):
     """Get specific agent details."""
     agent = await service.agent_repo.get_agent(agent_id)
-    if not agent or agent.org_id != user.org_id:
+    if not agent or agent.org_id != user.org_id or agent.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     # 404 rather than 403 outside the caller's scope: a 403 would confirm the
@@ -293,16 +294,16 @@ async def delete_agent(
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """Discard a DRAFT agent entirely (owner or admin only).
+    """Delete an agent, from any lifecycle state (owner or admin only).
 
-    Only ever available in DRAFT: once an agent has been ACTIVE it can have
-    real executions, cost events, audit entries and ticket drafts, and
-    deleting it would either destroy that record or orphan it. Use the kill
-    switch / suspend for anything past DRAFT — this is only for cleaning up
-    an abandoned build.
+    This is a soft delete: the agent disappears from the roster and can
+    never run or transition again, but nothing about it is erased — its
+    passport, executions, cost events, audit entries and ticket drafts stay
+    exactly where they are, still visible under Runs / Audit Log / Costs /
+    Draft Replies.
     """
     agent = await service.agent_repo.get_agent(agent_id)
-    if not agent or agent.org_id != user.org_id:
+    if not agent or agent.org_id != user.org_id or agent.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     if user.role != "admin" and agent.owner_id != user.id:

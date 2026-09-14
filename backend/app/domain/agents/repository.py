@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.domain.agent_requests.models import AgentRequest
 from app.domain.agents.models import Agent, AgentPassport, AgentSkill
 from app.domain.auth.models import Profile
-from app.domain.permissions.models import Permission
 
 
 class AgentRepository:
@@ -32,8 +31,11 @@ class AgentRepository:
         offset: int = 0,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
+        include_deleted: bool = True,
     ) -> list[Agent]:
         query = self._with_relations().where(Agent.org_id == org_id)
+        if not include_deleted:
+            query = query.where(Agent.deleted_at.is_(None))
         if owner_id and assigned_user_id:
             query = query.where(
                 or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
@@ -53,8 +55,11 @@ class AgentRepository:
         org_id: UUID,
         owner_id: UUID | None = None,
         assigned_user_id: UUID | None = None,
+        include_deleted: bool = True,
     ) -> int:
         query = select(func.count(Agent.id)).where(Agent.org_id == org_id)
+        if not include_deleted:
+            query = query.where(Agent.deleted_at.is_(None))
         if owner_id and assigned_user_id:
             query = query.where(
                 or_(Agent.owner_id == owner_id, Agent.assigned_user_id == assigned_user_id)
@@ -103,31 +108,20 @@ class AgentRepository:
         return list(result.scalars().all())
 
     async def delete_agent(self, agent: Agent) -> None:
-        """Hard-deletes a DRAFT agent and everything scoped only to it.
+        """Soft-deletes an agent from any lifecycle state.
 
-        The service only ever calls this for a DRAFT agent, which is why it's
-        safe: nothing but a draft's own passport/skills/permissions can exist
-        yet — no executions, cost events, audit entries or ticket drafts,
-        since none of those can be created before an agent is ever ACTIVE.
-        Deletes in FK-safe order inside the caller's transaction (committed
-        by the route, same as every other write here).
+        Only `deleted_at` is set (plus the passport flipped to REVOKED so the
+        governance gate and every state-gated transition keep refusing it).
+        Nothing is removed: the passport, skills, permissions and — for an
+        agent that ran — its executions, cost events, audit entries and
+        ticket drafts all stay exactly as they were, still resolvable by
+        `agent_id`. Deleting only hides the agent from the roster; it never
+        erases the record of what it did.
         """
+        agent.deleted_at = datetime.now(timezone.utc)
+        agent.status = "DELETED"
         if agent.passport is not None:
-            await self.session.execute(
-                delete(Permission).where(Permission.passport_id == agent.passport.id)
-            )
-        await self.session.execute(delete(AgentSkill).where(AgentSkill.agent_id == agent.id))
-        # A fulfilled request points back at the agent it produced
-        # (agent_requests.agent_id) — null that out first rather than leaving
-        # a request that names an agent that no longer exists.
-        await self.session.execute(
-            update(AgentRequest).where(AgentRequest.agent_id == agent.id).values(agent_id=None)
-        )
-        if agent.passport is not None:
-            await self.session.execute(
-                delete(AgentPassport).where(AgentPassport.id == agent.passport.id)
-            )
-        await self.session.execute(delete(Agent).where(Agent.id == agent.id))
+            agent.passport.lifecycle_state = "REVOKED"
 
     async def list_active_agents_with_skill(self, skill_id: str) -> list[Agent]:
         """Every ACTIVE agent, across every org, with the given skill bound.
