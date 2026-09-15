@@ -19,11 +19,11 @@ SCHEMA_HINT = """
 ================================================================================
 
 Seeded collections:
-  * knowledge_base  (10 docs: IT, HR, Finance, Security, Engineering, Support)
+  * knowledge_base  (20 docs: IT, HR, Finance, Security, Engineering, Support)
       -> PERMITTED in agent passport
-  * compliance_docs (5 docs: GDPR, SOX, AML, InfoSec, BCP)
+  * compliance_docs (12 docs: GDPR, SOX, AML, InfoSec, BCP, ISO 27001, SOC 2, PCI-DSS, HIPAA, AI Ethics)
       -> PERMITTED in agent passport
-  * confidential_hr (2 docs: exec compensation, workplace investigation)
+  * confidential_hr (6 docs: exec compensation, workplace investigation, equity grants, severance, whistleblower)
       -> RESTRICTED (not in passport - watch governance firewall deny it)
 
 --------------------------------------------------------------------------------
@@ -31,14 +31,19 @@ HOW TO USE:
 --------------------------------------------------------------------------------
 1. AI AGENT MODE (Human Natural Language -> LLM Tool Call -> Solr -> Answer):
    ask How do I fix VPN timeout issues?
+   ask What is the Kubernetes Pod CrashLoopBackOff runbook?
    ask What is the GDPR response timeline for data requests?
+   ask What controls are required for HIPAA and PHI data?
    ask What is the CEO's compensation?        (Watch GovernAI block the LLM!)
 
 2. DIRECT TOOL MODE (Inspect Raw Solr Tool Execution):
    search knowledge_base password reset
+   search knowledge_base kubernetes crashloop
    search compliance_docs GDPR data subject
+   search compliance_docs SOC 2 trust services
    search confidential_hr compensation       (Direct denial check)
    facet compliance_docs *:* department classification
+   facet knowledge_base *:* department classification
 
 Type 'quit' to exit.
 ================================================================================
@@ -48,28 +53,28 @@ Type 'quit' to exit.
 def _simulate_llm_agent_intent(question: str) -> tuple[str, str, str]:
     """Simulate how an LLM evaluates the user prompt and selects collection + query."""
     q_lower = question.lower()
-    if any(k in q_lower for k in ["salary", "compensation", "investigation", "ceo", "pay", "bonus"]):
+    if any(k in q_lower for k in ["salary", "compensation", "investigation", "ceo", "pay", "bonus", "equity", "severance", "whistleblower"]):
         return "confidential_hr", "compensation salary", "Targeting HR records for compensation data"
-    elif any(k in q_lower for k in ["gdpr", "sox", "aml", "compliance", "audit", "security policy", "dsar", "bcp"]):
+    elif any(k in q_lower for k in ["gdpr", "sox", "aml", "compliance", "audit", "security policy", "dsar", "bcp", "iso", "soc 2", "pci", "hipaa", "phi", "retention", "ethics"]):
         return "compliance_docs", question, "Targeting compliance repository for regulatory guidelines"
     else:
         return "knowledge_base", question, "Targeting enterprise knowledge base for operational procedures"
 
 
 async def handle_agent_mode(question: str, tools: dict) -> None:
-    print(f"\n[1. User Natural Language Prompt]")
+    print("\n[1. User Natural Language Prompt]")
     print(f"    \"{question}\"\n")
 
     collection, query, reason = _simulate_llm_agent_intent(question)
 
-    print(f"[2. LLM Reasoning & Function Call]")
+    print("[2. LLM Reasoning & Function Call]")
     print(f"    Thought : {reason}")
-    print(f"    Action  : search_solr(")
+    print("    Action  : search_solr(")
     print(f"                collection=\"{collection}\",")
     print(f"                query=\"{query}\"")
-    print(f"              )\n")
+    print("              )\n")
 
-    print(f"[3. GovernAI Policy & Passport Gate]")
+    print("[3. GovernAI Policy & Passport Gate]")
     print(f"    Validating: Agent Passport -> Permissions for '{collection}'...")
 
     result = await tools["search_solr"].execute(
@@ -77,32 +82,32 @@ async def handle_agent_mode(question: str, tools: dict) -> None:
     )
 
     if not result.get("success"):
-        print(f"    [BLOCKED] Policy Firewall Denied Query!")
+        print("    [BLOCKED] Policy Firewall Denied Query!")
         print(f"    Reason   : {result.get('reason')}\n")
-        print(f"[4. Audit Trail]")
-        print(f"    [SECURITY EVENT] Access denied logged to immutable audit ledger.\n")
-        print(f"[5. Agent Final Response to User]")
-        print(f"    \"I cannot fulfill this request. My passport does not grant me permission")
+        print("[4. Audit Trail]")
+        print("    [SECURITY EVENT] Access denied logged to immutable audit ledger.\n")
+        print("[5. Agent Final Response to User]")
+        print("    \"I cannot fulfill this request. My passport does not grant me permission")
         print(f"     to access the '{collection}' collection. Please contact an administrator")
-        print(f"     if you require authorized access to this data.\"\n")
+        print("     if you require authorized access to this data.\"\n")
         return
 
     docs = result.get("documents", [])
     print(f"    [ALLOWED] Passport permission confirmed (solr:search:{collection}).\n")
-    print(f"[4. Solr Retrieval Engine]")
+    print("[4. Solr Retrieval Engine]")
     print(f"    Retrieved {len(docs)} matching document(s) (Total in index: {result.get('total_found')})")
     if docs:
         top = docs[0]
         print(f"    Top Match: [{top.get('id')}] \"{top.get('title')}\" (Relevance Score: {top.get('_score')})\n")
 
-        print(f"[5. Agent Final Response to User (Synthesized from Solr results)]")
+        print("[5. Agent Final Response to User (Synthesized from Solr results)]")
         print(f"    \"According to {top.get('title')} ({top.get('id')}):")
         print(f"     {top.get('content')}\"")
         print(f"     (Source: {top.get('department')} / Classification: {top.get('classification')})\n")
     else:
         print("    No matching documents found.\n")
-        print(f"[5. Agent Final Response to User]")
-        print(f"    \"I searched the knowledge base, but could not find any relevant documentation on that topic.\"\n")
+        print("[5. Agent Final Response to User]")
+        print("    \"I searched the knowledge base, but could not find any relevant documentation on that topic.\"\n")
 
 
 async def main() -> None:

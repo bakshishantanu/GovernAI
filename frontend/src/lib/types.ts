@@ -66,6 +66,18 @@ export interface TicketDraft {
   created_at: string;
 }
 
+export interface ExecutionStep {
+  id: string;
+  execution_id: string;
+  step_number: number;
+  tool?: string | null;
+  tool_args?: Record<string, any> | null;
+  tool_result?: Record<string, any> | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Matches what GET /executions/{id} actually returns, confirmed against a live
 // response — not `prompt`/`created_at`, which this file previously guessed at
 // and which the API has never sent. `executions/page.tsx` was formatting
@@ -83,4 +95,5 @@ export interface Execution {
   triggered_by_id?: string | null;
   total_cost_usd?: number | null;
   total_tokens?: number | null;
+  steps?: ExecutionStep[];
 }

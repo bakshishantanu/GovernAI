@@ -28,10 +28,10 @@ async def test_bootstrap_registers_all_three_mvp_skills_independently():
     await registry.bootstrap()
 
     checked_ids = [call.args[0] for call in skill_repo.get_skill.call_args_list]
-    assert checked_ids == ["ticketing", "solr_search", "document_search"]
+    assert checked_ids == ["ticketing", "solr_search", "document_search", "figma_design"]
 
     added_ids = {s.id for s in _added(session, SkillModel)}
-    assert added_ids == ["ticketing", "solr_search", "document_search"] or added_ids == {"ticketing", "solr_search", "document_search"}
+    assert added_ids == {"ticketing", "solr_search", "document_search", "figma_design"}
 
 
 async def test_bootstrap_skips_only_the_skill_that_already_exists():
@@ -47,7 +47,7 @@ async def test_bootstrap_skips_only_the_skill_that_already_exists():
 
     added_ids = {s.id for s in _added(session, SkillModel)}
     assert "ticketing" not in added_ids
-    assert added_ids == {"solr_search", "document_search"}
+    assert added_ids == {"solr_search", "document_search", "figma_design"}
 
 
 async def test_bootstrap_persists_skill_level_permissions():
@@ -66,6 +66,8 @@ async def test_bootstrap_persists_skill_level_permissions():
     assert "solr:search:compliance_docs" in added_permissions
     assert "solr:search:knowledge_base" in added_permissions
     assert "docs:search:public" in added_permissions
+    assert "figma:design:generate" in added_permissions
+    assert "figma:design:read" in added_permissions
 
 
 async def test_bootstrap_persists_a_specific_required_permission_per_tool():
@@ -93,6 +95,8 @@ async def test_bootstrap_persists_a_specific_required_permission_per_tool():
     )
     assert tools_by_name["search_documents"].required_permission == "docs:search:public"
     assert tools_by_name["get_document"].required_permission == "docs:search:public"
+    assert tools_by_name["generate_wireframe"].required_permission == "figma:design:generate"
+    assert tools_by_name["get_figma_components"].required_permission == "figma:design:read"
 
 
 def test_get_tools_resolves_bound_skill_ids_to_their_tools():

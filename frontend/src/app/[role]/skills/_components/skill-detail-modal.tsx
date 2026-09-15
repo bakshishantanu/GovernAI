@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShieldCheck, Bot, FileSearch, Ticket, Search } from "lucide-react";
+import { X, ShieldCheck, Bot, FileSearch, Ticket, Search, LayoutTemplate } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { accentFor, type Skill } from "./skill-types";
 
@@ -9,6 +9,7 @@ const SKILL_ICON: Record<string, LucideIcon> = {
   ticketing: Ticket,
   document_search: FileSearch,
   solr_search: Search,
+  figma_design: LayoutTemplate,
 };
 
 /**
