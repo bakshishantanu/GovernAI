@@ -47,17 +47,27 @@ export default function SkillsPage() {
   const isDesktopWidth = useMediaQuery("(min-width: 640px)");
   const asDeck = isDesktopWidth && (skills?.length ?? 0) <= DECK_LIMIT;
 
+  // Scrolls to the next/previous card's own snap point rather than an
+  // arbitrary pixel delta. `scrollBy` with a fixed offset fights the
+  // track's `scroll-snap-type` — a mid-card destination gets pulled back
+  // toward the nearest snap point almost immediately, so a smooth
+  // scrollBy barely moves at all (confirmed live: a 320px scrollBy only
+  // travelled ~5px). Targeting an actual card's `offsetLeft` — always a
+  // valid snap point (`scrollSnapAlign: "start"` on every card) — gives
+  // the browser nothing to snap back from.
   function scroll(dir: 1 | -1) {
-    // `behavior: "smooth"` was tried first and never moved scrollLeft at
-    // all in this project's test environment — confirmed directly (not
-    // via the button, calling scrollBy on the track itself), confirmed
-    // with scroll-snap disabled (not a snap interaction), confirmed after
-    // a real 3s wait (not a throttled-animation timing issue like the
-    // ones elsewhere in this project — smooth scroll runs on the
-    // compositor, not React's scheduler, so that explanation doesn't fit
-    // here anyway). "auto" reliably works. CSS scroll-snap still gives the
-    // row its settle-into-place feel without needing the smooth behavior.
-    trackRef.current?.scrollBy({ left: dir * 320, behavior: "auto" });
+    const track = trackRef.current;
+    if (!track) return;
+    const cards = [...track.children] as HTMLElement[];
+    if (cards.length === 0) return;
+
+    const current = cards.reduce((closest, card) =>
+      Math.abs(card.offsetLeft - track.scrollLeft) < Math.abs(closest.offsetLeft - track.scrollLeft)
+        ? card
+        : closest
+    );
+    const target = cards[cards.indexOf(current) + dir];
+    if (target) track.scrollTo({ left: target.offsetLeft, behavior: "smooth" });
   }
 
   return (
@@ -122,7 +132,7 @@ export default function SkillsPage() {
       ) : asDeck ? (
         <div
           ref={trackRef}
-          className="mt-10 flex justify-center gap-0 overflow-x-auto px-2 py-10"
+          className="landing-hide-scrollbar mt-10 flex scroll-smooth justify-center gap-0 overflow-x-auto px-2 py-10"
           style={{ scrollSnapType: "x proximity" }}
         >
           {skills.map((skill, i) => (

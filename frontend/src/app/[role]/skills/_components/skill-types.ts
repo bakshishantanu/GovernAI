@@ -19,7 +19,10 @@ export type Skill = {
 export const SKILL_ACCENT: Record<string, { fg: string; bg: string; ring: string }> = {
   ticketing: { fg: "var(--l-teal)", bg: "var(--l-teal)", ring: "var(--l-teal)" },
   document_search: { fg: "var(--l-orange-deep)", bg: "var(--l-orange)", ring: "var(--l-orange)" },
-  solr_search: { fg: "var(--l-navy-deep)", bg: "var(--l-navy-deep)", ring: "var(--l-navy-deep)" },
+  // bg is `var(--l-yellow-deep)`, not the paler `--l-yellow`: it's also the
+  // "Read more" button's background under white text, and the pale yellow
+  // doesn't have the contrast for that.
+  solr_search: { fg: "var(--l-yellow-deep)", bg: "var(--l-yellow-deep)", ring: "var(--l-yellow)" },
   figma_design: { fg: "var(--l-orange-deep)", bg: "var(--l-orange)", ring: "var(--l-orange)" },
 };
 
