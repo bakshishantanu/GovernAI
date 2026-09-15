@@ -168,6 +168,14 @@ _DEFAULT_SEED_DATA: dict[str, list[dict]] = {
             "classification": "internal",
             "author": "Customer Success Leadership",
         },
+        {
+            "id": "KB-021",
+            "title": "PRD - Mobile Checkout Flow Wireframe Specifications",
+            "content": "Frontend wireframe design specification for mobile checkout: Screen name 'Mobile Checkout Flow', layout form factor 'mobile'. Required sections: Order Summary with cart item prices, Express Payment options (Apple Pay, Credit Card form), Shipping Address input fields, and Action Footer with primary CTA 'Complete Purchase - $96.12'. Brand color palette: Canvas background #FBF7EE, primary header #1E1B4B, CTA button accent #FF3366.",
+            "department": "Design",
+            "classification": "public",
+            "author": "UX Design Architecture Team",
+        },
     ],
     "compliance_docs": [
         {

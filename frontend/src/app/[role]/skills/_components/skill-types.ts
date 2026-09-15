@@ -20,6 +20,7 @@ export const SKILL_ACCENT: Record<string, { fg: string; bg: string; ring: string
   ticketing: { fg: "var(--l-teal)", bg: "var(--l-teal)", ring: "var(--l-teal)" },
   document_search: { fg: "var(--l-orange-deep)", bg: "var(--l-orange)", ring: "var(--l-orange)" },
   solr_search: { fg: "var(--l-navy-deep)", bg: "var(--l-navy-deep)", ring: "var(--l-navy-deep)" },
+  figma_design: { fg: "var(--l-orange-deep)", bg: "var(--l-orange)", ring: "var(--l-orange)" },
 };
 
 export function accentFor(id: string) {

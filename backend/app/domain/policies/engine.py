@@ -68,7 +68,9 @@ class PolicyEngine:
                                 False, f"Missing required permission: '{target_perm}'"
                             )
                     else:
-                        allowed_perms = [p.strip() for p in required_permission.split(",") if p.strip()]
+                        allowed_perms = [
+                            p.strip() for p in required_permission.split(",") if p.strip()
+                        ]
                         if not any(p in perm_strings for p in allowed_perms):
                             return PolicyDecision(
                                 False, f"Missing required permission: '{required_permission}'"
@@ -97,6 +99,8 @@ class PolicyEngine:
                         denial = self._check_query_blocklist(policy, rule, tool_args)
                     elif rule_type == "deny_list":
                         denial = self._check_deny_list(policy, rule, tool_name, tool_args)
+                    elif rule_type == "brand_color_check" and tool_name == "generate_wireframe":
+                        denial = self._check_brand_color(policy, rule, tool_args)
                     elif rule_type == "rate_limit":
                         denial = await self._check_rate_limit(policy, rule, agent_id)
                     else:
@@ -134,6 +138,25 @@ class PolicyEngine:
                     False,
                     f"Policy '{policy.name}': Disallowed keyword '{keyword}' detected.",
                 )
+        return None
+
+    @staticmethod
+    def _check_brand_color(policy, rule, tool_args: dict[str, Any]) -> PolicyDecision | None:
+        """Deny wireframe generation if requested custom colors violate brand policy."""
+        allowed_palette = [
+            str(c).strip().upper() for c in rule.config.get("allowed_hex_codes", [])
+        ]
+        if not allowed_palette:
+            return None
+        palette = tool_args.get("color_palette")
+        if isinstance(palette, dict):
+            for role, hex_val in palette.items():
+                if hex_val and str(hex_val).strip().upper() not in allowed_palette:
+                    return PolicyDecision(
+                        False,
+                        f"Policy '{policy.name}': Color '{hex_val}' for '{role}' "
+                        "is not in approved brand palette.",
+                    )
         return None
 
     @staticmethod

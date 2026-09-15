@@ -18,17 +18,26 @@ import {
   MessageSquare,
   Paperclip,
   Check,
+  LayoutTemplate,
 } from "lucide-react";
 import { API_BASE, getAuthHeader, fetchApi } from "@/lib/api-client";
 import { readSseBody } from "@/lib/sse-client";
 import { useRoleBase } from "@/lib/use-role-base";
 import type { Execution } from "@/lib/types";
 import { money } from "../../../../_components/agent-types";
+import { FigmaArtifactViewer, type FigmaWireframeArtifact } from "./figma-artifact-viewer";
 
 type LiveStatus = "connecting" | "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED";
 
 type TimelineEvent =
-  | { id: string; kind: "allowed" | "denied"; tool: string; reason: string; at: string }
+  | {
+      id: string;
+      kind: "allowed" | "denied";
+      tool: string;
+      reason: string;
+      at: string;
+      metadata?: Record<string, any> | null;
+    }
   | { id: string; kind: "cost"; cost_usd: number; tokens: number; model?: string | null; at: string };
 
 /**
@@ -143,6 +152,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
               tool: e.tool as string,
               reason: e.reason ?? "",
               at: e.timestamp,
+              metadata: (e as any).metadata ?? null,
             })),
           ...timeline.cost_events.map(
             (e): TimelineEvent => ({
@@ -204,6 +214,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
                 tool: data.tool,
                 reason: data.reason ?? "",
                 at: data.at,
+                metadata: data.metadata ?? null,
               },
             ]);
           } else if (event === "cost.llm.incurred") {
@@ -268,6 +279,25 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
 
   const stageIndex = pipelineStageIndex(status);
 
+  // Extract Figma wireframe artifact if present in events or execution steps
+  const figmaArtifact: FigmaWireframeArtifact | null = (() => {
+    for (const e of events) {
+      if (e.kind === "allowed" && (e.tool === "generate_wireframe" || e.metadata)) {
+        const art = parseArtifactMetadata(e.metadata);
+        if (art) return art;
+      }
+    }
+    if (run?.steps && Array.isArray(run.steps)) {
+      for (const s of run.steps) {
+        if (s.tool === "generate_wireframe" || s.tool_result) {
+          const art = parseArtifactMetadata(s.tool_result) || parseArtifactMetadata((s as any).metadata_json);
+          if (art) return art;
+        }
+      }
+    }
+    return null;
+  })();
+
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <Link
@@ -324,11 +354,12 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           {TABS.map((t) => {
             const TIcon = t.icon;
             const on = tab === t.id;
+            const hasArtifactBadge = t.id === "artifacts" && Boolean(figmaArtifact);
             return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors relative"
                 style={{
                   background: on ? "var(--l-ink)" : "transparent",
                   color: on ? "var(--l-cream)" : "var(--l-charcoal)",
@@ -336,6 +367,17 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
               >
                 <TIcon className="h-3.5 w-3.5" />
                 {t.label}
+                {hasArtifactBadge && (
+                  <span
+                    className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none"
+                    style={{
+                      background: on ? "var(--l-cream)" : "var(--l-ink)",
+                      color: on ? "var(--l-ink)" : "var(--l-cream)",
+                    }}
+                  >
+                    1
+                  </span>
+                )}
               </button>
             );
           })}
@@ -355,9 +397,16 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           ) : tab === "governance" ? (
             <GovernanceTab calls={toolCalls} live={live} />
           ) : tab === "output" ? (
-            <OutputTab status={status} result={result ?? run?.result ?? null} error={runError ?? run?.error ?? null} live={live} />
+            <OutputTab
+              status={status}
+              result={result ?? run?.result ?? null}
+              error={runError ?? run?.error ?? null}
+              live={live}
+              artifact={figmaArtifact}
+              onViewArtifact={() => setTab("artifacts")}
+            />
           ) : (
-            <ArtifactsTab />
+            <ArtifactsTab artifact={figmaArtifact} live={live} />
           )}
         </div>
       </div>
@@ -670,54 +719,231 @@ function GovernanceTab({
   );
 }
 
+function parseArtifactMetadata(raw: any): FigmaWireframeArtifact | null {
+  if (!raw) return null;
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (parsed && typeof parsed === "object") {
+    if (parsed.wireframe_id || parsed.screen_name || parsed.svg_content || parsed.embed_url) {
+      return parsed as FigmaWireframeArtifact;
+    }
+    if (parsed.tool_result) {
+      return parseArtifactMetadata(parsed.tool_result);
+    }
+    if (parsed.artifact) {
+      return parseArtifactMetadata(parsed.artifact);
+    }
+    if (parsed.metadata) {
+      return parseArtifactMetadata(parsed.metadata);
+    }
+  }
+  return null;
+}
+
+function renderInlineMarkdown(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match;
+  let i = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      parts.push(
+        <strong key={i++} className="font-semibold text-[var(--l-ink)]">
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      parts.push(
+        <code
+          key={i++}
+          className="rounded bg-[var(--l-ink)]/5 px-1.5 py-0.5 font-mono text-[12px] text-[var(--l-ink)]"
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
+function FormattedOutput({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-[var(--l-charcoal)]/85">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-1.5" />;
+        }
+        if (trimmed.startsWith("### ")) {
+          return (
+            <h3 key={idx} className="mt-3 text-base font-bold text-[var(--l-ink)]">
+              {trimmed.slice(4)}
+            </h3>
+          );
+        }
+        if (trimmed.startsWith("## ")) {
+          return (
+            <h2 key={idx} className="mt-4 text-lg font-bold text-[var(--l-ink)] border-b border-[var(--l-ink)]/10 pb-1">
+              {trimmed.slice(3)}
+            </h2>
+          );
+        }
+        if (trimmed.startsWith("# ")) {
+          return (
+            <h1 key={idx} className="mt-4 text-xl font-bold text-[var(--l-ink)]">
+              {trimmed.slice(2)}
+            </h1>
+          );
+        }
+        if (trimmed.startsWith("#### ")) {
+          return (
+            <h4 key={idx} className="mt-2 text-sm font-bold text-[var(--l-ink)]">
+              {trimmed.slice(5)}
+            </h4>
+          );
+        }
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-2">
+              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--l-ink)]/60" />
+              <span>{renderInlineMarkdown(trimmed.slice(2))}</span>
+            </div>
+          );
+        }
+        if (trimmed.startsWith("> ")) {
+          return (
+            <blockquote
+              key={idx}
+              className="border-l-2 border-[var(--l-ink)]/40 pl-3 italic text-[var(--l-charcoal)]/70"
+            >
+              {renderInlineMarkdown(trimmed.slice(2))}
+            </blockquote>
+          );
+        }
+        return <p key={idx}>{renderInlineMarkdown(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
+
 function OutputTab({
   status,
   result,
   error,
   live,
+  artifact,
+  onViewArtifact,
 }: {
   status: LiveStatus;
   result: string | null;
   error: string | null;
   live: boolean;
+  artifact?: FigmaWireframeArtifact | null;
+  onViewArtifact?: () => void;
 }) {
   if (live) {
     return <EmptyTab live waiting="The run is still going — output appears once it finishes." idle="" />;
   }
+
+  const outputContent = result || error || "No result was recorded.";
+
   return (
-    <div
-      className="rounded-2xl border-2 p-5"
-      style={{
-        borderColor: status === "COMPLETED" ? "var(--l-teal)" : "var(--l-orange-deep)",
-        background:
-          status === "COMPLETED"
-            ? "color-mix(in srgb, var(--l-teal) 8%, var(--l-cream))"
-            : "color-mix(in srgb, var(--l-orange-deep) 8%, var(--l-cream))",
-      }}
-    >
-      <div className="flex items-center gap-2">
-        {status === "COMPLETED" ? (
-          <CheckCircle2 className="h-5 w-5" style={{ color: "var(--l-teal)" }} />
-        ) : (
-          <XCircle className="h-5 w-5" style={{ color: "var(--l-orange-deep)" }} />
-        )}
-        <h2 className="landing-display text-base text-[var(--l-ink)]">
-          {status === "COMPLETED" ? "Run completed" : `Run ${status.toLowerCase()}`}
-        </h2>
+    <div className="space-y-4">
+      {artifact && (
+        <div
+          className="flex items-center justify-between rounded-xl border-2 p-3.5"
+          style={{
+            borderColor: "var(--l-ink)",
+            background: "color-mix(in srgb, var(--l-ink) 4%, var(--l-cream))",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+              style={{ background: "var(--l-ink)" }}
+            >
+              <LayoutTemplate className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
+                Figma Wireframe Generated
+              </div>
+              <div className="text-sm font-bold text-[var(--l-ink)]">
+                {artifact.screen_name} ({artifact.layout_type || "UI"} Layout)
+              </div>
+            </div>
+          </div>
+          {onViewArtifact && (
+            <button
+              onClick={onViewArtifact}
+              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105"
+              style={{ background: "var(--l-ink)" }}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              View in Artifacts
+            </button>
+          )}
+        </div>
+      )}
+
+      <div
+        className="rounded-2xl border-2 p-5"
+        style={{
+          borderColor: status === "COMPLETED" ? "var(--l-teal)" : "var(--l-orange-deep)",
+          background:
+            status === "COMPLETED"
+              ? "color-mix(in srgb, var(--l-teal) 8%, var(--l-cream))"
+              : "color-mix(in srgb, var(--l-orange-deep) 8%, var(--l-cream))",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          {status === "COMPLETED" ? (
+            <CheckCircle2 className="h-5 w-5" style={{ color: "var(--l-teal)" }} />
+          ) : (
+            <XCircle className="h-5 w-5" style={{ color: "var(--l-orange-deep)" }} />
+          )}
+          <h2 className="landing-display text-base text-[var(--l-ink)]">
+            {status === "COMPLETED" ? "Run completed" : `Run ${status.toLowerCase()}`}
+          </h2>
+        </div>
+        <FormattedOutput text={outputContent} />
       </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--l-charcoal)]/75">
-        {result || error || "No result was recorded."}
-      </p>
     </div>
   );
 }
 
-/** Real, honest and always empty right now: none of this platform's current
- * skills (ticketing, sql_query, document_search) produce a file, so there is
- * no artifact data to show — this is not a "coming soon" placeholder, it's
- * the true state, structured so a real artifact can render here later
- * without this tab's shape changing. */
-function ArtifactsTab() {
+function ArtifactsTab({
+  artifact,
+  live,
+}: {
+  artifact?: FigmaWireframeArtifact | null;
+  live?: boolean;
+}) {
+  if (live) {
+    return <EmptyTab live waiting="Watching for generated artifacts and wireframes…" idle="" />;
+  }
+
+  if (artifact) {
+    return <FigmaArtifactViewer artifact={artifact} />;
+  }
+
   return (
     <div className="rounded-xl border-2 border-dashed border-[var(--l-line)] px-6 py-10 text-center">
       <Paperclip className="mx-auto h-5 w-5 text-[var(--l-charcoal)]/30" />

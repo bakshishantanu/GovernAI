@@ -11,6 +11,7 @@ from app.runtime.rag.embeddings import EmbeddingProvider
 from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
+from app.skills.figma_design import FigmaDesignSkill
 from app.skills.solr_search import SolrSearchSkill
 from app.skills.ticketing import (
     TicketDraftStore,
@@ -50,6 +51,7 @@ class SkillRegistry:
                 TicketingSkill(adapter=jira_adapter, draft_store=draft_store),
                 SolrSearchSkill(permitted_collections={"knowledge_base", "compliance_docs"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
+                FigmaDesignSkill(),
             )
         }
 
