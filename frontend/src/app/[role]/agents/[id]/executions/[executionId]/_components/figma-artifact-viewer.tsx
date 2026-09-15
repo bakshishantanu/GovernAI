@@ -66,6 +66,26 @@ export function FigmaArtifactViewer({
   const layoutType = (artifact.layout_type || "desktop").toLowerCase();
   const isMobile = layoutType === "mobile";
 
+  // The badge used to hardcode "390×844" for mobile and "1200×800" for
+  // everything else, regardless of what was actually generated — neither
+  // number matches the real canvas the backend renders for any layout type
+  // (backend/app/runtime/figma/adapter.py: mobile 390×780, modal 640×480,
+  // desktop/dashboard 1000×640), and modal wireframes were silently
+  // mislabeled "Desktop" since this only ever branched on isMobile. Parsing
+  // the real `viewBox` out of the SVG the backend actually returned is the
+  // one value that can never drift from what's on screen; only fall back to
+  // a per-layout guess (matching the backend's own real defaults) for an
+  // artifact that hasn't rendered its SVG yet.
+  const viewBoxDims = artifact.svg_content?.match(/viewBox="0 0 (\d+) (\d+)"/);
+  const [canvasWidth, canvasHeight] = viewBoxDims
+    ? [Number(viewBoxDims[1]), Number(viewBoxDims[2])]
+    : layoutType === "mobile"
+      ? [390, 780]
+      : layoutType === "modal"
+        ? [640, 480]
+        : [1000, 640];
+  const layoutLabel = layoutType.charAt(0).toUpperCase() + layoutType.slice(1);
+
   const palette = {
     canvas: artifact.palette?.canvas || "#FBF7EE",
     primary: artifact.palette?.primary || "#1E1B4B",
@@ -115,7 +135,7 @@ export function FigmaArtifactViewer({
               </h3>
               <span className="flex items-center gap-1 rounded-full border border-[var(--l-line)] bg-white/60 px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--l-charcoal)]/80 shadow-xs dark:bg-black/20">
                 {isMobile ? <Smartphone className="h-3 w-3" /> : <Monitor className="h-3 w-3" />}
-                {isMobile ? "Mobile (390×844)" : "Desktop (1200×800)"}
+                {layoutLabel} ({canvasWidth}×{canvasHeight})
               </span>
               <span className="rounded-full bg-[var(--l-teal)]/15 px-2 py-0.5 font-mono text-[10px] font-bold tracking-wide text-[var(--l-teal)] uppercase">
                 From Figma

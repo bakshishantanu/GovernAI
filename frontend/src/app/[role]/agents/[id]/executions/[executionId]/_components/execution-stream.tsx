@@ -19,13 +19,43 @@ import {
   Paperclip,
   Check,
   LayoutTemplate,
+  Ticket,
+  FileSearch,
+  Search,
+  Bot,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { API_BASE, getAuthHeader, fetchApi } from "@/lib/api-client";
 import { readSseBody } from "@/lib/sse-client";
 import { useRoleBase } from "@/lib/use-role-base";
 import type { Execution } from "@/lib/types";
 import { money } from "../../../../_components/agent-types";
+import { accentFor } from "../../../../../skills/_components/skill-types";
 import { FigmaArtifactViewer, type FigmaWireframeArtifact } from "./figma-artifact-viewer";
+
+/**
+ * Which skill each real tool belongs to, purely for display — the backend
+ * has no "skill" field on a governance event, only a tool name (see
+ * `backend/app/domain/policies/engine.py`). Kept as a flat lookup rather
+ * than importing the skill registry: this is presentation grouping, not a
+ * governance decision, and the tool→skill mapping is small and stable
+ * (skills/*.py's own `get_tools()`).
+ */
+const TOOL_SKILL: Record<string, { skillId: string; label: string; icon: LucideIcon }> = {
+  read_ticket: { skillId: "ticketing", label: "Ticketing & ITSM", icon: Ticket },
+  search_tickets: { skillId: "ticketing", label: "Ticketing & ITSM", icon: Ticket },
+  draft_ticket_reply: { skillId: "ticketing", label: "Ticketing & ITSM", icon: Ticket },
+  search_documents: { skillId: "document_search", label: "Knowledge Search", icon: FileSearch },
+  get_document: { skillId: "document_search", label: "Knowledge Search", icon: FileSearch },
+  search_solr: { skillId: "solr_search", label: "Enterprise Search", icon: Search },
+  facet_solr: { skillId: "solr_search", label: "Enterprise Search", icon: Search },
+  generate_wireframe: { skillId: "figma_design", label: "Figma Design Studio", icon: LayoutTemplate },
+  get_figma_components: { skillId: "figma_design", label: "Figma Design Studio", icon: LayoutTemplate },
+};
+
+function skillFor(tool: string) {
+  return TOOL_SKILL[tool] ?? { skillId: "", label: "Tool", icon: Bot };
+}
 
 type LiveStatus = "connecting" | "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "TERMINATED";
 
@@ -339,6 +369,8 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
         )}
       </div>
 
+      <SkillPipeline toolCalls={toolCalls} live={live} />
+
       <div className="flex flex-wrap gap-3">
         <StatTile label="Duration" value={duration ?? "—"} />
         <StatTile label="Tool calls" value={String(toolCalls.length)} />
@@ -504,6 +536,138 @@ function PipelineStrip({
           governance blocked {denials} action{denials > 1 ? "s" : ""}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-skill Jenkins-style pipeline: one stage per governed tool call, in the
+ * order they actually happened, each labelled with which of the agent's
+ * skills it belongs to (`TOOL_SKILL` above) and colored with that skill's
+ * own accent from the Skills page (`accentFor`) — the same visual language
+ * a builder already associates with "Enterprise Search" or "Figma Design
+ * Studio" elsewhere in the console, not a new color scheme invented here.
+ * Grows live as `audit.tool.allowed`/`audit.tool.denied` events arrive over
+ * SSE; the trailing dashed node is a generic "still reasoning" placeholder
+ * while `live` is true, since the stream has no "about to call X" event —
+ * only completed calls — so which skill comes next genuinely isn't known
+ * until it happens.
+ */
+function SkillPipeline({
+  toolCalls,
+  live,
+}: {
+  toolCalls: Extract<TimelineEvent, { kind: "allowed" | "denied" }>[];
+  live: boolean;
+}) {
+  if (toolCalls.length === 0 && !live) return null;
+
+  return (
+    <div className="rounded-2xl border-2 border-[var(--l-ink)]/90 bg-[var(--l-cream)] p-5 shadow-[0_4px_0_0_rgba(22,19,14,0.12)]">
+      <div className="flex items-center justify-between">
+        <span className="landing-display text-[11px] uppercase tracking-wide text-[var(--l-charcoal)]/55">
+          Skill pipeline
+        </span>
+        <span className="font-mono text-[10px] text-[var(--l-charcoal)]/40">
+          which skill is doing what, in order
+        </span>
+      </div>
+
+      {toolCalls.length === 0 ? (
+        <p className="mt-3 text-[12px] text-[var(--l-charcoal)]/45">
+          Waiting for the first skill to be called…
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-stretch gap-1">
+          <AnimatePresence initial={false}>
+            {toolCalls.map((e, i) => (
+              <div key={e.id} className="flex items-stretch">
+                <SkillStage event={e} index={i + 1} />
+                {(i < toolCalls.length - 1 || live) && <Connector done={e.kind === "allowed"} />}
+              </div>
+            ))}
+          </AnimatePresence>
+          {live && <PendingStage />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkillStage({
+  event,
+  index,
+}: {
+  event: Extract<TimelineEvent, { kind: "allowed" | "denied" }>;
+  index: number;
+}) {
+  const { label, icon: Icon } = skillFor(event.tool);
+  const accent = accentFor(skillFor(event.tool).skillId);
+  const denied = event.kind === "denied";
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.25 }}
+      title={event.reason}
+      className="flex w-[128px] shrink-0 flex-col gap-1.5 rounded-xl border-2 p-2.5"
+      style={{
+        borderColor: denied ? "var(--l-orange-deep)" : accent.ring,
+        background: denied
+          ? "color-mix(in srgb, var(--l-orange-deep) 6%, var(--l-cream))"
+          : "color-mix(in srgb, var(--l-teal) 5%, var(--l-cream))",
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className="flex h-6 w-6 items-center justify-center rounded-full"
+          style={{ background: denied ? "var(--l-orange-deep)" : accent.bg }}
+        >
+          <Icon className="h-3 w-3" style={{ color: "#ffffff" }} />
+        </span>
+        {denied ? (
+          <ShieldX className="h-3.5 w-3.5" style={{ color: "var(--l-orange-deep)" }} />
+        ) : (
+          <ShieldCheck className="h-3.5 w-3.5" style={{ color: "var(--l-teal)" }} />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p
+          className="truncate font-mono text-[9.5px] uppercase tracking-wide"
+          style={{ color: denied ? "var(--l-orange-deep)" : "var(--l-charcoal)" }}
+        >
+          {index}. {label}
+        </p>
+        <p className="truncate font-mono text-[11px] font-semibold text-[var(--l-ink)]">{event.tool}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function PendingStage() {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex w-[128px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-[var(--l-charcoal)]/30 p-2.5"
+    >
+      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--l-charcoal)" }} />
+      <p className="text-center font-mono text-[9.5px] uppercase tracking-wide text-[var(--l-charcoal)]/50">
+        agent reasoning…
+      </p>
+    </motion.div>
+  );
+}
+
+function Connector({ done }: { done: boolean }) {
+  return (
+    <div className="flex w-4 shrink-0 items-center">
+      <span
+        className="h-[2px] w-full"
+        style={{ background: done ? "var(--l-teal)" : "var(--l-line)" }}
+      />
     </div>
   );
 }
