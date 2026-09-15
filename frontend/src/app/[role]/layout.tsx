@@ -61,7 +61,13 @@ export default async function RoleLayout({
             blob and cutting the same amount off the opposite edge. `overflow: clip`
             keeps the identical visual clip but is not a scroll container at all, so
             `scrollLeft` can never move. */}
-        <div className="landing relative flex min-h-screen overflow-clip text-[var(--l-ink)]">
+        {/* id="app-shell": the console's `--l-*` design tokens (landing.css) are
+            scoped to `.landing`, not set globally — anything portaled out of
+            the normal render tree (e.g. create-agent-modal.tsx's dialog, to
+            dodge a `space-y-*` sibling's margin) must still portal INTO this
+            element, not document.body, or it loses every `var(--l-*)` color
+            and renders transparent/uncolored. */}
+        <div id="app-shell" className="landing relative flex min-h-screen overflow-clip text-[var(--l-ink)]">
           {/* Ambient colour wash — the console has been cream-only since D-038;
               this borrows the landing/login pages' own layered-blob technique
               (see landing.css's .landing-blob) at low opacity so the whole

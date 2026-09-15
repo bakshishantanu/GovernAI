@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bot, FileSearch, Ticket, ShieldCheck, ShieldX, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -41,6 +42,9 @@ export function CreateAgentModal({
   const [violation, setViolation] = useState("");
   const [violations, setViolations] = useState<ApiViolation[]>([]);
   const [createdName, setCreatedName] = useState("");
+  // Portal target only exists client-side; guards the SSR pass.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -116,7 +120,21 @@ export function CreateAgentModal({
     }
   }
 
-  return (
+  const shell = mounted ? document.getElementById("app-shell") : null;
+  if (!mounted || !shell) return null;
+
+  // Portaled to #app-shell (layout.tsx), not document.body: as a
+  // normal-flow sibling inside the page's own layout, this fixed overlay
+  // was picking up a `margin-bottom` from the page's `space-y-*` gap
+  // utility (it isn't the last child) — a margin `position: fixed; inset: 0`
+  // still honours, so the overlay's own height came out 24px short of the
+  // viewport, leaving a strip at the bottom undimmed. A portal removes it
+  // from that flow entirely. It has to land inside `#app-shell` specifically
+  // and not `document.body`: the console's `--l-*` color tokens are scoped
+  // to `.landing` (landing.css), so portaling past it loses every themed
+  // color and the modal renders see-through instead of its cream background
+  // — confirmed live, this is exactly what happened on the first attempt.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -285,7 +303,8 @@ export function CreateAgentModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    shell
   );
 }
 
