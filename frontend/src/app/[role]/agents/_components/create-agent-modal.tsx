@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Bot, FileSearch, Ticket, ShieldCheck, ShieldX, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -41,6 +42,9 @@ export function CreateAgentModal({
   const [violation, setViolation] = useState("");
   const [violations, setViolations] = useState<ApiViolation[]>([]);
   const [createdName, setCreatedName] = useState("");
+  // Portal target only exists client-side; guards the SSR pass.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -116,7 +120,24 @@ export function CreateAgentModal({
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  // Portaled to document.body: as a normal-flow sibling inside the page's
+  // own layout, this fixed overlay was picking up a `margin-bottom` from
+  // the page's `space-y-*` gap utility (it isn't the last child) — a
+  // margin `position: fixed; inset: 0` still honours, so the overlay's own
+  // height came out 24px short of the viewport, leaving a strip at the
+  // bottom undimmed. A portal removes it from that flow entirely.
+  //
+  // The dialog box below carries a `landing` class for the same reason
+  // dialog.tsx's DialogContent and popover.tsx do: portaling to <body>
+  // leaves it outside the `.landing` div that defines every `--l-*` color
+  // token (landing.css), so without re-declaring that class on the
+  // portaled root, `bg-[var(--l-cream)]`/`text-[var(--l-ink)]` etc. all
+  // resolve to nothing and the dialog renders see-through — confirmed live
+  // on the first attempt at this fix (portaling straight to document.body
+  // with no `landing` class).
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -135,7 +156,7 @@ export function CreateAgentModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="fixed left-1/2 top-1/2 z-50 w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border-2 border-[var(--l-ink)] bg-[var(--l-cream)] shadow-2xl"
+            className="landing fixed left-1/2 top-1/2 z-50 w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border-2 border-[var(--l-ink)] bg-[var(--l-cream)] shadow-2xl"
             style={{ maxHeight: "88vh" }}
           >
             {stage === "active" ? (
@@ -285,7 +306,8 @@ export function CreateAgentModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
