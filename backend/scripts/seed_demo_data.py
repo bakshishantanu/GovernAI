@@ -25,6 +25,7 @@ from app.runtime.figma.models import (
     FigmaSection,
     FigmaWireframeRequest,
 )
+from app.runtime.rag.embeddings import GeminiEmbeddingProvider
 
 connect_args = {"statement_cache_size": 0} if "pooler.supabase.com" in settings.DATABASE_URL else {}
 engine = create_async_engine(settings.DATABASE_URL, echo=False, connect_args=connect_args)
@@ -49,6 +50,13 @@ async def derive_permissions(session, passport_id: uuid.UUID, skill_ids: list[st
 
 
 async def seed_data():
+    # Real embeddings for the seeded documents below, not a placeholder: a
+    # zero vector can never be the nearest neighbor to a real query, so
+    # documents seeded that way are permanently unsearchable regardless of
+    # what's asked (found live testing multi-skill agents — the search
+    # legitimately ran and was allowed, it just could never find them).
+    embedding_provider = GeminiEmbeddingProvider(api_key=settings.GEMINI_API_KEY)
+
     async with AsyncSessionLocal() as session:
         org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
         admin_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -293,6 +301,28 @@ async def seed_data():
         )
 
         # 4. Documents
+        doc_1_content = "All refunds must be processed within 14 days of purchase. No exceptions."
+        doc_2_content = "VIP customers (tagged in Zendesk) receive automatic 10% concessions."
+        doc_3_content = (
+            "PRD: Mobile Checkout Flow Redesign. Layout: mobile. "
+            "Sections: Order Summary ($96.12 total), "
+            "Express Payment (Apple Pay, Credit Card), "
+            "Shipping Address, Action CTA 'Complete Purchase'. "
+            "Colors: Canvas #FBF7EE, Header #1E1B4B, Button #FF3366."
+        )
+        # embed_batch, not embed: the whole seed runs as one transaction,
+        # committed only at the very end (see below), and embed() has no
+        # retry/backoff around a transient 429/503 the way embed_batch's
+        # _post_batch_with_retry does - the exact same reason the real
+        # document-ingestion path (documents/service.py) already uses
+        # embed_batch over embed for this. Without it, a single rate-limited
+        # embedding call would abort the entire seed run, not just these
+        # three documents - confirmed hitting a transient Gemini 503 live
+        # while patching this same data.
+        doc_1_embedding, doc_2_embedding, doc_3_embedding = await embedding_provider.embed_batch(
+            [doc_1_content, doc_2_content, doc_3_content]
+        )
+
         doc_id_1 = uuid.uuid4()
         session.add(
             Document(
@@ -307,8 +337,8 @@ async def seed_data():
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_1,
-                content="All refunds must be processed within 14 days of purchase. No exceptions.",
-                embedding=[0.0] * 768,
+                content=doc_1_content,
+                embedding=doc_1_embedding,
                 chunk_index=0,
             )
         )
@@ -327,8 +357,8 @@ async def seed_data():
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_2,
-                content="VIP customers (tagged in Zendesk) receive automatic 10% concessions.",
-                embedding=[0.0] * 768,
+                content=doc_2_content,
+                embedding=doc_2_embedding,
                 chunk_index=0,
             )
         )
@@ -347,14 +377,8 @@ async def seed_data():
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_3,
-                content=(
-                    "PRD: Mobile Checkout Flow Redesign. Layout: mobile. "
-                    "Sections: Order Summary ($96.12 total), "
-                    "Express Payment (Apple Pay, Credit Card), "
-                    "Shipping Address, Action CTA 'Complete Purchase'. "
-                    "Colors: Canvas #FBF7EE, Header #1E1B4B, Button #FF3366."
-                ),
-                embedding=[0.0] * 768,
+                content=doc_3_content,
+                embedding=doc_3_embedding,
                 chunk_index=0,
             )
         )
