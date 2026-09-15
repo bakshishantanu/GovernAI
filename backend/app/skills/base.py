@@ -26,6 +26,17 @@ class BaseTool(ABC):
     @abstractmethod
     async def execute(self, **kwargs: Any) -> Any: ...
 
+    def enrich_arguments(self, arguments: dict, prior_messages: list[dict]) -> dict:
+        """Hook to auto-fill arguments the model omitted, using the results of
+        earlier tool calls in this same execution (see agent_graph.tools_node).
+
+        Returns the arguments unchanged by default. A tool overrides this only
+        when one of its optional arguments can be derived deterministically
+        from prior tool output instead of depending on the model choosing to
+        pass it (e.g. citing the document a preceding search actually found).
+        """
+        return arguments
+
     def audit_metadata(self, arguments: dict, result: Any) -> dict | None:
         """What of this call is worth keeping on the audit record.
 

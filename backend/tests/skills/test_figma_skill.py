@@ -529,6 +529,57 @@ async def test_generate_wireframe_tool_invalid_layout_rejection():
     assert "unsupported" in res["reason"]
 
 
+def test_enrich_arguments_fills_source_spec_doc_from_prior_solr_search():
+    """The model doesn't always pass source_spec_doc even when it just used a
+    search_solr result to build the wireframe (that argument is optional and
+    LLM-discretionary). enrich_arguments should ground it deterministically to
+    whatever document the most recent search_solr call actually found."""
+    tool = GenerateFigmaWireframeTool(adapter=FigmaAdapter())
+    prior_messages = [
+        {"role": "assistant", "content": None, "tool_calls": []},
+        {
+            "role": "tool",
+            "tool_call_id": "call_1",
+            "content": (
+                '{"success": true, "documents": '
+                '[{"id": "KB-001", "title": "Password Reset Procedure"}], '
+                '"total_found": 1}'
+            ),
+        },
+    ]
+
+    enriched = tool.enrich_arguments(
+        {"screen_name": "Password Reset", "layout_type": "desktop"}, prior_messages
+    )
+
+    assert enriched["source_spec_doc"] == "KB-001"
+
+
+def test_enrich_arguments_respects_explicit_source_spec_doc():
+    tool = GenerateFigmaWireframeTool(adapter=FigmaAdapter())
+    prior_messages = [
+        {
+            "role": "tool",
+            "content": '{"success": true, "documents": [{"id": "KB-002"}]}',
+        },
+    ]
+
+    enriched = tool.enrich_arguments(
+        {"screen_name": "VPN Setup", "source_spec_doc": "KB-999"}, prior_messages
+    )
+
+    assert enriched["source_spec_doc"] == "KB-999"
+
+
+def test_enrich_arguments_no_op_without_prior_solr_search():
+    tool = GenerateFigmaWireframeTool(adapter=FigmaAdapter())
+    prior_messages = [{"role": "assistant", "content": "just thinking out loud"}]
+
+    enriched = tool.enrich_arguments({"screen_name": "Dashboard"}, prior_messages)
+
+    assert "source_spec_doc" not in enriched
+
+
 def test_figma_skill_metadata_and_permissions():
     skill = FigmaDesignSkill(adapter=FigmaAdapter())
     assert skill.name == "figma_design"

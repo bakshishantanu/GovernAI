@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from app.runtime.figma.adapter import FigmaAdapter, FigmaError, FigmaTimeoutError
@@ -113,6 +114,31 @@ class GenerateFigmaWireframeTool(BaseTool):
 
     def __init__(self, adapter: FigmaAdapter) -> None:
         self._adapter = adapter
+
+    def enrich_arguments(self, arguments: dict, prior_messages: list[dict]) -> dict:
+        # source_spec_doc is optional in the schema, so whether a wireframe
+        # gets grounded to the document a preceding search_solr call actually
+        # found is otherwise up to the model choosing to pass it — it does so
+        # inconsistently. If the model already named a doc, respect it;
+        # otherwise fall back to the id of the top result from the most
+        # recent successful search_solr call in this execution, if any.
+        if arguments.get("source_spec_doc"):
+            return arguments
+        for message in reversed(prior_messages):
+            if message.get("role") != "tool":
+                continue
+            try:
+                content = json.loads(message.get("content") or "")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(content, dict):
+                continue
+            docs = content.get("documents")
+            if isinstance(docs, list) and docs and isinstance(docs[0], dict):
+                doc_id = docs[0].get("id")
+                if doc_id:
+                    return {**arguments, "source_spec_doc": doc_id}
+        return arguments
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         screen_name = kwargs.get("screen_name", "").strip()
