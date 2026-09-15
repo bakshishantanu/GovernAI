@@ -98,6 +98,9 @@ def build_agent_graph(
                     org_id, agent_id, execution_id, name, False, "Unknown tool"
                 )
             else:
+                # Let the tool fill in anything the model left out using
+                # earlier tool results in this execution (see BaseTool.enrich_arguments).
+                arguments = tool.enrich_arguments(arguments, state["messages"])
                 # GOVERNANCE GATE: policy check + timed execution + audit log,
                 # for every tool call, allowed or denied.
                 result = await govern_tool(
