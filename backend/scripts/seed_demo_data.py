@@ -301,6 +301,28 @@ async def seed_data():
         )
 
         # 4. Documents
+        doc_1_content = "All refunds must be processed within 14 days of purchase. No exceptions."
+        doc_2_content = "VIP customers (tagged in Zendesk) receive automatic 10% concessions."
+        doc_3_content = (
+            "PRD: Mobile Checkout Flow Redesign. Layout: mobile. "
+            "Sections: Order Summary ($96.12 total), "
+            "Express Payment (Apple Pay, Credit Card), "
+            "Shipping Address, Action CTA 'Complete Purchase'. "
+            "Colors: Canvas #FBF7EE, Header #1E1B4B, Button #FF3366."
+        )
+        # embed_batch, not embed: the whole seed runs as one transaction,
+        # committed only at the very end (see below), and embed() has no
+        # retry/backoff around a transient 429/503 the way embed_batch's
+        # _post_batch_with_retry does - the exact same reason the real
+        # document-ingestion path (documents/service.py) already uses
+        # embed_batch over embed for this. Without it, a single rate-limited
+        # embedding call would abort the entire seed run, not just these
+        # three documents - confirmed hitting a transient Gemini 503 live
+        # while patching this same data.
+        doc_1_embedding, doc_2_embedding, doc_3_embedding = await embedding_provider.embed_batch(
+            [doc_1_content, doc_2_content, doc_3_content]
+        )
+
         doc_id_1 = uuid.uuid4()
         session.add(
             Document(
@@ -311,13 +333,12 @@ async def seed_data():
                 access_scope=["public"],
             )
         )
-        doc_1_content = "All refunds must be processed within 14 days of purchase. No exceptions."
         session.add(
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_1,
                 content=doc_1_content,
-                embedding=await embedding_provider.embed(doc_1_content),
+                embedding=doc_1_embedding,
                 chunk_index=0,
             )
         )
@@ -332,13 +353,12 @@ async def seed_data():
                 access_scope=["internal"],
             )
         )
-        doc_2_content = "VIP customers (tagged in Zendesk) receive automatic 10% concessions."
         session.add(
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_2,
                 content=doc_2_content,
-                embedding=await embedding_provider.embed(doc_2_content),
+                embedding=doc_2_embedding,
                 chunk_index=0,
             )
         )
@@ -353,19 +373,12 @@ async def seed_data():
                 access_scope=["public"],
             )
         )
-        doc_3_content = (
-            "PRD: Mobile Checkout Flow Redesign. Layout: mobile. "
-            "Sections: Order Summary ($96.12 total), "
-            "Express Payment (Apple Pay, Credit Card), "
-            "Shipping Address, Action CTA 'Complete Purchase'. "
-            "Colors: Canvas #FBF7EE, Header #1E1B4B, Button #FF3366."
-        )
         session.add(
             DocumentChunk(
                 id=uuid.uuid4(),
                 document_id=doc_id_3,
                 content=doc_3_content,
-                embedding=await embedding_provider.embed(doc_3_content),
+                embedding=doc_3_embedding,
                 chunk_index=0,
             )
         )
