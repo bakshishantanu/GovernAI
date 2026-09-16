@@ -12,6 +12,55 @@ class AuditService:
         self.audit_repo = audit_repo
         self.event_bus = event_bus
 
+    async def log_connection_saved(
+        self, org_id: UUID, actor_id: UUID, requirement_key: str, label: str
+    ) -> None:
+        """A connection (e.g. Jira credentials) is a shared, org-wide
+        credential -- one person saving or overwriting it affects every
+        agent in the org that needs it, not just the one they were looking
+        at. Without this, GovernAI's own audit log couldn't answer "who
+        connected/changed our Jira integration, and when" for its own
+        governance feature."""
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="connection_saved",
+            resource=requirement_key,
+            policy_decision="ALLOW",
+            reason=f"Connection saved: {label}",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.connection.saved",
+                {"org_id": str(org_id), "requirement_key": requirement_key},
+            )
+        )
+
+    async def log_connection_deleted(
+        self, org_id: UUID, actor_id: UUID, requirement_key: str
+    ) -> None:
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="connection_deleted",
+            resource=requirement_key,
+            policy_decision="ALLOW",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.connection.deleted",
+                {"org_id": str(org_id), "requirement_key": requirement_key},
+            )
+        )
+
     async def log_agent_created(self, org_id: UUID, actor_id: UUID, agent_id: UUID):
         event = AuditEvent(
             id=uuid.uuid4(),

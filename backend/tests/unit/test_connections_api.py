@@ -41,6 +41,7 @@ async def test_save_connection_commits_and_returns_it(current_user):
     )
     service.save_connection.return_value = saved
     db = AsyncMock()
+    audit_service = AsyncMock()
 
     envelope = await save_connection(
         requirement_key="jira",
@@ -50,6 +51,7 @@ async def test_save_connection_commits_and_returns_it(current_user):
         user=current_user,
         db=db,
         service=service,
+        audit_service=audit_service,
     )
 
     db.commit.assert_awaited_once()
@@ -57,13 +59,63 @@ async def test_save_connection_commits_and_returns_it(current_user):
 
 
 @pytest.mark.asyncio
+async def test_save_connection_writes_an_audit_event():
+    """A connection is a shared, org-wide credential -- saving/overwriting one
+    must be traceable the same way every other governance-relevant action is."""
+    current_user = CurrentUser(id=uuid.uuid4(), org_id=uuid.uuid4(), role="agent_builder")
+    service = AsyncMock()
+    service.save_connection.return_value = ConnectionModel(
+        id=uuid.uuid4(), org_id=current_user.org_id, requirement_key="jira",
+        type="credentials", label="Jira account", status="CONNECTED", preview={},
+    )
+    db = AsyncMock()
+    audit_service = AsyncMock()
+
+    await save_connection(
+        requirement_key="jira",
+        payload=SaveConnectionRequest(
+            type="credentials", label="Jira account", fields={"api_token": "x"}
+        ),
+        user=current_user,
+        db=db,
+        service=service,
+        audit_service=audit_service,
+    )
+
+    audit_service.log_connection_saved.assert_awaited_once_with(
+        current_user.org_id, current_user.id, requirement_key="jira", label="Jira account"
+    )
+
+
+@pytest.mark.asyncio
 async def test_delete_connection_404s_when_nothing_deleted(current_user):
     service = AsyncMock()
     service.delete_connection.return_value = False
     db = AsyncMock()
+    audit_service = AsyncMock()
 
     with pytest.raises(HTTPException) as exc:
         await delete_connection(
-            requirement_key="jira", user=current_user, db=db, service=service
+            requirement_key="jira", user=current_user, db=db, service=service,
+            audit_service=audit_service,
         )
     assert exc.value.status_code == 404
+    audit_service.log_connection_deleted.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_connection_writes_an_audit_event(current_user):
+    service = AsyncMock()
+    service.delete_connection.return_value = True
+    db = AsyncMock()
+    audit_service = AsyncMock()
+
+    await delete_connection(
+        requirement_key="jira", user=current_user, db=db, service=service,
+        audit_service=audit_service,
+    )
+
+    audit_service.log_connection_deleted.assert_awaited_once_with(
+        current_user.org_id, current_user.id, requirement_key="jira"
+    )
+    db.commit.assert_awaited_once()
