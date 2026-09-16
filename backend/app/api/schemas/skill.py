@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 TrustLevel = Literal["VERIFIED", "COMMUNITY", "EXPERIMENTAL"]
 
@@ -52,7 +52,16 @@ class SkillResponse(BaseModel):
     version: str
     trust_level: TrustLevel
     tools: list[ToolResponse]
-    required_permissions: list[str] = []
+    # validation_alias is load-bearing: SkillModel's ORM attribute is named
+    # `permissions` (see domain/skills/models.py), not `required_permissions`.
+    # Without this, from_attributes=True never finds a `required_permissions`
+    # attribute on a real SkillModel and silently falls back to the `[]`
+    # default below -- the extract_permissions validator never even runs on
+    # real data. Confirmed live: GET /skills/ returned required_permissions:
+    # [] for every skill despite each one having real SkillPermission rows
+    # (agent creation itself was unaffected, since it reads `skill.permissions`
+    # directly rather than through this schema).
+    required_permissions: list[str] = Field(default=[], validation_alias="permissions")
     requirements: list[SkillRequirementResponse] = []
 
     @field_validator("trust_level", mode="before")

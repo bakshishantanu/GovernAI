@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from app.api.schemas.skill import SkillRequirementResponse, SkillResponse
-from app.domain.skills.models import SkillModel, SkillRequirementModel
+from app.domain.skills.models import SkillModel, SkillPermission, SkillRequirementModel
 from app.skills.base import BaseSkill, SkillRequirement, SkillRequirementField, TrustLevel
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.ticketing import TicketingSkill
@@ -92,3 +92,30 @@ def test_skill_requirement_response_normalizes_a_null_fields_column_to_empty_lis
         {"key": "documents", "type": "file_upload", "label": "Docs", "fields": None}
     )
     assert response.fields == []
+
+
+def test_skill_response_required_permissions_reflects_real_skill_permissions():
+    """SkillModel's ORM attribute is `permissions` (see domain/skills/models.py),
+    not `required_permissions` -- a field named `required_permissions` with no
+    validation_alias pointing at `permissions` reads nothing from a real ORM
+    object under `from_attributes=True` and silently falls back to its `[]`
+    default, no matter how many SkillPermission rows the skill actually has.
+    This is what the create-agent modal shows the builder under 'permissions
+    are derived, never hand-picked' -- if it's always empty, that promise is a
+    lie. The actual grant (AgentService.create_agent) is unaffected, since it
+    reads `skill.permissions` directly in Python rather than through this
+    schema -- this bug is specifically about what gets *displayed*."""
+    db_skill = SkillModel(
+        id="ticketing", name="ticketing", display_name="Ticketing", description="d",
+        version="1.0.0", trust_level="VERIFIED",
+    )
+    db_skill.tools = []
+    db_skill.requirements = []
+    db_skill.permissions = [
+        SkillPermission(id=uuid.uuid4(), skill_id="ticketing", permission="ticket:read"),
+        SkillPermission(id=uuid.uuid4(), skill_id="ticketing", permission="ticket:create"),
+    ]
+
+    response = SkillResponse.model_validate(db_skill)
+
+    assert set(response.required_permissions) == {"ticket:read", "ticket:create"}
