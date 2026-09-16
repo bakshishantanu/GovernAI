@@ -146,11 +146,23 @@ async def test_activate_agent_rejects_non_approved():
 
 
 async def test_activate_agent_activates_approved_agent():
+    from unittest.mock import AsyncMock as _AsyncMock
+    from unittest.mock import patch
+
     service, agent_repo, _, perm_repo = _service()
     agent = _agent_with_passport(lifecycle_state="APPROVED")
     agent_repo.get_agent.return_value = agent
 
-    activated = await service.activate_agent(agent.id)
+    # activate_agent now also checks this agent's skills' requirements (see
+    # domain/connections/requirements.py) -- that check has its own tests in
+    # test_agent_activation_requirements.py, so it's stubbed out satisfied
+    # here rather than deep-mocking a SQLAlchemy session round trip that has
+    # nothing to do with what this test verifies.
+    with patch(
+        "app.domain.agents.service.resolve_requirements",
+        new=_AsyncMock(return_value=[]),
+    ):
+        activated = await service.activate_agent(agent.id)
 
     assert activated.status == "ACTIVE"
     assert activated.passport.lifecycle_state == "ACTIVE"
@@ -257,10 +269,16 @@ async def test_activate_agent_fulfills_linked_request():
     agent_repo.get_agent.return_value = agent
     agent_repo.session = MagicMock()
 
-    with patch(
-        "app.domain.agent_requests.service.AgentRequestService.fulfill_request",
-        new_callable=AsyncMock,
-    ) as mock_fulfill:
+    with (
+        patch(
+            "app.domain.agents.service.resolve_requirements",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.domain.agent_requests.service.AgentRequestService.fulfill_request",
+            new_callable=AsyncMock,
+        ) as mock_fulfill,
+    ):
         activated = await service.activate_agent(agent.id)
         assert activated.status == "ACTIVE"
         mock_fulfill.assert_awaited_once_with(agent.request_id, agent.id)
