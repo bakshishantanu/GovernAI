@@ -12,6 +12,125 @@ class AuditService:
         self.audit_repo = audit_repo
         self.event_bus = event_bus
 
+    async def log_policy_created(
+        self, org_id: UUID, actor_id: UUID, policy_id: UUID, name: str
+    ) -> None:
+        """A policy is the actual rule set constraining every agent in the
+        org -- creating, changing, disabling, or deleting one is exactly the
+        kind of action a governance/audit platform must never leave silent."""
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="policy_created",
+            resource=str(policy_id),
+            policy_decision="ALLOW",
+            reason=f"Policy created: {name}",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.policy.created", {"policy_id": str(policy_id), "org_id": str(org_id)}
+            )
+        )
+
+    async def log_policy_updated(
+        self, org_id: UUID, actor_id: UUID, policy_id: UUID, reason: str
+    ) -> None:
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="policy_updated",
+            resource=str(policy_id),
+            policy_decision="ALLOW",
+            reason=reason,
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.policy.updated", {"policy_id": str(policy_id), "org_id": str(org_id)}
+            )
+        )
+
+    async def log_policy_deleted(
+        self, org_id: UUID, actor_id: UUID, policy_id: UUID, name: str
+    ) -> None:
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="policy_deleted",
+            resource=str(policy_id),
+            policy_decision="ALLOW",
+            reason=f"Policy deleted: {name}",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.policy.deleted", {"policy_id": str(policy_id), "org_id": str(org_id)}
+            )
+        )
+
+    async def log_policy_rule_added(
+        self, org_id: UUID, actor_id: UUID, policy_id: UUID, rule_id: UUID, rule_type: str
+    ) -> None:
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="policy_rule_added",
+            resource=str(rule_id),
+            policy_decision="ALLOW",
+            reason=f"Rule added to policy {policy_id}: {rule_type}",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.policy.rule_added",
+                {"policy_id": str(policy_id), "rule_id": str(rule_id), "org_id": str(org_id)},
+            )
+        )
+
+    async def log_policy_rule_toggled(
+        self, org_id: UUID, actor_id: UUID, policy_id: UUID, rule_id: UUID, enabled: bool
+    ) -> None:
+        """FRD-14's whole point is that disabling a rule takes effect
+        immediately with no redeploy -- that same moment is exactly when an
+        audit trail matters most, since a disabled rule is a gap in coverage
+        someone deliberately opened."""
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            action="policy_rule_enabled" if enabled else "policy_rule_disabled",
+            resource=str(rule_id),
+            policy_decision="ALLOW",
+            reason=f"Rule {rule_id} on policy {policy_id} {'enabled' if enabled else 'disabled'}",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.policy.rule_toggled",
+                {
+                    "policy_id": str(policy_id),
+                    "rule_id": str(rule_id),
+                    "org_id": str(org_id),
+                    "enabled": enabled,
+                },
+            )
+        )
+
     async def log_connection_saved(
         self, org_id: UUID, actor_id: UUID, requirement_key: str, label: str
     ) -> None:
