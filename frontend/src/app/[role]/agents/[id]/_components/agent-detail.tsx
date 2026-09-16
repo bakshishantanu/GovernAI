@@ -12,6 +12,7 @@ import { PassportPanel } from "./passport-panel";
 import { RunGoalCard } from "./run-goal-card";
 import { AgentRunsList } from "./agent-runs-list";
 import { AgentAuditFeed } from "./agent-audit-feed";
+import { AgentConnectionsPanel } from "./agent-connections-panel";
 import type { Agent, Budget } from "../../_components/agent-types";
 
 /**
@@ -118,6 +119,7 @@ export function AgentDetail({ id }: { id: string }) {
         </div>
         <div className="space-y-4">
           <PassportPanel agent={agent} budget={budget} />
+          <AgentConnectionsPanel agentId={agent.id} />
           <AgentAuditFeed agentId={agent.id} />
         </div>
       </div>
