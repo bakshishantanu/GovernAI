@@ -37,7 +37,14 @@ async def test_bootstrap_registers_all_three_mvp_skills_independently():
 
 async def test_bootstrap_skips_only_the_skill_that_already_exists():
     async def get_skill(skill_id):
-        return object() if skill_id == "ticketing" else None
+        # A real get_skill() returns a SkillModel with .id/.requirements --
+        # bootstrap() now reads both on the "already exists" path (it
+        # re-syncs requirements even for a skill it doesn't re-create).
+        if skill_id == "ticketing":
+            existing = SkillModel(id="ticketing")
+            existing.requirements = []
+            return existing
+        return None
 
     skill_repo = AsyncMock()
     skill_repo.get_skill.side_effect = get_skill

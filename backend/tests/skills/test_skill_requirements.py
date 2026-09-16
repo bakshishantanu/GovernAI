@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import uuid
+
+from app.api.schemas.skill import SkillResponse
+from app.domain.skills.models import SkillModel, SkillRequirementModel
 from app.skills.base import BaseSkill, SkillRequirement, SkillRequirementField, TrustLevel
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.ticketing import TicketingSkill
@@ -55,3 +59,25 @@ def test_document_search_skill_requires_file_upload():
     assert len(reqs) == 1
     assert reqs[0].key == "documents"
     assert reqs[0].type == "file_upload"
+
+
+def test_skill_response_serializes_requirements():
+    db_skill = SkillModel(
+        id="ticketing", name="ticketing", display_name="Ticketing", description="d",
+        version="1.0.0", trust_level="VERIFIED",
+    )
+    db_skill.tools = []
+    db_skill.permissions = []
+    db_skill.requirements = [
+        SkillRequirementModel(
+            id=uuid.uuid4(), skill_id="ticketing", key="jira", type="credentials",
+            label="Jira account", description="Needed to read and post tickets.",
+            fields=[{"key": "api_token", "label": "API token", "secret": True, "placeholder": ""}],
+        )
+    ]
+
+    response = SkillResponse.model_validate(db_skill)
+
+    assert len(response.requirements) == 1
+    assert response.requirements[0].key == "jira"
+    assert response.requirements[0].fields[0].secret is True

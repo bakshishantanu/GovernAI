@@ -15,6 +15,25 @@ class ToolResponse(BaseModel):
     required_permission: str
 
 
+class SkillRequirementFieldResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    label: str
+    secret: bool = False
+    placeholder: str = ""
+
+
+class SkillRequirementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    type: str
+    label: str
+    description: str = ""
+    fields: list[SkillRequirementFieldResponse] = []
+
+
 class SkillResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -26,6 +45,7 @@ class SkillResponse(BaseModel):
     trust_level: TrustLevel
     tools: list[ToolResponse]
     required_permissions: list[str] = []
+    requirements: list[SkillRequirementResponse] = []
 
     @field_validator("trust_level", mode="before")
     @classmethod
