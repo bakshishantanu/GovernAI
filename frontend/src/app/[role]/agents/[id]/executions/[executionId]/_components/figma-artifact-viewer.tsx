@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutTemplate,
@@ -20,7 +20,17 @@ import {
   ShieldCheck,
   ChevronRight,
   ChevronDown,
+  Archive,
+  Code2,
+  Globe,
+  Loader2,
 } from "lucide-react";
+import {
+  downloadStandaloneHtml,
+  downloadHtmlFile,
+  downloadCssFile,
+  downloadZipBundle,
+} from "./figma-code-generator";
 
 export interface FigmaWireframeArtifact {
   wireframe_id?: string;
@@ -61,6 +71,24 @@ export function FigmaArtifactViewer({
   const [copiedHex, setCopiedHex] = useState<string | null>(null);
   const [iframeLoading, setIframeLoading] = useState(true);
   const [showNodeTree, setShowNodeTree] = useState(true);
+  const [codeDropdownOpen, setCodeDropdownOpen] = useState(false);
+  const [isPackagingZip, setIsPackagingZip] = useState(false);
+  const [downloadSuccessMessage, setDownloadSuccessMessage] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setCodeDropdownOpen(false);
+      }
+    }
+    if (codeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [codeDropdownOpen]);
 
   const screenName = artifact.screen_name || "Figma Design Frame";
   const layoutType = (artifact.layout_type || "desktop").toLowerCase();
@@ -111,6 +139,54 @@ export function FigmaArtifactViewer({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const showFeedback = (msg: string) => {
+    setDownloadSuccessMessage(msg);
+    setTimeout(() => setDownloadSuccessMessage(null), 2400);
+  };
+
+  const handleDownloadStandalone = () => {
+    try {
+      downloadStandaloneHtml(artifact);
+      showFeedback("Downloaded Standalone HTML");
+      setCodeDropdownOpen(false);
+    } catch (e) {
+      console.error("Failed to download standalone HTML", e);
+    }
+  };
+
+  const handleDownloadHtml = () => {
+    try {
+      downloadHtmlFile(artifact);
+      showFeedback("Downloaded index.html");
+      setCodeDropdownOpen(false);
+    } catch (e) {
+      console.error("Failed to download HTML", e);
+    }
+  };
+
+  const handleDownloadCss = () => {
+    try {
+      downloadCssFile(artifact);
+      showFeedback("Downloaded styles.css");
+      setCodeDropdownOpen(false);
+    } catch (e) {
+      console.error("Failed to download CSS", e);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    try {
+      setIsPackagingZip(true);
+      await downloadZipBundle(artifact);
+      showFeedback("Downloaded Code Package (.zip)");
+      setCodeDropdownOpen(false);
+    } catch (e) {
+      console.error("Failed to compile ZIP bundle", e);
+    } finally {
+      setIsPackagingZip(false);
+    }
   };
 
   const figmaExternalUrl =
@@ -213,9 +289,151 @@ export function FigmaArtifactViewer({
               title="Download Rendered SVG"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Download</span>
+              <span>SVG</span>
             </button>
           )}
+
+          {/* Download Code Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setCodeDropdownOpen((open) => !open)}
+              className="flex items-center gap-1.5 rounded-xl border-2 border-[var(--l-orange-deep)]/30 bg-[var(--l-orange)]/10 px-3 py-1.5 text-xs font-bold text-[var(--l-orange-deep)] shadow-xs transition hover:bg-[var(--l-orange)]/20 active:scale-95 dark:border-[var(--l-orange)]/40 dark:bg-[var(--l-orange)]/15"
+              title="Export HTML & CSS Code"
+            >
+              {isPackagingZip ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Code2 className="h-3.5 w-3.5" />
+              )}
+              <span>Download Code</span>
+              <ChevronDown
+                className={`h-3 w-3 transition-transform duration-200 ${
+                  codeDropdownOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {codeDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border-2 border-[var(--l-line)] bg-[var(--l-cream)] p-2 shadow-xl backdrop-blur-md dark:bg-[#1a1b20]"
+                >
+                  <div className="border-b border-[var(--l-line)] px-2.5 py-1.5 mb-1">
+                    <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
+                      Developer Handoff • HTML5 & CSS
+                    </p>
+                  </div>
+
+                  {/* Option 1: Full ZIP Package */}
+                  <button
+                    onClick={handleDownloadZip}
+                    disabled={isPackagingZip}
+                    className="flex w-full items-start gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/80 active:bg-white dark:hover:bg-white/10"
+                  >
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--l-orange)]/20 text-[var(--l-orange-deep)]">
+                      {isPackagingZip ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Archive className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[var(--l-ink)]">
+                          Full Package (.zip)
+                        </span>
+                        <span className="rounded bg-[var(--l-orange)]/15 px-1.5 py-0.2 font-mono text-[9px] font-bold text-[var(--l-orange-deep)]">
+                          Recommended
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[var(--l-charcoal)]/70">
+                        Bundled HTML, CSS stylesheet & README handoff specs
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Standalone HTML */}
+                  <button
+                    onClick={handleDownloadStandalone}
+                    className="flex w-full items-start gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/80 active:bg-white dark:hover:bg-white/10"
+                  >
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--l-teal)]/20 text-[var(--l-teal)]">
+                      <Globe className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[var(--l-ink)]">
+                          Standalone HTML (.html)
+                        </span>
+                        <span className="font-mono text-[9px] text-[var(--l-charcoal)]/50">
+                          Zero server
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[var(--l-charcoal)]/70">
+                        Single file with embedded styles — double-click to view anywhere
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Option 3: index.html */}
+                  <button
+                    onClick={handleDownloadHtml}
+                    className="flex w-full items-start gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/80 active:bg-white dark:hover:bg-white/10"
+                  >
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                      <FileCode className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-[var(--l-ink)]">
+                        HTML Markup (index.html)
+                      </span>
+                      <p className="text-[11px] text-[var(--l-charcoal)]/70">
+                        Semantic HTML5 linking to external stylesheet
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Option 4: styles.css */}
+                  <button
+                    onClick={handleDownloadCss}
+                    className="flex w-full items-start gap-2.5 rounded-xl p-2 text-left transition hover:bg-white/80 active:bg-white dark:hover:bg-white/10"
+                  >
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400">
+                      <Palette className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-[var(--l-ink)]">
+                        CSS Stylesheet (styles.css)
+                      </span>
+                      <p className="text-[11px] text-[var(--l-charcoal)]/70">
+                        GovernAI tokens & responsive component rules
+                      </p>
+                    </div>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Feedback Pill */}
+          <AnimatePresence>
+            {downloadSuccessMessage && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
+              >
+                <Check className="h-3 w-3" />
+                <span>{downloadSuccessMessage}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Open in Figma External Link */}
           {figmaExternalUrl && (
