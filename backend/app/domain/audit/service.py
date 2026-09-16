@@ -77,6 +77,44 @@ class AuditService:
             Event.create("audit.agent.created", {"agent_id": str(agent_id), "org_id": str(org_id)})
         )
 
+    async def log_agent_activated(self, org_id: UUID, actor_id: UUID, agent_id: UUID) -> None:
+        """The moment an agent goes from APPROVED to ACTIVE -- the single
+        most consequential transition an agent has, since only an ACTIVE
+        agent may actually run and spend money. Confirmed live this had no
+        audit method at all before this fix."""
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            agent_id=agent_id,
+            action="agent_activated",
+            policy_decision="ALLOW",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create(
+                "audit.agent.activated", {"agent_id": str(agent_id), "org_id": str(org_id)}
+            )
+        )
+
+    async def log_agent_deleted(self, org_id: UUID, actor_id: UUID, agent_id: UUID) -> None:
+        event = AuditEvent(
+            id=uuid.uuid4(),
+            org_id=org_id,
+            actor_type="user",
+            actor_id=actor_id,
+            agent_id=agent_id,
+            action="agent_deleted",
+            policy_decision="ALLOW",
+            timestamp=datetime.now(timezone.utc),
+        )
+        await self.audit_repo.record_event(event)
+        await self.event_bus.publish(
+            Event.create("audit.agent.deleted", {"agent_id": str(agent_id), "org_id": str(org_id)})
+        )
+
     async def log_agent_suspended(self, org_id: UUID, actor_id: UUID, agent_id: UUID, reason: str):
         event = AuditEvent(
             id=uuid.uuid4(),

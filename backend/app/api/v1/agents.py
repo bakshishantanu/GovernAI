@@ -73,6 +73,7 @@ async def create_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Create a new agent draft."""
     assigned_user_id = payload.assigned_user_id
@@ -94,6 +95,7 @@ async def create_agent(
             request_id=payload.request_id,
             assigned_user_id=assigned_user_id,
         )
+        await audit_service.log_agent_created(user.org_id, user.id, agent.id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except SkillNotFoundError as e:
@@ -250,6 +252,7 @@ async def activate_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Activate an approved agent."""
     agent = await service.agent_repo.get_agent(agent_id)
@@ -261,6 +264,7 @@ async def activate_agent(
 
     try:
         await service.activate_agent(agent_id)
+        await audit_service.log_agent_activated(user.org_id, user.id, agent_id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except InvalidStateTransitionError as e:
@@ -322,6 +326,7 @@ async def delete_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete an agent, from any lifecycle state (owner or admin only).
 
@@ -343,6 +348,7 @@ async def delete_agent(
     except InvalidStateTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
+    await audit_service.log_agent_deleted(user.org_id, user.id, agent_id)
     await db.commit()
 
 

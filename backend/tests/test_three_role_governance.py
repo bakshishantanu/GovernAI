@@ -358,6 +358,7 @@ async def test_user_can_activate_own_agent(standard_user):
         user=standard_user,
         service=agent_service,
         db=make_db(),
+        audit_service=AsyncMock(),
     )
     assert res.data.id == agent_id
     agent_service.activate_agent.assert_awaited_once_with(agent_id)

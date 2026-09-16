@@ -83,10 +83,12 @@ async def test_delete_allows_admin_regardless_of_ownership():
     agent = _agent(org_id, uuid.uuid4())  # owned by someone else
     service = _service_with(agent)
     db = AsyncMock()
+    audit_service = AsyncMock()
 
-    await delete_agent(agent.id, user=admin, service=service, db=db)
+    await delete_agent(agent.id, user=admin, service=service, db=db, audit_service=audit_service)
 
     service.delete_agent.assert_awaited_once_with(agent.id)
+    audit_service.log_agent_deleted.assert_awaited_once_with(org_id, admin.id, agent.id)
     db.commit.assert_awaited_once()
 
 
@@ -97,10 +99,12 @@ async def test_delete_allows_the_owner():
     agent = _agent(org_id, builder.id)
     service = _service_with(agent)
     db = AsyncMock()
+    audit_service = AsyncMock()
 
-    await delete_agent(agent.id, user=builder, service=service, db=db)
+    await delete_agent(agent.id, user=builder, service=service, db=db, audit_service=audit_service)
 
     service.delete_agent.assert_awaited_once_with(agent.id)
+    audit_service.log_agent_deleted.assert_awaited_once_with(org_id, builder.id, agent.id)
     db.commit.assert_awaited_once()
 
 
@@ -112,8 +116,9 @@ async def test_delete_allows_active_agent():
     agent = _agent(org_id, builder.id, lifecycle_state="ACTIVE")
     service = _service_with(agent)
     db = AsyncMock()
+    audit_service = AsyncMock()
 
-    await delete_agent(agent.id, user=builder, service=service, db=db)
+    await delete_agent(agent.id, user=builder, service=service, db=db, audit_service=audit_service)
 
     service.delete_agent.assert_awaited_once_with(agent.id)
     db.commit.assert_awaited_once()
