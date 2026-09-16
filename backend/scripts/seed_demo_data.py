@@ -300,6 +300,54 @@ async def seed_data():
             session, passport_proto_id, ["figma_design", "solr_search", "document_search"]
         )
 
+        # Agent 4: Site Performance & SEO Auditor (equipped with site_audit)
+        req_audit_id = uuid.uuid4()
+        agent_audit_id = uuid.uuid4()
+        req_audit = AgentRequest(
+            id=req_audit_id,
+            org_id=org_id,
+            requester_id=builder2_id,
+            builder_id=builder_id,
+            agent_id=None,
+            title="Site Performance & Web Vitals Auditor",
+            description="Audits website performance, Core Web Vitals, SEO health, security headers, and crawls site structure.",
+            requested_skills=["site_audit"],
+            status="FULFILLED",
+            claimed_at=datetime.now(timezone.utc),
+            fulfilled_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(req_audit)
+        await session.flush()
+
+        agent_audit = Agent(
+            id=agent_audit_id,
+            org_id=org_id,
+            owner_id=builder_id,
+            assigned_user_id=builder2_id,
+            request_id=req_audit_id,
+            name="Web Performance & SEO Auditor",
+            description="Autonomous web auditor generating Lighthouse Core Web Vitals, performance diagnostics, security checks, and site crawl maps.",
+            status="ACTIVE",
+        )
+        session.add(agent_audit)
+        await session.flush()
+        req_audit.agent_id = agent_audit_id
+        await session.flush()
+
+        passport_audit_id = uuid.uuid4()
+        session.add(
+            AgentPassport(
+                id=passport_audit_id,
+                agent_id=agent_audit_id,
+                compliance_status="PASSED",
+                lifecycle_state="ACTIVE",
+                permissions=[],
+            )
+        )
+        session.add(AgentSkill(agent_id=agent_audit_id, skill_id="site_audit"))
+        await derive_permissions(session, passport_audit_id, ["site_audit"])
+
         # 4. Documents
         doc_1_content = "All refunds must be processed within 14 days of purchase. No exceptions."
         doc_2_content = "VIP customers (tagged in Zendesk) receive automatic 10% concessions."
