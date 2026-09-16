@@ -44,4 +44,11 @@ class Policy(Base):
         DateTime(timezone=True), server_default=text("now()")
     )
 
-    rules: Mapped[list[PolicyRule]] = relationship("PolicyRule", back_populates="policy")
+    # cascade="all, delete-orphan" is load-bearing: without it, deleting a
+    # Policy leaves SQLAlchemy trying to null out each rule's policy_id
+    # instead of deleting the rule -- and policy_id is NOT NULL, so deleting
+    # any policy that had rules 500'd with a constraint violation (confirmed
+    # live).
+    rules: Mapped[list[PolicyRule]] = relationship(
+        "PolicyRule", back_populates="policy", cascade="all, delete-orphan"
+    )
