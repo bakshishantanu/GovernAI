@@ -23,6 +23,8 @@ import {
   FileSearch,
   Search,
   Bot,
+  Activity,
+  Globe,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { API_BASE, getAuthHeader, fetchApi } from "@/lib/api-client";
@@ -32,6 +34,7 @@ import type { Execution } from "@/lib/types";
 import { money } from "../../../../_components/agent-types";
 import { accentFor } from "../../../../../skills/_components/skill-types";
 import { FigmaArtifactViewer, type FigmaWireframeArtifact } from "./figma-artifact-viewer";
+import { SiteAuditArtifactViewer, type SiteAuditArtifact } from "./site-audit-artifact-viewer";
 
 /**
  * Which skill each real tool belongs to, purely for display — the backend
@@ -51,6 +54,8 @@ const TOOL_SKILL: Record<string, { skillId: string; label: string; icon: LucideI
   facet_solr: { skillId: "solr_search", label: "Enterprise Search", icon: Search },
   generate_wireframe: { skillId: "figma_design", label: "Figma Design Studio", icon: LayoutTemplate },
   get_figma_components: { skillId: "figma_design", label: "Figma Design Studio", icon: LayoutTemplate },
+  audit_website: { skillId: "site_audit", label: "Site Audit & Performance", icon: Activity },
+  crawl_website: { skillId: "site_audit", label: "Site Audit & Performance", icon: Globe },
 };
 
 function skillFor(tool: string) {
@@ -328,6 +333,25 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
     return null;
   })();
 
+  // Extract Site Audit artifact if present in events or execution steps
+  const siteAuditArtifact: SiteAuditArtifact | null = (() => {
+    for (const e of events) {
+      if (e.kind === "allowed" && (e.tool === "audit_website" || e.tool === "crawl_website" || e.metadata)) {
+        const art = parseSiteAuditMetadata(e.metadata);
+        if (art) return art;
+      }
+    }
+    if (run?.steps && Array.isArray(run.steps)) {
+      for (const s of run.steps) {
+        if (s.tool === "audit_website" || s.tool === "crawl_website" || s.tool_result) {
+          const art = parseSiteAuditMetadata(s.tool_result) || parseSiteAuditMetadata((s as any).metadata_json);
+          if (art) return art;
+        }
+      }
+    }
+    return null;
+  })();
+
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <Link
@@ -386,7 +410,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           {TABS.map((t) => {
             const TIcon = t.icon;
             const on = tab === t.id;
-            const hasArtifactBadge = t.id === "artifacts" && Boolean(figmaArtifact);
+            const hasArtifactBadge = t.id === "artifacts" && (Boolean(figmaArtifact) || Boolean(siteAuditArtifact));
             return (
               <button
                 key={t.id}
@@ -435,10 +459,15 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
               error={runError ?? run?.error ?? null}
               live={live}
               artifact={figmaArtifact}
+              siteAuditArtifact={siteAuditArtifact}
               onViewArtifact={() => setTab("artifacts")}
             />
           ) : (
-            <ArtifactsTab artifact={figmaArtifact} live={live} />
+            <ArtifactsTab
+              artifact={figmaArtifact}
+              siteAuditArtifact={siteAuditArtifact}
+              live={live}
+            />
           )}
         </div>
       </div>
@@ -910,6 +939,33 @@ function parseArtifactMetadata(raw: any): FigmaWireframeArtifact | null {
   return null;
 }
 
+function parseSiteAuditMetadata(raw: any): SiteAuditArtifact | null {
+  if (!raw) return null;
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (parsed && typeof parsed === "object") {
+    if (parsed.audit_id || parsed.crawl_id || parsed.scores || parsed.vitals) {
+      return parsed as SiteAuditArtifact;
+    }
+    if (parsed.tool_result) {
+      return parseSiteAuditMetadata(parsed.tool_result);
+    }
+    if (parsed.artifact) {
+      return parseSiteAuditMetadata(parsed.artifact);
+    }
+    if (parsed.metadata) {
+      return parseSiteAuditMetadata(parsed.metadata);
+    }
+  }
+  return null;
+}
+
 function renderInlineMarkdown(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   const regex = /(\*\*[^*]+\*\*|`[^`]+`)/g;
@@ -1013,6 +1069,7 @@ function OutputTab({
   error,
   live,
   artifact,
+  siteAuditArtifact,
   onViewArtifact,
 }: {
   status: LiveStatus;
@@ -1020,6 +1077,7 @@ function OutputTab({
   error: string | null;
   live: boolean;
   artifact?: FigmaWireframeArtifact | null;
+  siteAuditArtifact?: SiteAuditArtifact | null;
   onViewArtifact?: () => void;
 }) {
   if (live) {
@@ -1030,6 +1088,43 @@ function OutputTab({
 
   return (
     <div className="space-y-4">
+      {siteAuditArtifact && (
+        <div
+          className="flex items-center justify-between rounded-xl border-2 p-3.5"
+          style={{
+            borderColor: "var(--l-ink)",
+            background: "color-mix(in srgb, var(--l-ink) 4%, var(--l-cream))",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+              style={{ background: "var(--l-ink)" }}
+            >
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
+                Site Performance Audit Generated
+              </div>
+              <div className="text-sm font-bold text-[var(--l-ink)]">
+                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditArtifact.scores?.performance ?? "—"}/100 · SEO: {siteAuditArtifact.scores?.seo ?? "—"}/100
+              </div>
+            </div>
+          </div>
+          {onViewArtifact && (
+            <button
+              onClick={onViewArtifact}
+              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105"
+              style={{ background: "var(--l-ink)" }}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              View in Artifacts
+            </button>
+          )}
+        </div>
+      )}
+
       {artifact && (
         <div
           className="flex items-center justify-between rounded-xl border-2 p-3.5"
@@ -1095,13 +1190,19 @@ function OutputTab({
 
 function ArtifactsTab({
   artifact,
+  siteAuditArtifact,
   live,
 }: {
   artifact?: FigmaWireframeArtifact | null;
+  siteAuditArtifact?: SiteAuditArtifact | null;
   live?: boolean;
 }) {
   if (live) {
-    return <EmptyTab live waiting="Watching for generated artifacts and wireframes…" idle="" />;
+    return <EmptyTab live waiting="Watching for generated artifacts and reports…" idle="" />;
+  }
+
+  if (siteAuditArtifact) {
+    return <SiteAuditArtifactViewer artifact={siteAuditArtifact} />;
   }
 
   if (artifact) {

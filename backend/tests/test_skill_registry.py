@@ -28,10 +28,11 @@ async def test_bootstrap_registers_all_three_mvp_skills_independently():
     await registry.bootstrap()
 
     checked_ids = [call.args[0] for call in skill_repo.get_skill.call_args_list]
-    assert checked_ids == ["ticketing", "solr_search", "document_search", "figma_design"]
+    expected = ["ticketing", "solr_search", "document_search", "figma_design", "site_audit"]
+    assert checked_ids == expected
 
     added_ids = {s.id for s in _added(session, SkillModel)}
-    assert added_ids == {"ticketing", "solr_search", "document_search", "figma_design"}
+    assert added_ids == set(expected)
 
 
 async def test_bootstrap_skips_only_the_skill_that_already_exists():
@@ -47,7 +48,7 @@ async def test_bootstrap_skips_only_the_skill_that_already_exists():
 
     added_ids = {s.id for s in _added(session, SkillModel)}
     assert "ticketing" not in added_ids
-    assert added_ids == {"solr_search", "document_search", "figma_design"}
+    assert added_ids == {"solr_search", "document_search", "figma_design", "site_audit"}
 
 
 async def test_bootstrap_persists_skill_level_permissions():

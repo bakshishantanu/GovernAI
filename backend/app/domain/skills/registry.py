@@ -12,6 +12,7 @@ from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
 from app.skills.base import BaseTool
 from app.skills.document_search import DocumentSearchSkill
 from app.skills.figma_design import FigmaDesignSkill
+from app.skills.site_audit import SiteAuditSkill
 from app.skills.solr_search import SolrSearchSkill
 from app.skills.ticketing import (
     TicketDraftStore,
@@ -52,6 +53,7 @@ class SkillRegistry:
                 SolrSearchSkill(permitted_collections={"knowledge_base", "compliance_docs"}),
                 DocumentSearchSkill(permitted_scopes={"public"}, adapter=document_search_adapter),
                 FigmaDesignSkill(),
+                SiteAuditSkill(),
             )
         }
 
