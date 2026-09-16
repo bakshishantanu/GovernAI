@@ -33,6 +33,14 @@ class SkillRequirementResponse(BaseModel):
     description: str = ""
     fields: list[SkillRequirementFieldResponse] = []
 
+    @field_validator("fields", mode="before")
+    @classmethod
+    def _normalise_fields(cls, v: Any) -> Any:
+        # `fields` is a nullable JSONB column; a requirement with no
+        # per-field form (e.g. file_upload) stores an empty list there, but
+        # nothing stops a stale or manually-inserted row from having NULL.
+        return [] if v is None else v
+
 
 class SkillResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

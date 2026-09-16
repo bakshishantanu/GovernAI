@@ -35,6 +35,13 @@ async def test_bootstrap_seeds_requirements_for_a_new_skill():
     assert jira_reqs[0].type == "credentials"
     doc_reqs = [r for r in added_requirements if r.key == "documents"]
     assert len(doc_reqs) == 1
+    # document_search's requirement declares no per-field form (it's a
+    # file_upload, not credentials) -- `fields` must still come out as an
+    # empty list, never None, because SkillRequirementResponse.fields is
+    # typed list[...], not list[...] | None. A None here previously slipped
+    # past every test (none of them round-tripped a fieldless requirement
+    # through the API schema) and 500'd the real /skills/ endpoint.
+    assert doc_reqs[0].fields == []
 
 
 @pytest.mark.asyncio

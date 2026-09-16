@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.api.schemas.skill import SkillResponse
+from app.api.schemas.skill import SkillRequirementResponse, SkillResponse
 from app.domain.skills.models import SkillModel, SkillRequirementModel
 from app.skills.base import BaseSkill, SkillRequirement, SkillRequirementField, TrustLevel
 from app.skills.document_search import DocumentSearchSkill
@@ -81,3 +81,14 @@ def test_skill_response_serializes_requirements():
     assert len(response.requirements) == 1
     assert response.requirements[0].key == "jira"
     assert response.requirements[0].fields[0].secret is True
+
+
+def test_skill_requirement_response_normalizes_a_null_fields_column_to_empty_list():
+    """Defense in depth: registry.bootstrap() is now the only writer and
+    always writes a list (see the fix for the real /skills/ 500 this caused),
+    but a stale/manually-inserted row could still have fields=None in the DB
+    -- the schema should not blow up the whole endpoint over one bad row."""
+    response = SkillRequirementResponse.model_validate(
+        {"key": "documents", "type": "file_upload", "label": "Docs", "fields": None}
+    )
+    assert response.fields == []

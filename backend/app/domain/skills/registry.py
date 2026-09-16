@@ -120,6 +120,11 @@ class SkillRegistry:
                         type=requirement.type,
                         label=requirement.label,
                         description=requirement.description,
+                        # Always a list, never None: a requirement with no
+                        # per-field form (e.g. file_upload) still needs
+                        # `fields` to serialize as `[]`, since
+                        # SkillRequirementResponse.fields is typed
+                        # list[...], not list[...] | None.
                         fields=[
                             {
                                 "key": f.key,
@@ -128,8 +133,6 @@ class SkillRegistry:
                                 "placeholder": f.placeholder,
                             }
                             for f in requirement.fields
-                        ]
-                        if requirement.fields
-                        else None,
+                        ],
                     )
                 )
