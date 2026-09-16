@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from app.skills.base import BaseSkill, SkillRequirement, SkillRequirementField, TrustLevel
+from app.skills.document_search import DocumentSearchSkill
+from app.skills.ticketing import TicketingSkill
 
 
 def test_base_skill_has_no_requirements_by_default():
@@ -35,3 +37,21 @@ def test_skill_requirement_carries_fields():
     assert req.type == "credentials"
     assert len(req.fields) == 1
     assert req.fields[0].key == "api_token"
+
+
+def test_ticketing_skill_requires_jira_credentials():
+    reqs = TicketingSkill(adapter=None).requirements
+    assert len(reqs) == 1
+    assert reqs[0].key == "jira"
+    assert reqs[0].type == "credentials"
+    field_keys = {f.key for f in reqs[0].fields}
+    assert field_keys == {"base_url", "email", "api_token"}
+    secret_fields = {f.key for f in reqs[0].fields if f.secret}
+    assert secret_fields == {"api_token"}
+
+
+def test_document_search_skill_requires_file_upload():
+    reqs = DocumentSearchSkill(permitted_scopes={"public"}).requirements
+    assert len(reqs) == 1
+    assert reqs[0].key == "documents"
+    assert reqs[0].type == "file_upload"

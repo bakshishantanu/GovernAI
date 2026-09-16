@@ -5,7 +5,13 @@ from dataclasses import asdict, dataclass, field
 
 import httpx
 
-from app.skills.base import BaseSkill, BaseTool, TrustLevel
+from app.skills.base import (
+    BaseSkill,
+    BaseTool,
+    SkillRequirement,
+    SkillRequirementField,
+    TrustLevel,
+)
 
 
 @dataclass
@@ -303,6 +309,22 @@ class TicketingSkill(BaseSkill):
     version = "1.0.0"
     required_permissions = ["ticket:read", "ticket:create"]
     trust_level = TrustLevel.VERIFIED
+    requirements = [
+        SkillRequirement(
+            key="jira",
+            type="credentials",
+            label="Jira account",
+            description="Connect your Jira instance so this agent can read and post tickets.",
+            fields=(
+                SkillRequirementField(
+                    key="base_url", label="Jira base URL",
+                    placeholder="https://yourcompany.atlassian.net",
+                ),
+                SkillRequirementField(key="email", label="Email"),
+                SkillRequirementField(key="api_token", label="API token", secret=True),
+            ),
+        ),
+    ]
 
     def __init__(
         self,
