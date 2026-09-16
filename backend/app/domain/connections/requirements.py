@@ -27,16 +27,17 @@ async def resolve_requirements(
     entry -- the UI renders one upload box, not two (first declaration wins
     for label/description, which only matters if two skills phrase the same
     key differently; none do today). Satisfaction is checked per requirement
-    type: `file_upload` looks at whether the org has ever uploaded a READY
-    document (a document is org-wide, not agent-scoped, so any ready
-    document satisfies it -- there is deliberately no per-agent document
-    binding yet); anything else looks for a matching row in the org's
-    connections.
+    type: `file_upload` looks at whether the org has a READY document in a
+    scope this specific skill is actually permitted to search (its
+    `docs:search:<scope>` permissions -- a document is org-wide, but a
+    document search skill is scoped, so a READY document sitting in a scope
+    the skill can't see must not report "Connected": the search tool would
+    find nothing despite the badge saying everything is set up); anything
+    else looks for a matching row in the org's connections.
     """
     by_key: dict[str, RequirementStatus] = {}
     connections = {c.requirement_key for c in await connection_repo.list_for_org(org_id)}
     documents = await document_repo.list_documents(org_id)
-    has_ready_document = any(d.status == "READY" for d in documents)
 
     for skill_id in skill_ids:
         skill = await skill_repo.get_skill(skill_id)
@@ -45,11 +46,18 @@ async def resolve_requirements(
         for requirement in skill.requirements:
             if requirement.key in by_key:
                 continue
-            satisfied = (
-                has_ready_document
-                if requirement.type == "file_upload"
-                else requirement.key in connections
-            )
+            if requirement.type == "file_upload":
+                permitted_scopes = {
+                    p.permission.rsplit(":", 1)[-1]
+                    for p in skill.permissions
+                    if p.permission.startswith("docs:search:")
+                }
+                satisfied = any(
+                    d.status == "READY" and permitted_scopes & set(d.access_scope)
+                    for d in documents
+                )
+            else:
+                satisfied = requirement.key in connections
             by_key[requirement.key] = RequirementStatus(
                 key=requirement.key,
                 type=requirement.type,
