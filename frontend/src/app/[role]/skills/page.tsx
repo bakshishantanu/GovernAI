@@ -136,7 +136,7 @@ export default function SkillsPage() {
           style={{ scrollSnapType: "x proximity" }}
         >
           {skills.map((skill, i) => (
-            <div key={skill.id} className={i === 0 ? "" : "-ml-8"} style={{ scrollSnapAlign: "start" }}>
+            <div key={skill.id} className={i === 0 ? "" : "-ml-4"} style={{ scrollSnapAlign: "start" }}>
               <SkillCard skill={skill} index={i} onReadMore={() => setSelected(skill)} />
             </div>
           ))}
