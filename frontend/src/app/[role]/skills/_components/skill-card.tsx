@@ -39,14 +39,42 @@ export function SkillCard({
   const still = useReducedMotion();
   const accent = accentFor(skill.id);
   const Icon = SKILL_ICON[skill.id] ?? Bot;
-  const tilt = still || flat ? 0 : TILT[index % TILT.length];
+  // The leading card never tilts: a rotated box's visual bounds extend past
+  // its unrotated layout box, and for the very first card in a left-aligned
+  // scroll track that overhang lands to the left of scrollLeft: 0 -- a
+  // position the track can never actually scroll to. Every other card is
+  // safe because whatever pokes out to its left just tucks under its
+  // neighbour, still within the scrollable range.
+  const tilt = still || flat || index === 0 ? 0 : TILT[index % TILT.length];
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 40, rotate: 0 }}
-      animate={{ opacity: 1, y: 0, rotate: tilt }}
-      transition={{ duration: 0.5, delay: Math.min(index, 8) * 0.12, ease: "easeOut" }}
-      whileHover={still ? undefined : { rotate: 0, y: -8, scale: 1.03, zIndex: 20 }}
+      // The entrance stagger (delay scaling with index) must not leak into
+      // the hover gesture -- a shared top-level `transition` prop applies to
+      // every animation target, hover included, so without its own
+      // transition here the 5th card wouldn't even start reacting to a
+      // hover until its 0.48s entrance delay had (re)elapsed, on top of the
+      // 0.5s duration. Confirmed live: hover felt like a full second on
+      // later cards. Scoping the entrance's delay to `animate` alone and
+      // giving `whileHover` its own fast, delay-free transition fixes both.
+      animate={{
+        opacity: 1,
+        y: 0,
+        rotate: tilt,
+        transition: { duration: 0.5, delay: Math.min(index, 8) * 0.12, ease: "easeOut" },
+      }}
+      whileHover={
+        still
+          ? undefined
+          : {
+              rotate: 0,
+              y: -8,
+              scale: 1.03,
+              zIndex: 20,
+              transition: { duration: 0.15, ease: "easeOut" },
+            }
+      }
       // Flat (grid) mode has to fill its grid cell rather than carry the
       // deck's fixed 256px card width - fixed-width + shrink-0 is exactly
       // what the deck's horizontal-scroll track wants, but inside a

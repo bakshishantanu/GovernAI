@@ -20,6 +20,7 @@ from app.api.schemas.agent import (
 )
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope, PaginatedResponse
+from app.api.schemas.connection import RequirementStatusResponse
 from app.domain.agents.kill_switch import KillSwitchService
 from app.domain.agents.models import AgentSkill
 from app.domain.agents.service import (
@@ -31,6 +32,9 @@ from app.domain.agents.service import (
 from app.domain.audit.service import AuditService
 from app.domain.auth.middleware import get_current_user
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
+from app.domain.connections.repository import ConnectionRepository
+from app.domain.connections.requirements import resolve_requirements
+from app.domain.documents.repository import DocumentRepository
 from app.domain.skills.models import SkillModel
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -69,6 +73,7 @@ async def create_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Create a new agent draft."""
     assigned_user_id = payload.assigned_user_id
@@ -90,6 +95,7 @@ async def create_agent(
             request_id=payload.request_id,
             assigned_user_id=assigned_user_id,
         )
+        await audit_service.log_agent_created(user.org_id, user.id, agent.id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except SkillNotFoundError as e:
@@ -154,6 +160,31 @@ async def get_agent(
 
     skills = await _skills_for(db, [agent.id])
     return Envelope(data=_with_skills(agent, skills))
+
+
+@router.get("/{agent_id}/requirements", response_model=Envelope[list[RequirementStatusResponse]])
+async def get_agent_requirements(
+    agent_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service: AgentService = Depends(get_agent_service),
+):
+    """The deduplicated connection/setup checklist for this agent's skills,
+    each flagged with whether the org has already satisfied it -- what the
+    agent page's Connections panel renders."""
+    agent = await service.agent_repo.get_agent(agent_id)
+    if not agent or agent.org_id != user.org_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    skill_ids = await service.agent_repo.list_skill_ids(agent_id)
+    statuses = await resolve_requirements(
+        org_id=user.org_id,
+        skill_ids=skill_ids,
+        skill_repo=service.skill_repo,
+        connection_repo=ConnectionRepository(db),
+        document_repo=DocumentRepository(db),
+    )
+    return Envelope(data=statuses)
 
 
 @router.patch("/{agent_id}/submit", response_model=Envelope[AgentResponse])
@@ -221,6 +252,7 @@ async def activate_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Activate an approved agent."""
     agent = await service.agent_repo.get_agent(agent_id)
@@ -232,6 +264,7 @@ async def activate_agent(
 
     try:
         await service.activate_agent(agent_id)
+        await audit_service.log_agent_activated(user.org_id, user.id, agent_id)
         if isinstance(db, AsyncSession):
             await db.commit()
     except InvalidStateTransitionError as e:
@@ -293,6 +326,7 @@ async def delete_agent(
     user: CurrentUser = Depends(require_builder_or_admin),
     service: AgentService = Depends(get_agent_service),
     db: AsyncSession = Depends(get_db),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Delete an agent, from any lifecycle state (owner or admin only).
 
@@ -314,6 +348,7 @@ async def delete_agent(
     except InvalidStateTransitionError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
+    await audit_service.log_agent_deleted(user.org_id, user.id, agent_id)
     await db.commit()
 
 

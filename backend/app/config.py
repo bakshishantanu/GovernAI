@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # who happens to find its URL.
     JIRA_WEBHOOK_SECRET: str = ""
 
+    # --- Connections: encrypted per-org integration credentials ---
+    # A deployed server MUST set this to a real Fernet key
+    # (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+    # via the environment. Left blank, connections.crypto falls back to a
+    # fixed key committed in source — fine for local dev/tests, never for a
+    # real deployment (anyone who reads this source could decrypt every
+    # stored connection).
+    CONNECTIONS_ENCRYPTION_KEY: str = ""
+
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
 

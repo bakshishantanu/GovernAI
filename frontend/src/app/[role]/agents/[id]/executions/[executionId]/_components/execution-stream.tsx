@@ -263,6 +263,17 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
             setStatus(data.status);
             setResult(data.result ?? null);
             setRunError(data.error ?? null);
+            // The `run` fetched on mount was a snapshot taken the instant
+            // this page loaded, almost always before any cost events
+            // existed -- so run.total_cost_usd/total_tokens were real
+            // zeros, not null, and permanently shadowed the correct
+            // live-accumulated totals for the rest of the page's life (the
+            // `run?.total_tokens ?? liveTokens` fallback below never
+            // triggers on an explicit 0). Refetching now that the run is
+            // actually finished gives the real final totals.
+            fetchApi(`/executions/${executionId}`)
+              .then((detail: Execution) => !controller.signal.aborted && setRun(detail))
+              .catch(() => {});
           }
         },
         controller.signal,

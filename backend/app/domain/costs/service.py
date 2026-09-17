@@ -49,8 +49,15 @@ class CostService:
         model: str,
         prompt_tokens: int,
         completion_tokens: int,
-    ):
+    ) -> bool:
+        """Records the cost event and returns whether `model` was actually
+        priced. The event is always recorded, even at $0.00 for an unpriced
+        model -- losing the token counts would be worse. Callers that care
+        about budget enforcement (not just reporting) must check the return
+        value themselves: an unpriced call still spent real money that this
+        service could not account for."""
         pricing = PRICING_TIERS.get(model)
+        was_priced = pricing is not None
         if pricing is None:
             # Falling back to zero silently is how this breaks in a way nobody
             # notices: the dashboard shows spend going up more slowly than it
@@ -101,3 +108,4 @@ class CostService:
                 },
             )
         )
+        return was_priced

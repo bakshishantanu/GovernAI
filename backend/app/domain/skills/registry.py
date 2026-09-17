@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.documents.repository import DocumentRepository
-from app.domain.skills.models import SkillModel, SkillPermission, ToolModel
+from app.domain.skills.models import SkillModel, SkillPermission, SkillRequirementModel, ToolModel
 from app.domain.skills.repository import SkillRepository
 from app.runtime.rag.embeddings import EmbeddingProvider
 from app.runtime.rag.pgvector_search import PgVectorDocumentSearchAdapter
@@ -73,30 +73,66 @@ class SkillRegistry:
     async def bootstrap(self):
         for skill_class in self._instances.values():
             existing = await self.skill_repo.get_skill(skill_class.name)
-            if existing:
-                continue
 
-            db_skill = SkillModel(
-                id=skill_class.name,
-                name=skill_class.name,
-                display_name=skill_class.display_name,
-                description=skill_class.description,
-                version=skill_class.version,
-                trust_level=skill_class.trust_level,
-            )
-            self.session.add(db_skill)
+            if existing is None:
+                db_skill = SkillModel(
+                    id=skill_class.name,
+                    name=skill_class.name,
+                    display_name=skill_class.display_name,
+                    description=skill_class.description,
+                    version=skill_class.version,
+                    trust_level=skill_class.trust_level,
+                )
+                self.session.add(db_skill)
 
-            for permission in skill_class.required_permissions:
+                for permission in skill_class.required_permissions:
+                    self.session.add(
+                        SkillPermission(id=uuid.uuid4(), skill=db_skill, permission=permission)
+                    )
+
+                for tool in skill_class.get_tools():
+                    self.session.add(
+                        ToolModel(
+                            id=uuid.uuid4(),
+                            skill=db_skill,
+                            name=tool.name,
+                            description=tool.description,
+                            required_permission=tool.required_permission,
+                        )
+                    )
+                skill_id_for_requirements = db_skill.id
+            else:
+                # Requirements are re-synced on every boot, unlike
+                # permissions/tools above: this is the only piece of a
+                # skill's manifest expected to change after a skill already
+                # exists in an org's DB, since it ships after some orgs will
+                # already have bootstrapped without it.
+                for stale_requirement in list(existing.requirements):
+                    await self.session.delete(stale_requirement)
+                skill_id_for_requirements = existing.id
+
+            for requirement in skill_class.requirements:
                 self.session.add(
-                    SkillPermission(id=uuid.uuid4(), skill=db_skill, permission=permission)
+                    SkillRequirementModel(
+                        id=uuid.uuid4(),
+                        skill_id=skill_id_for_requirements,
+                        key=requirement.key,
+                        type=requirement.type,
+                        label=requirement.label,
+                        description=requirement.description,
+                        # Always a list, never None: a requirement with no
+                        # per-field form (e.g. file_upload) still needs
+                        # `fields` to serialize as `[]`, since
+                        # SkillRequirementResponse.fields is typed
+                        # list[...], not list[...] | None.
+                        fields=[
+                            {
+                                "key": f.key,
+                                "label": f.label,
+                                "secret": f.secret,
+                                "placeholder": f.placeholder,
+                            }
+                            for f in requirement.fields
+                        ],
+                    )
                 )
-
-            for tool in skill_class.get_tools():
-                db_tool = ToolModel(
-                    id=uuid.uuid4(),
-                    skill=db_skill,
-                    name=tool.name,
-                    description=tool.description,
-                    required_permission=tool.required_permission,
-                )
-                self.session.add(db_tool)

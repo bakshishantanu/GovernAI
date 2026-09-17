@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.runtime.rag.citations import CITATION_INSTRUCTIONS
 from app.runtime.rag.retrieval import DocumentRetriever, DocumentSearchAdapter
-from app.skills.base import BaseSkill, BaseTool, TrustLevel
+from app.skills.base import BaseSkill, BaseTool, SkillRequirement, TrustLevel
 
 #: Per-source snippet kept on the audit record. Enough to recognise the
 #: passage without copying the corpus into audit_events: the full chunk is
@@ -144,6 +144,14 @@ class DocumentSearchSkill(BaseSkill):
     )
     version = "1.0.0"
     trust_level = TrustLevel.VERIFIED
+    requirements = [
+        SkillRequirement(
+            key="documents",
+            type="file_upload",
+            label="Source documents",
+            description="Upload the documents this agent should search.",
+        ),
+    ]
 
     def __init__(
         self,

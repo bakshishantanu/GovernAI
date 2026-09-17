@@ -108,7 +108,7 @@ export default function AgentsPage() {
             {updatedAt ? `updated ${timeAgo(new Date(updatedAt).toISOString())}` : "loading…"}
           </p>
         </motion.div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full min-w-0 items-center gap-3 sm:w-auto">
           <RosterControls query={query} onQuery={setQuery} filter={filter} onFilter={setFilter} counts={counts} />
         </div>
       </div>

@@ -1,14 +1,49 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 
 class TrustLevel(str, Enum):
     VERIFIED = "VERIFIED"
     COMMUNITY = "COMMUNITY"
     EXPERIMENTAL = "EXPERIMENTAL"
+
+
+@dataclass(frozen=True)
+class SkillRequirementField:
+    """One input in a multi-field requirement, e.g. Jira's base URL / email /
+    API token. `secret` marks a value that must never be echoed back to the
+    frontend once saved (see ConnectionService.save_connection)."""
+
+    key: str
+    label: str
+    secret: bool = False
+    placeholder: str = ""
+
+
+@dataclass(frozen=True)
+class SkillRequirement:
+    """Something an agent built with this skill needs before it can actually
+    work — a connected account, uploaded documents, a webhook target. This is
+    metadata only: it says what setup is needed, not how the frontend draws
+    it (see the widget-type registry in agent-connections-panel.tsx) or how
+    satisfaction is checked (see domain/connections/requirements.py).
+
+    `type` is one of "credentials" (a small form, at least one field secret),
+    "file_upload" (documents, checked against the existing documents table
+    rather than the connections table), or "webhook" (a generated URL, no
+    user input needed — satisfaction is always true once declared, since
+    there is nothing to fill in; reserved for a later skill).
+    """
+
+    key: str
+    type: str
+    label: str
+    description: str = ""
+    fields: tuple[SkillRequirementField, ...] = ()
 
 
 class BaseTool(ABC):
@@ -76,6 +111,7 @@ class BaseSkill(ABC):
     version: str
     required_permissions: list[str]
     trust_level: TrustLevel
+    requirements: ClassVar[list[SkillRequirement]] = []
 
     @abstractmethod
     def get_tools(self) -> list[BaseTool]: ...

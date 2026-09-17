@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+from app.api.deps import get_audit_service, get_db
 from app.api.schemas.auth import CurrentUser
 from app.api.schemas.common import Envelope
 from app.api.schemas.policy import (
@@ -14,6 +14,7 @@ from app.api.schemas.policy import (
     PolicyRuleCreate,
     PolicyRuleResponse,
 )
+from app.domain.audit.service import AuditService
 from app.domain.auth.rbac import require_admin, require_builder_or_admin
 from app.domain.policies.models import Policy, PolicyRule
 from app.domain.policies.repository import PolicyRepository
@@ -43,6 +44,7 @@ async def create_policy(
     current_user: CurrentUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     repo: PolicyRepository = Depends(get_policy_repo),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """
     Create a new governance policy with associated rules.
@@ -67,10 +69,17 @@ async def create_policy(
         new_policy.rules.append(new_rule)
 
     created_policy = await repo.create_policy(new_policy)
+    await audit_service.log_policy_created(
+        current_user.org_id, current_user.id, created_policy.id, name=created_policy.name
+    )
     await db.commit()
-    await db.refresh(created_policy)
-
-    return Envelope(data=created_policy)
+    # Not db.refresh(created_policy): refresh only reloads scalar columns,
+    # not relationships, so PolicyResponse's .rules would try to lazy-load
+    # outside an async-safe context and crash every single create with a
+    # 500 (confirmed live) -- re-fetch through get_policy(), same as
+    # get_policy/update_policy already do, which eager-loads rules.
+    refetched = await repo.get_policy(created_policy.id, current_user.org_id)
+    return Envelope(data=refetched)
 
 
 @router.get("/{policy_id}", response_model=Envelope[PolicyResponse])
@@ -95,6 +104,7 @@ async def update_policy(
     current_user: CurrentUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     repo: PolicyRepository = Depends(get_policy_repo),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Rename a policy, or switch the whole thing on and off.
 
@@ -106,13 +116,21 @@ async def update_policy(
     if policy is None:
         raise HTTPException(status_code=404, detail="Policy not found")
 
-    if enabled is not None:
+    changes = []
+    if enabled is not None and enabled != policy.enabled:
+        changes.append(f"enabled: {policy.enabled} -> {enabled}")
         policy.enabled = enabled
-    if name is not None:
+    if name is not None and name != policy.name:
+        changes.append(f"name: {policy.name!r} -> {name!r}")
         policy.name = name
-    if description is not None:
+    if description is not None and description != policy.description:
+        changes.append("description changed")
         policy.description = description
 
+    if changes:
+        await audit_service.log_policy_updated(
+            current_user.org_id, current_user.id, policy_id, reason="; ".join(changes)
+        )
     await db.commit()
     refreshed = await repo.get_policy(policy_id, current_user.org_id)
     return Envelope(data=refreshed)
@@ -124,6 +142,7 @@ async def delete_policy(
     current_user: CurrentUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     repo: PolicyRepository = Depends(get_policy_repo),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Remove a policy and its rules."""
     policy = await repo.get_policy(policy_id, current_user.org_id)
@@ -131,6 +150,9 @@ async def delete_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
 
     await repo.delete_policy(policy)
+    await audit_service.log_policy_deleted(
+        current_user.org_id, current_user.id, policy_id, name=policy.name
+    )
     await db.commit()
 
 
@@ -157,6 +179,7 @@ async def add_rule(
     current_user: CurrentUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     repo: PolicyRepository = Depends(get_policy_repo),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Add a rule to an existing policy."""
     policy = await repo.get_policy(policy_id, current_user.org_id)
@@ -173,6 +196,9 @@ async def add_rule(
         enabled=rule_in.enabled,
     )
     db.add(rule)
+    await audit_service.log_policy_rule_added(
+        current_user.org_id, current_user.id, policy_id, rule.id, rule_type=rule_in.rule_type
+    )
     await db.commit()
     await db.refresh(rule)
     return Envelope(data=rule)
@@ -186,6 +212,7 @@ async def toggle_rule(
     current_user: CurrentUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
     repo: PolicyRepository = Depends(get_policy_repo),
+    audit_service: AuditService = Depends(get_audit_service),
 ):
     """Switch a single rule on or off.
 
@@ -199,6 +226,9 @@ async def toggle_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
 
     rule.enabled = enabled
+    await audit_service.log_policy_rule_toggled(
+        current_user.org_id, current_user.id, policy_id, rule_id, enabled=enabled
+    )
     await db.commit()
     await db.refresh(rule)
     return Envelope(data=rule)

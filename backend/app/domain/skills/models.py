@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +30,25 @@ class SkillPermission(Base):
     skill: Mapped[SkillModel] = relationship("SkillModel", back_populates="permissions")
 
 
+class SkillRequirementModel(Base):
+    """What an agent built with this skill needs before it works — see
+    app.skills.base.SkillRequirement, which this table mirrors. Seeded from
+    the skill classes by SkillRegistry.bootstrap(), same as SkillPermission."""
+
+    __tablename__ = "skill_requirements"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    skill_id: Mapped[str] = mapped_column(String, ForeignKey("skills.id"))
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    label: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False, default="")
+    #: [{"key": ..., "label": ..., "secret": bool, "placeholder": ...}, ...]
+    #: empty/None for a requirement type with no per-field form (e.g. webhook).
+    fields: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
+
+    skill: Mapped[SkillModel] = relationship("SkillModel", back_populates="requirements")
+
+
 class SkillModel(Base):
     __tablename__ = "skills"
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -41,4 +61,7 @@ class SkillModel(Base):
     tools: Mapped[list[ToolModel]] = relationship("ToolModel", back_populates="skill")
     permissions: Mapped[list[SkillPermission]] = relationship(
         "SkillPermission", back_populates="skill"
+    )
+    requirements: Mapped[list[SkillRequirementModel]] = relationship(
+        "SkillRequirementModel", back_populates="skill"
     )

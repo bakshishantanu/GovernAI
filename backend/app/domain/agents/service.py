@@ -6,6 +6,9 @@ from uuid import UUID, uuid4
 from app.domain.agents.compliance import Violation, check_compliance
 from app.domain.agents.models import Agent, AgentPassport
 from app.domain.agents.repository import AgentRepository
+from app.domain.connections.repository import ConnectionRepository
+from app.domain.connections.requirements import resolve_requirements
+from app.domain.documents.repository import DocumentRepository
 from app.domain.permissions.models import Permission
 from app.domain.permissions.repository import PermissionRepository
 from app.domain.skills.repository import SkillRepository
@@ -178,6 +181,22 @@ class AgentService:
             raise ValueError("Agent or passport not found")
         if agent.passport.lifecycle_state != "APPROVED":
             raise InvalidStateTransitionError("Only APPROVED agents can be activated")
+
+        skill_ids = await self.agent_repo.list_skill_ids(agent_id)
+        statuses = await resolve_requirements(
+            org_id=agent.org_id,
+            skill_ids=skill_ids,
+            skill_repo=self.skill_repo,
+            connection_repo=ConnectionRepository(self.agent_repo.session),
+            document_repo=DocumentRepository(self.agent_repo.session),
+        )
+        unmet_labels = [s.label for s in statuses if not s.satisfied]
+        if unmet_labels:
+            raise InvalidStateTransitionError(
+                "Connect everything this agent's skills need before activating: "
+                + ", ".join(unmet_labels)
+            )
+
         agent.status = "ACTIVE"
         agent.passport.lifecycle_state = "ACTIVE"
 

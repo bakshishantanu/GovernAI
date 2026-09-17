@@ -69,7 +69,7 @@ export default function CostsPage() {
   const byAgentRows = useMemo(() => {
     if (!windowed) return [];
     return Object.entries(windowed.by_agent)
-      .map(([id, value]) => ({ label: nameOf(id), value }))
+      .map(([id, value]) => ({ id, label: nameOf(id), value }))
       .sort((a, b) => b.value - a.value);
   }, [windowed, nameOf]);
 

@@ -119,3 +119,25 @@ class BudgetGuard:
                 pass
 
         return BudgetDecision(allowed=False, spend_usd=spend, cap_usd=cap, reason=reason)
+
+    async def deny_unpriced_model(self, agent_id: UUID, org_id: UUID, model: str) -> BudgetDecision:
+        """Fail closed the same way `check()` does on a read error: if spend
+        on this call cannot be priced, it cannot be proven to be within
+        budget, so the agent is suspended rather than left free to keep
+        spending on a model nothing enforces a cap on. This does not undo the
+        call that already happened -- only the provider can do that -- it
+        stops the agent from making the next one.
+        """
+        cap = self._cap_for(agent_id)
+        reason = (
+            f"Model {model!r} has no pricing entry, so its cost cannot be verified "
+            "against the budget. The agent has been suspended."
+        )
+
+        if self._on_breach is not None:
+            try:
+                await self._on_breach(agent_id, org_id, reason)
+            except Exception:
+                pass
+
+        return BudgetDecision(allowed=False, spend_usd=0.0, cap_usd=cap, reason=reason)

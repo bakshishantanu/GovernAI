@@ -55,6 +55,17 @@ class ExecutionService:
             execution_id=execution_id, status="FAILED", error=error
         )
 
+    async def terminate(self, execution_id: UUID, reason: str) -> None:
+        """A run the platform itself cut short for governance reasons (over
+        budget, or spend on a model nothing can price) -- distinct from
+        FAILED, which means the agent's own reasoning or a tool broke. The
+        console renders TERMINATED with its own badge precisely so a stop
+        like this doesn't read as an ordinary success or an ordinary error.
+        """
+        await self.exec_repo.complete_execution(
+            execution_id=execution_id, status="TERMINATED", error=reason
+        )
+
     async def cancel(self, execution_id: UUID, org_id: UUID) -> Execution:
         execution = await self.exec_repo.get_execution(execution_id)
         if not execution or execution.org_id != org_id:

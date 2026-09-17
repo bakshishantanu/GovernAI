@@ -132,11 +132,11 @@ export default function SkillsPage() {
       ) : asDeck ? (
         <div
           ref={trackRef}
-          className="landing-hide-scrollbar mt-10 flex scroll-smooth justify-center gap-0 overflow-x-auto px-2 py-10"
+          className="landing-hide-scrollbar mt-10 flex scroll-smooth justify-start gap-0 overflow-x-auto px-2 py-10"
           style={{ scrollSnapType: "x proximity" }}
         >
           {skills.map((skill, i) => (
-            <div key={skill.id} className={i === 0 ? "" : "-ml-8"} style={{ scrollSnapAlign: "start" }}>
+            <div key={skill.id} className={i === 0 ? "" : "-ml-4"} style={{ scrollSnapAlign: "start" }}>
               <SkillCard skill={skill} index={i} onReadMore={() => setSelected(skill)} />
             </div>
           ))}

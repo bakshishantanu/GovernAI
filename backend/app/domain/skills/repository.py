@@ -14,7 +14,11 @@ class SkillRepository:
     async def get_skill(self, skill_id: str) -> SkillModel | None:
         stmt = (
             select(SkillModel)
-            .options(selectinload(SkillModel.tools), selectinload(SkillModel.permissions))
+            .options(
+                selectinload(SkillModel.tools),
+                selectinload(SkillModel.permissions),
+                selectinload(SkillModel.requirements),
+            )
             .where(SkillModel.id == skill_id)
         )
         result = await self.session.execute(stmt)
@@ -22,7 +26,9 @@ class SkillRepository:
 
     async def list_skills(self) -> list[SkillModel]:
         stmt = select(SkillModel).options(
-            selectinload(SkillModel.tools), selectinload(SkillModel.permissions)
+            selectinload(SkillModel.tools),
+            selectinload(SkillModel.permissions),
+            selectinload(SkillModel.requirements),
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

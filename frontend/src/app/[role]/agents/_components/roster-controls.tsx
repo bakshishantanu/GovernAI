@@ -20,12 +20,22 @@ export function RosterControls({
   counts: Record<RosterFilter, number>;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {/* overflow-x-auto + flex-nowrap rather than flex-wrap: on a narrow
           screen five pills wrapping into a ragged second row reads worse
           than letting the row scroll horizontally, which is the native,
-          expected gesture for a segmented control that doesn't fit. */}
-      <div className="flex items-center gap-1.5 overflow-x-auto rounded-full border-2 border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/40 p-1">
+          expected gesture for a segmented control that doesn't fit.
+          min-w-0 is required here: a flex item's default min-width is
+          "auto" (its content's intrinsic width), which overrides
+          overflow-x-auto and pushes the flex-col parent -- and the whole
+          page -- wider instead of scrolling internally. Without it,
+          "Suspended"/"Revoked" were unreachable at phone width: min-w-0
+          alone stopped the row from blowing out the whole page, but the row
+          itself still rendered at its natural (wider-than-viewport) content
+          width and got silently clipped by an ancestor instead of
+          scrolling -- w-full is what actually bounds it to the parent's
+          width so overflow-x-auto has something to scroll within. */}
+      <div className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto rounded-full border-2 border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/40 p-1 sm:w-auto">
         {FILTERS.map((f) => {
           const isOn = filter === f;
           return (

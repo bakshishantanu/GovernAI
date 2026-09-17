@@ -82,6 +82,38 @@ async def test_a_failed_suspension_still_denies_the_call():
 
 
 @pytest.mark.asyncio
+async def test_unpriced_model_is_denied_and_suspends_the_agent():
+    """A call on a model with no PRICING_TIERS entry can't be proven within
+    budget, so it's treated like a hard breach: denied, and the agent is
+    suspended so it can't keep making unpriced calls indefinitely."""
+    suspended = []
+
+    async def on_breach(agent_id, org_id, reason):
+        suspended.append((agent_id, org_id, reason))
+
+    guard = BudgetGuard(FakeSpendReader(0.0), on_breach=on_breach, cap_resolver=cap_of(5.0))
+
+    decision = await guard.deny_unpriced_model(AGENT, ORG, "some-brand-new-model")
+
+    assert not decision.allowed
+    assert "some-brand-new-model" in decision.reason
+    assert len(suspended) == 1
+    assert suspended[0][0] == AGENT
+
+
+@pytest.mark.asyncio
+async def test_unpriced_model_denial_survives_a_failed_suspension():
+    async def broken_on_breach(*_args):
+        raise RuntimeError("database unavailable")
+
+    guard = BudgetGuard(FakeSpendReader(0.0), on_breach=broken_on_breach, cap_resolver=cap_of(5.0))
+
+    decision = await guard.deny_unpriced_model(AGENT, ORG, "some-brand-new-model")
+
+    assert not decision.allowed
+
+
+@pytest.mark.asyncio
 async def test_unreadable_spend_fails_closed():
     """If we cannot prove the agent is under budget, it does not spend."""
     guard = BudgetGuard(

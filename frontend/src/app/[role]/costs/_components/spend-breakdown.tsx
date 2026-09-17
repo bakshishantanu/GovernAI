@@ -12,7 +12,7 @@ export function SpendBreakdown({
   loading,
 }: {
   title: string;
-  rows: { label: string; value: number }[];
+  rows: { id?: string; label: string; value: number }[];
   loading: boolean;
 }) {
   const max = Math.max(1e-9, ...rows.map((r) => r.value));
@@ -30,7 +30,7 @@ export function SpendBreakdown({
           <AnimatePresence initial={false}>
           {rows.map((row, i) => (
             <motion.div
-              key={row.label}
+              key={row.id ?? row.label}
               layout
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
