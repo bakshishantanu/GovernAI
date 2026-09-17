@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { fetchApi } from "@/lib/api-client";
+import { useRef, useState } from "react";
+import { Loader2, Upload } from "lucide-react";
+import { ApiError, fetchApi } from "@/lib/api-client";
+import { useRoleBase } from "@/lib/use-role-base";
 
 export type RequirementField = {
   key: string;
@@ -33,7 +35,7 @@ export function RequirementWidget({
     case "credentials":
       return <CredentialsWidget requirement={requirement} onSaved={onSaved} />;
     case "file_upload":
-      return <FileUploadWidget requirement={requirement} />;
+      return <FileUploadWidget requirement={requirement} onSaved={onSaved} />;
     default:
       return (
         <div className="rounded-lg border border-dashed border-[var(--l-line)] p-3 text-[12.5px] text-[var(--l-charcoal)]/60">
@@ -99,7 +101,37 @@ function CredentialsWidget({
   );
 }
 
-function FileUploadWidget({ requirement }: { requirement: RequirementStatus }) {
+function FileUploadWidget({
+  requirement,
+  onSaved,
+}: {
+  requirement: RequirementStatus;
+  onSaved: () => void;
+}) {
+  const base = useRoleBase();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleUpload() {
+    if (!file || uploading) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      await fetchApi("/documents/", { method: "POST", body });
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't upload this file.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="space-y-2 rounded-xl border border-[var(--l-line)] bg-[var(--l-cream)] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -107,9 +139,31 @@ function FileUploadWidget({ requirement }: { requirement: RequirementStatus }) {
         <StatusBadge satisfied={requirement.satisfied} />
       </div>
       <p className="text-[11.5px] text-[var(--l-charcoal)]/60">{requirement.description}</p>
-      <a href="../../documents" className="text-[11.5px] font-semibold text-[var(--l-ink)] underline">
-        Manage documents &rarr;
-      </a>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.pptx,.jpg,.jpeg,.png,.webp"
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        className="w-full text-[12px] text-[var(--l-charcoal)] file:mr-2.5 file:rounded-full file:border-0 file:bg-[var(--l-ink)] file:px-3 file:py-1 file:text-[11.5px] file:font-semibold file:text-white"
+      />
+      {error && <p className="text-[11px] text-[var(--l-orange-deep)]">{error}</p>}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          className="inline-flex items-center gap-1.5 rounded-full bg-[var(--l-ink)] px-3 py-1.5 text-[11.5px] font-semibold text-white transition-opacity disabled:opacity-40"
+        >
+          {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+          Upload document
+        </button>
+        <a
+          href={`${base}/documents`}
+          className="text-[11.5px] font-semibold text-[var(--l-ink)] underline"
+        >
+          Manage documents &rarr;
+        </a>
+      </div>
     </div>
   );
 }

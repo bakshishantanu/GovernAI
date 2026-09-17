@@ -115,11 +115,11 @@ export function AgentDetail({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <RunGoalCard agentId={agent.id} active={agent.passport.lifecycle_state === "ACTIVE"} />
+          <AgentConnectionsPanel agentId={agent.id} />
           <AgentRunsList agentId={agent.id} />
         </div>
         <div className="space-y-4">
           <PassportPanel agent={agent} budget={budget} />
-          <AgentConnectionsPanel agentId={agent.id} />
           <AgentAuditFeed agentId={agent.id} />
         </div>
       </div>
