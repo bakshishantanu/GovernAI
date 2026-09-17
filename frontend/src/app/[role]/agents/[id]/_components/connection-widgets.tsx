@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { ApiError, fetchApi } from "@/lib/api-client";
 import { useRoleBase } from "@/lib/use-role-base";
@@ -19,6 +19,10 @@ export type RequirementStatus = {
   description: string;
   fields: RequirementField[];
   satisfied: boolean;
+  /** Masked, non-secret values from the saved connection (e.g. Jira base
+   * URL/email but never the API token) -- undefined until the panel has
+   * loaded /connections/ and matched one for this requirement. */
+  preview?: Record<string, string> | null;
 };
 
 /** Renders the right setup widget for one deduplicated requirement. Adding a
@@ -54,7 +58,17 @@ function CredentialsWidget({
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Once satisfied, show the connected state instead of the raw form -- the
+  // form only reappears if the user explicitly asks to change the account,
+  // or after a disconnect (satisfied goes back to false on its own). Keyed
+  // off `satisfied` flipping true so a fresh save also collapses back to the
+  // connected view without the user having to do anything.
+  const [editing, setEditing] = useState(!requirement.satisfied);
+  useEffect(() => {
+    if (requirement.satisfied) setEditing(false);
+  }, [requirement.satisfied]);
 
   async function handleSave() {
     setSaving(true);
@@ -64,12 +78,59 @@ function CredentialsWidget({
         method: "PUT",
         body: JSON.stringify({ type: requirement.type, label: requirement.label, fields: values }),
       });
+      setValues({});
       onSaved();
     } catch {
       setError("Couldn't save this connection. Check the values and try again.");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    setError(null);
+    try {
+      await fetchApi(`/connections/${requirement.key}`, { method: "DELETE" });
+      onSaved();
+    } catch {
+      setError("Couldn't disconnect this account. Try again.");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  if (requirement.satisfied && !editing) {
+    const previewEntries = Object.entries(requirement.preview ?? {});
+    return (
+      <div className="space-y-2 rounded-xl border border-[var(--l-line)] bg-[var(--l-cream)] p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold text-[var(--l-ink)]">{requirement.label}</span>
+          <StatusBadge satisfied />
+        </div>
+        {previewEntries.length > 0 && (
+          <p className="text-[11.5px] text-[var(--l-charcoal)]/60">
+            {previewEntries.map(([, v]) => v).join(" · ")}
+          </p>
+        )}
+        {error && <p className="text-[11px] text-[var(--l-orange-deep)]">{error}</p>}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEditing(true)}
+            className="rounded-full border border-[var(--l-line)] bg-white px-3 py-1.5 text-[11.5px] font-semibold text-[var(--l-ink)] transition-colors hover:bg-[var(--l-cream-deep)]"
+          >
+            Change account
+          </button>
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[var(--l-orange-deep)] transition-opacity hover:underline disabled:opacity-50"
+          >
+            {disconnecting ? "Disconnecting..." : "Disconnect"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -90,13 +151,27 @@ function CredentialsWidget({
         />
       ))}
       {error && <p className="text-[11px] text-[var(--l-orange-deep)]">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="rounded-full bg-[var(--l-ink)] px-3 py-1.5 text-[11.5px] font-semibold text-[var(--l-cream)] transition-opacity disabled:opacity-50"
-      >
-        {saving ? "Saving..." : "Save connection"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-full bg-[var(--l-ink)] px-3 py-1.5 text-[11.5px] font-semibold text-[var(--l-cream)] transition-opacity disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save connection"}
+        </button>
+        {requirement.satisfied && (
+          <button
+            onClick={() => {
+              setValues({});
+              setError(null);
+              setEditing(false);
+            }}
+            className="rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[var(--l-charcoal)]/60 hover:text-[var(--l-ink)]"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   );
 }
