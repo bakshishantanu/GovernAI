@@ -132,7 +132,7 @@ export default function SkillsPage() {
       ) : asDeck ? (
         <div
           ref={trackRef}
-          className="landing-hide-scrollbar mt-10 flex scroll-smooth justify-center gap-0 overflow-x-auto px-2 py-10"
+          className="landing-hide-scrollbar mt-10 flex scroll-smooth justify-start gap-0 overflow-x-auto px-2 py-10"
           style={{ scrollSnapType: "x proximity" }}
         >
           {skills.map((skill, i) => (
