@@ -111,7 +111,10 @@ async def test_an_unpriced_model_is_warned_about_loudly(caplog):
 async def test_an_unrecognised_model_still_falls_back_to_free_not_an_error():
     """The fallback exists on purpose - a model with no known rate shouldn't
     crash a run, it should record honestly-unpriced spend rather than fail
-    the whole execution."""
+    the whole execution. Whether the *agent* gets to keep running on that
+    is a separate decision the caller makes from the return value (see
+    test_agent_graph.py's unpriced-model test) -- CostService itself never
+    raises."""
     repo = AsyncMock()
     bus = AsyncMock()
     service = CostService(cost_repo=repo, event_bus=bus)
@@ -127,3 +130,32 @@ async def test_an_unrecognised_model_still_falls_back_to_free_not_an_error():
 
     recorded_event = repo.record_cost.await_args.args[0]
     assert recorded_event.cost_usd == 0
+
+
+@pytest.mark.asyncio
+async def test_record_llm_cost_reports_whether_the_model_was_priced():
+    """Callers that only care about accurate reporting can ignore the return
+    value; callers that enforce budget (agent_graph) need to know a $0.00
+    event might mean 'really free' or might mean 'unpriced, spend unknown'
+    -- those are not the same thing."""
+    service = CostService(cost_repo=AsyncMock(), event_bus=AsyncMock())
+
+    priced = await service.record_llm_cost(
+        org_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        model="openai/gpt-oss-20b",
+        prompt_tokens=100,
+        completion_tokens=100,
+    )
+    unpriced = await service.record_llm_cost(
+        org_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        model="some-brand-new-model-nobody-priced-yet",
+        prompt_tokens=100,
+        completion_tokens=100,
+    )
+
+    assert priced is True
+    assert unpriced is False

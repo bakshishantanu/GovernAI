@@ -80,8 +80,9 @@ def build_agent_graph(
         response = await llm_service.chat(state["messages"], tools=tool_specs)
 
         # 💰 COST TRACKING: Record token usage per LLM call
+        was_priced = True
         if response.usage:
-            await cost_service.record_llm_cost(
+            was_priced = await cost_service.record_llm_cost(
                 org_id=org_id,
                 agent_id=agent_id,
                 execution_id=execution_id,
@@ -89,6 +90,21 @@ def build_agent_graph(
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
             )
+
+        # FAIL CLOSED: a call that just happened on an unpriced model spent
+        # real money nothing can put a cap on, since BudgetGuard only ever
+        # sees priced spend. This can't undo that one call, but it stops the
+        # agent from making another one -- same as a real budget breach.
+        if not was_priced and budget_guard is not None:
+            budget = await budget_guard.deny_unpriced_model(agent_id, org_id, response.model)
+            await audit_service.log_tool_call(
+                org_id, agent_id, execution_id, "llm_call", False, budget.reason
+            )
+            return {
+                "messages": [{"role": "assistant", "content": budget.reason}],
+                "steps": state["steps"] + 1,
+                "stopped_reason": "unpriced_model",
+            }
 
         assistant_message: dict = {"role": "assistant", "content": response.content}
         if response.tool_calls:
@@ -200,23 +216,24 @@ async def run_agent(
         {"messages": messages, "steps": 0, "max_steps": max_steps, "stopped_reason": None}
     )
 
-    budget_exceeded = final_state.get("stopped_reason") == "budget_exceeded"
+    # agent_node sets stopped_reason itself when it stops the run early
+    # (budget exceeded, or an unpriced model denied); that always takes
+    # precedence over inferring max_steps/completed from the last message.
+    early_stop = final_state.get("stopped_reason")
     hit_max_steps = final_state["steps"] >= max_steps and final_state["messages"][-1].get(
         "tool_calls"
     )
     final_message = final_state["messages"][-1]
 
-    if budget_exceeded:
-        stopped_reason = "budget_exceeded"
+    if early_stop:
+        stopped_reason = early_stop
     elif hit_max_steps:
         stopped_reason = "max_steps_reached"
     else:
         stopped_reason = "completed"
 
     return {
-        "final_answer": None if (budget_exceeded or hit_max_steps) else final_message.get(
-            "content"
-        ),
+        "final_answer": None if (early_stop or hit_max_steps) else final_message.get("content"),
         "messages": final_state["messages"],
         "steps": final_state["steps"],
         "stopped_reason": stopped_reason,

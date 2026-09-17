@@ -354,3 +354,44 @@ async def test_budget_allowed_lets_the_llm_call_proceed_as_normal():
     assert provider.call_count == 1
     assert result["final_answer"] == "still within budget"
     assert result["stopped_reason"] == "completed"
+
+
+async def test_unpriced_model_denies_and_stops_the_run_after_the_call():
+    """CostService.record_llm_cost returns False when the model it was just
+    called with has no PRICING_TIERS entry (see test_cost_pricing.py). That
+    call already happened and cannot be undone, but the agent must not be
+    allowed to act on the response or keep running -- same treatment as a
+    hard budget breach."""
+    provider = _ScriptedProvider([_resp("answer from an unpriced model")])
+    service = LLMService([provider])
+    audit_service = AsyncMock()
+    cost_service = AsyncMock()
+    cost_service.record_llm_cost.return_value = False
+
+    guard = AsyncMock()
+    guard.deny_unpriced_model.return_value = BudgetDecision(
+        allowed=False, spend_usd=0.0, cap_usd=5.0, reason="Model 'm' has no pricing entry"
+    )
+
+    result = await run_agent(
+        service,
+        tools=[],
+        agent_id=_TEST_AGENT_ID,
+        org_id=uuid.uuid4(),
+        execution_id=uuid.uuid4(),
+        audit_service=audit_service,
+        cost_service=cost_service,
+        policy_engine=_AllowAllPolicyEngine(),
+        goal="do something on an unpriced model",
+        budget_guard=guard,
+    )
+
+    assert provider.call_count == 1, "the call already happened, it cannot be prevented"
+    guard.deny_unpriced_model.assert_awaited_once()
+    assert guard.deny_unpriced_model.await_args.args[0] == _TEST_AGENT_ID
+    assert result["stopped_reason"] == "unpriced_model"
+    assert result["final_answer"] is None
+    audit_service.log_tool_call.assert_awaited_once()
+    call_args = audit_service.log_tool_call.await_args.args
+    assert call_args[3] == "llm_call"
+    assert call_args[4] is False
