@@ -20,7 +20,7 @@ export function RosterControls({
   counts: Record<RosterFilter, number>;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {/* overflow-x-auto + flex-nowrap rather than flex-wrap: on a narrow
           screen five pills wrapping into a ragged second row reads worse
           than letting the row scroll horizontally, which is the native,
