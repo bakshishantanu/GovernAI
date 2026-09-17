@@ -118,25 +118,43 @@ async def run_execution(
             await exec_service.mark_running(execution_id)
             await session.commit()
 
-            result = await run_agent(
-                llm_service=llm_service,
-                tools=tools,
-                agent_id=agent_id,
-                org_id=org_id,
-                execution_id=execution_id,
-                policy_engine=PolicyEngine(
-                    agent_repo=agent_repo,
-                    perm_repo=PermissionRepository(session),
-                    policy_repo=PolicyRepository(session),
-                    audit_repo=audit_repo,
-                ),
-                audit_service=audit_service,
-                cost_service=CostService(cost_repo=cost_repo, event_bus=event_bus),
-                goal=goal,
-                system_prompt=system_prompt,
-                max_steps=max_steps,
-                budget_guard=BudgetGuard(spend_reader=cost_repo, on_breach=suspend_on_breach),
-            )
+            try:
+                result = await run_agent(
+                    llm_service=llm_service,
+                    tools=tools,
+                    agent_id=agent_id,
+                    org_id=org_id,
+                    execution_id=execution_id,
+                    policy_engine=PolicyEngine(
+                        agent_repo=agent_repo,
+                        perm_repo=PermissionRepository(session),
+                        policy_repo=PolicyRepository(session),
+                        audit_repo=audit_repo,
+                    ),
+                    audit_service=audit_service,
+                    cost_service=CostService(cost_repo=cost_repo, event_bus=event_bus),
+                    goal=goal,
+                    system_prompt=system_prompt,
+                    max_steps=max_steps,
+                    budget_guard=BudgetGuard(spend_reader=cost_repo, on_breach=suspend_on_breach),
+                )
+            except Exception as exc:
+                # The run itself failed partway through (e.g. every LLM
+                # provider erroring out) -- but real governed work already
+                # happened first: tool calls executed, policy decisions were
+                # made, LLM calls were billed. Committing THIS session (not
+                # falling through to the bare `except` below, which uses a
+                # fresh session that knows nothing about any of that) is what
+                # keeps that audit trail and cost/budget accounting instead
+                # of silently discarding it just because the run didn't
+                # finish cleanly. Losing this was worse than losing the final
+                # answer: a failed run's real spend never counted against the
+                # agent's budget cap at all, and its tool calls vanished from
+                # the audit log even though they really happened.
+                logger.exception("Background execution %s failed mid-run", execution_id)
+                await exec_service.fail(execution_id, error=str(exc))
+                await session.commit()
+                return
 
             stopped_reason = result.get("stopped_reason")
             if stopped_reason == "max_steps_reached":
@@ -163,11 +181,14 @@ async def run_execution(
             await session.commit()
 
     except Exception as exc:
-        # Nothing is awaiting this, so an escaping exception would be swallowed
-        # by the event loop and the run would sit at RUNNING forever — which
-        # also means its SSE stream never closes. Opening the session is inside
-        # the guard too: a database that is down must still end the run.
-        logger.exception("Background execution %s failed", execution_id)
+        # Reached only for failures *outside* run_agent's own try/except
+        # above: the session failing to open, or agent/skill loading failing
+        # before the run even started -- nothing governed happened yet, so
+        # there is nothing to preserve, and this session may itself be the
+        # problem. Nothing is awaiting this, so an escaping exception would
+        # be swallowed by the event loop and the run would sit at RUNNING
+        # forever, which also means its SSE stream never closes.
+        logger.exception("Background execution %s failed before/outside the run", execution_id)
         await _mark_failed(execution_id, str(exc))
 
 

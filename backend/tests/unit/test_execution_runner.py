@@ -73,6 +73,53 @@ async def test_a_failure_inside_the_run_is_recorded_not_raised(ids):
 
 
 @pytest.mark.asyncio
+async def test_a_run_that_fails_mid_flight_commits_the_same_session_not_mark_failed(ids):
+    """Found live: a run that did real governed work (tool calls, LLM calls,
+    audit/cost events all added to `session` but not yet committed) and then
+    had run_agent() itself raise (e.g. every LLM provider erroring out) used
+    to fall through to the bare `except Exception` below, which calls
+    `_mark_failed` on a brand new session that knows nothing about any of
+    that work -- so it was silently discarded. Session.add() without a
+    commit is invisible to any later query, even though the real tool calls
+    and LLM spend genuinely happened. The fix commits the SAME session
+    (preserving everything already added to it) right where the failure is
+    caught, instead of abandoning it for `_mark_failed`'s fresh one."""
+    session = AsyncMock()
+    session.__aenter__.return_value = session
+    exec_service = AsyncMock()
+
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=exec_service),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "BudgetGuard"),
+        patch.object(execution_runner, "KillSwitchService"),
+        patch.object(execution_runner, "_mark_failed", new_callable=AsyncMock) as mark_failed,
+    ):
+        load_tools.return_value = []
+        run.side_effect = RuntimeError(
+            "All LLM providers failed: groq attempt 1/2: Client error '429 Too Many Requests'"
+        )
+
+        await execution_runner.run_execution(
+            **ids,
+            goal="do a lot of governed work then hit a rate limit",
+            system_prompt=None,
+            max_steps=10,
+            llm_service=AsyncMock(),
+        )
+
+    exec_service.fail.assert_awaited_once()
+    assert exec_service.fail.await_args.args[0] == ids["execution_id"]
+    assert "429 Too Many Requests" in exec_service.fail.await_args.kwargs["error"]
+    session.commit.assert_awaited()
+    mark_failed.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_mark_failed_never_raises_even_if_the_database_is_gone(ids):
     """The last line of defence. If this raised, the exception would surface
     inside the except block that called it and be lost anyway."""
