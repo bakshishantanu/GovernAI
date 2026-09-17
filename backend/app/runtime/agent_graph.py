@@ -60,6 +60,23 @@ def build_agent_graph(
     tool_specs = [tool.to_openai_tool() for tool in tools]
 
     async def agent_node(state: AgentState) -> dict:
+        # BUDGET GATE: the LLM call is the dominant cost driver, so it must be
+        # checked before it happens -- not just before tool calls, which is
+        # where this used to live exclusively. Without this, an agent that is
+        # already over budget (or never calls a tool at all) could keep
+        # making billable LLM calls indefinitely.
+        if budget_guard is not None:
+            budget = await budget_guard.check(agent_id, org_id)
+            if not budget.allowed:
+                await audit_service.log_tool_call(
+                    org_id, agent_id, execution_id, "llm_call", False, budget.reason
+                )
+                return {
+                    "messages": [{"role": "assistant", "content": budget.reason}],
+                    "steps": state["steps"] + 1,
+                    "stopped_reason": "budget_exceeded",
+                }
+
         response = await llm_service.chat(state["messages"], tools=tool_specs)
 
         # 💰 COST TRACKING: Record token usage per LLM call
@@ -183,14 +200,24 @@ async def run_agent(
         {"messages": messages, "steps": 0, "max_steps": max_steps, "stopped_reason": None}
     )
 
+    budget_exceeded = final_state.get("stopped_reason") == "budget_exceeded"
     hit_max_steps = final_state["steps"] >= max_steps and final_state["messages"][-1].get(
         "tool_calls"
     )
     final_message = final_state["messages"][-1]
 
+    if budget_exceeded:
+        stopped_reason = "budget_exceeded"
+    elif hit_max_steps:
+        stopped_reason = "max_steps_reached"
+    else:
+        stopped_reason = "completed"
+
     return {
-        "final_answer": None if hit_max_steps else final_message.get("content"),
+        "final_answer": None if (budget_exceeded or hit_max_steps) else final_message.get(
+            "content"
+        ),
         "messages": final_state["messages"],
         "steps": final_state["steps"],
-        "stopped_reason": "max_steps_reached" if hit_max_steps else "completed",
+        "stopped_reason": stopped_reason,
     }
