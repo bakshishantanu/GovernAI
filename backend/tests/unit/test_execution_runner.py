@@ -174,3 +174,86 @@ async def test_the_run_is_budget_guarded(ids):
         )
 
     assert run.await_args.kwargs["budget_guard"] is not None
+
+
+@pytest.mark.asyncio
+async def test_budget_exceeded_is_terminated_not_completed(ids):
+    """Before this fix, a run stopped by the budget guard fell into the same
+    branch as a real success (final_answer is None either way, but only
+    max_steps_reached was special-cased) and was recorded as a normal
+    COMPLETED execution with a generic message -- a denied, cost-driven stop
+    that looked identical to success in the console. It must be recorded as
+    TERMINATED, with the real denial reason as the error."""
+    session = AsyncMock()
+    session.__aenter__.return_value = session
+    exec_service = AsyncMock()
+
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=exec_service),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "BudgetGuard"),
+        patch.object(execution_runner, "KillSwitchService"),
+    ):
+        load_tools.return_value = []
+        run.return_value = {
+            "final_answer": None,
+            "stopped_reason": "budget_exceeded",
+            "messages": [
+                {"role": "assistant", "content": "Budget exceeded: $10.00 of $5.00 spent"}
+            ],
+        }
+
+        await execution_runner.run_execution(
+            **ids,
+            goal="spend too much",
+            system_prompt=None,
+            max_steps=5,
+            llm_service=AsyncMock(),
+        )
+
+    exec_service.complete.assert_not_awaited()
+    exec_service.fail.assert_not_awaited()
+    exec_service.terminate.assert_awaited_once_with(
+        ids["execution_id"], reason="Budget exceeded: $10.00 of $5.00 spent"
+    )
+
+
+@pytest.mark.asyncio
+async def test_unpriced_model_is_terminated_not_completed(ids):
+    session = AsyncMock()
+    session.__aenter__.return_value = session
+    exec_service = AsyncMock()
+
+    with (
+        patch.object(execution_runner, "async_session_factory", return_value=session),
+        patch.object(execution_runner, "ExecutionService", return_value=exec_service),
+        patch.object(execution_runner, "load_agent_tools", new_callable=AsyncMock) as load_tools,
+        patch.object(execution_runner, "run_agent", new_callable=AsyncMock) as run,
+        patch.object(execution_runner, "SkillRegistry"),
+        patch.object(execution_runner, "PolicyEngine"),
+        patch.object(execution_runner, "BudgetGuard"),
+        patch.object(execution_runner, "KillSwitchService"),
+    ):
+        load_tools.return_value = []
+        run.return_value = {
+            "final_answer": None,
+            "stopped_reason": "unpriced_model",
+            "messages": [{"role": "assistant", "content": "Model 'm' has no pricing entry"}],
+        }
+
+        await execution_runner.run_execution(
+            **ids,
+            goal="use an unpriced model",
+            system_prompt=None,
+            max_steps=5,
+            llm_service=AsyncMock(),
+        )
+
+    exec_service.complete.assert_not_awaited()
+    exec_service.terminate.assert_awaited_once_with(
+        ids["execution_id"], reason="Model 'm' has no pricing entry"
+    )

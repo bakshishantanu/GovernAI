@@ -138,11 +138,23 @@ async def run_execution(
                 budget_guard=BudgetGuard(spend_reader=cost_repo, on_breach=suspend_on_breach),
             )
 
-            if result.get("stopped_reason") == "max_steps_reached":
+            stopped_reason = result.get("stopped_reason")
+            if stopped_reason == "max_steps_reached":
                 await exec_service.fail(
                     execution_id,
                     error="Execution stopped: Maximum reasoning steps reached.",
                 )
+            elif stopped_reason in ("budget_exceeded", "unpriced_model"):
+                # agent_node put the exact denial reason (from BudgetGuard) in
+                # the last message's content rather than final_answer, since
+                # final_answer is reserved for a real answer the agent
+                # produced. Falling back to a generic string only protects
+                # against a shape change upstream, not an expected case.
+                messages = result.get("messages") or []
+                reason = (messages[-1].get("content") if messages else None) or (
+                    "Execution stopped by governance: cost could not be verified against budget."
+                )
+                await exec_service.terminate(execution_id, reason=reason)
             else:
                 await exec_service.complete(
                     execution_id,
