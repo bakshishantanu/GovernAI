@@ -8,6 +8,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+import logging
+from app.runtime.site_audit.builtwith_adapter import BuiltWithAdapter
 from app.runtime.site_audit.models import (
     AuditOpportunity,
     AuditRequest,
@@ -15,12 +17,17 @@ from app.runtime.site_audit.models import (
     CrawledPage,
     CrawlRequest,
     CrawlResult,
+    DomainAuthorityReport,
     NetworkMetrics,
     ScoreSummary,
     SecurityReport,
     SeoReport,
+    TechStackProfile,
     VitalsMetrics,
 )
+from app.runtime.site_audit.semrush_adapter import SemrushAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class SiteAuditError(Exception):
@@ -163,9 +170,13 @@ class SiteAuditAdapter:
         self,
         http_client: httpx.AsyncClient | None = None,
         mock_mode: bool = False,
+        builtwith_adapter: BuiltWithAdapter | None = None,
+        semrush_adapter: SemrushAdapter | None = None,
     ) -> None:
         self._client = http_client
         self.mock_mode = mock_mode
+        self.builtwith = builtwith_adapter or BuiltWithAdapter(mock=mock_mode)
+        self.semrush = semrush_adapter or SemrushAdapter(mock=mock_mode)
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is not None:
@@ -183,7 +194,7 @@ class SiteAuditAdapter:
         )
 
     async def audit(self, request: AuditRequest) -> AuditResult:
-        """Run a full performance, vitals, SEO, and security audit for the given URL."""
+        """Run a full performance, vitals, SEO, security, tech stack, and domain authority audit."""
         parsed_url = urlparse(request.url)
         is_mock_host = parsed_url.hostname in {"test-audit.local"} or (
             parsed_url.hostname and parsed_url.hostname.endswith(".mock.test")
@@ -206,7 +217,46 @@ class SiteAuditAdapter:
                 # Silently fall back to native data if Google API is rate-limited or unavailable
                 pagespeed_data = None
 
-        return self._build_audit_result(request, native_data, pagespeed_data)
+        # 3. BuiltWith Tech Stack Profiling
+        tech_profile = None
+        if getattr(request, "include_tech_stack", True):
+            try:
+                tech_profile = await self.builtwith.detect_technologies(
+                    url_or_domain=request.url,
+                    html_content=native_data.get("raw_html"),
+                    response_headers=native_data.get("raw_headers"),
+                )
+            except Exception as exc:
+                logger.warning("BuiltWith profiling failed for %s: %s", request.url, exc)
+
+        # 4. Semrush by Adobe Domain Authority & Search Intelligence
+        domain_auth = None
+        if getattr(request, "include_domain_authority", True):
+            try:
+                domain_auth = await self.semrush.get_domain_authority(
+                    url_or_domain=request.url,
+                    html_content=native_data.get("raw_html"),
+                    seo_report=native_data.get("seo"),
+                    security_report=native_data.get("security"),
+                )
+            except Exception as exc:
+                logger.warning("Semrush domain authority check failed for %s: %s", request.url, exc)
+
+        return self._build_audit_result(
+            request,
+            native_data,
+            pagespeed_data,
+            tech_profile=tech_profile,
+            domain_authority=domain_auth,
+        )
+
+    async def detect_tech_stack(self, domain_or_url: str) -> TechStackProfile:
+        """Standalone technology stack detection via BuiltWith."""
+        return await self.builtwith.detect_technologies(domain_or_url)
+
+    async def get_domain_authority(self, domain_or_url: str) -> DomainAuthorityReport:
+        """Standalone domain authority and search footprint analysis via Semrush by Adobe."""
+        return await self.semrush.get_domain_authority(domain_or_url)
 
     async def crawl(self, request: CrawlRequest) -> CrawlResult:
         """Crawl website starting from start_url up to max_pages and max_depth."""
@@ -448,6 +498,8 @@ class SiteAuditAdapter:
             "network": network_metrics,
             "scripts_count": parser.scripts_count,
             "stylesheets_count": parser.stylesheets_count,
+            "raw_html": resp.text,
+            "raw_headers": dict(resp.headers),
         }
 
     async def _fetch_pagespeed_insights(
@@ -477,6 +529,8 @@ class SiteAuditAdapter:
         request: AuditRequest,
         native_data: dict[str, Any],
         pagespeed_data: dict[str, Any] | None,
+        tech_profile: TechStackProfile | None = None,
+        domain_authority: DomainAuthorityReport | None = None,
     ) -> AuditResult:
         """Combine Google PageSpeed Insights (if available) with native DOM/network audit."""
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -563,6 +617,8 @@ class SiteAuditAdapter:
                 security=sec_report,
                 seo=seo_report,
                 opportunities=opps[:6],
+                tech_stack=tech_profile,
+                domain_authority=domain_authority,
                 source="pagespeed_api",
             )
 
@@ -657,11 +713,16 @@ class SiteAuditAdapter:
             security=sec_report,
             seo=seo_report,
             opportunities=opportunities,
+            tech_stack=tech_profile,
+            domain_authority=domain_authority,
             source="native",
         )
 
     def _generate_mock_audit_result(self, request: AuditRequest) -> AuditResult:
         """Deterministic mock response for unit tests and offline testing."""
+        domain = urlparse(request.url).hostname or "test-audit.local"
+        tech_stack = self.builtwith._generate_mock_profile(domain)
+        domain_authority = self.semrush._generate_mock_report(domain)
         return AuditResult(
             url=request.url,
             final_url=request.url,
@@ -739,6 +800,8 @@ class SiteAuditAdapter:
                     estimated_savings_ms=60.0,
                 )
             ],
+            tech_stack=tech_stack,
+            domain_authority=domain_authority,
             source="mock",
         )
 

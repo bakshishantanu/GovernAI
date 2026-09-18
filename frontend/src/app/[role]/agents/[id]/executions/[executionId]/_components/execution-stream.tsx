@@ -25,6 +25,8 @@ import {
   Bot,
   Activity,
   Globe,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { API_BASE, getAuthHeader, fetchApi } from "@/lib/api-client";
@@ -56,6 +58,8 @@ const TOOL_SKILL: Record<string, { skillId: string; label: string; icon: LucideI
   get_figma_components: { skillId: "figma_design", label: "Figma Design Studio", icon: LayoutTemplate },
   audit_website: { skillId: "site_audit", label: "Site Audit & Performance", icon: Activity },
   crawl_website: { skillId: "site_audit", label: "Site Audit & Performance", icon: Globe },
+  detect_tech_stack: { skillId: "site_audit", label: "Tech Stack Profiler", icon: Layers },
+  get_domain_authority: { skillId: "site_audit", label: "Domain Authority & SEO", icon: Sparkles },
 };
 
 function skillFor(tool: string) {
@@ -939,22 +943,48 @@ function extractAllArtifacts(events: TimelineEvent[], runSteps?: any[]): Unified
   }
 
   function registerSiteAudit(siteAudit: SiteAuditArtifact, tool: string, at?: string) {
-    const id = siteAudit.audit_id || siteAudit.crawl_id || (siteAudit.url ? `site_${siteAudit.url}` : `site_${artifacts.length}`);
+    const id =
+      siteAudit.audit_id ||
+      siteAudit.crawl_id ||
+      siteAudit.tech_stack?.profile_id ||
+      siteAudit.domain_authority?.report_id ||
+      (siteAudit.url ? `site_${siteAudit.url}` : `site_${artifacts.length}`);
     const existing = byId.get(id);
     if (existing && existing.kind === "site_audit") {
+      existing.data = { ...existing.data, ...siteAudit };
       if (siteAudit.scores && !existing.data.scores) {
-        existing.data = { ...existing.data, ...siteAudit };
+        existing.data.scores = siteAudit.scores;
+      }
+      if (siteAudit.tech_stack && !existing.data.tech_stack) {
+        existing.data.tech_stack = siteAudit.tech_stack;
+      }
+      if (siteAudit.domain_authority && !existing.data.domain_authority) {
+        existing.data.domain_authority = siteAudit.domain_authority;
       }
       return;
     }
     const isCrawl = Boolean(siteAudit.crawl_id || siteAudit.start_url);
-    const title = siteAudit.url || siteAudit.start_url || (isCrawl ? "Site Crawl" : "Site Audit");
+    const title =
+      siteAudit.url ||
+      siteAudit.start_url ||
+      siteAudit.tech_stack?.domain ||
+      siteAudit.domain_authority?.domain ||
+      (isCrawl ? "Site Crawl" : "Site Audit");
     const perfScore = siteAudit.scores?.performance;
-    const subtitle = isCrawl
-      ? `${siteAudit.total_pages_crawled ?? 0} pages crawled`
-      : perfScore !== undefined
-      ? `Performance: ${perfScore}/100`
-      : "Audit Report";
+    const authScore = siteAudit.domain_authority?.authority_score;
+    const techCount = siteAudit.tech_stack?.detected_technologies?.length;
+    let subtitle = "Audit Report";
+    if (isCrawl) {
+      subtitle = `${siteAudit.total_pages_crawled ?? 0} pages crawled`;
+    } else if (perfScore !== undefined && authScore !== undefined) {
+      subtitle = `Perf: ${perfScore}/100 | Auth: ${authScore}/100`;
+    } else if (perfScore !== undefined) {
+      subtitle = `Performance: ${perfScore}/100`;
+    } else if (authScore !== undefined) {
+      subtitle = `Semrush Authority: ${authScore}/100`;
+    } else if (techCount !== undefined) {
+      subtitle = `BuiltWith: ${techCount} Techs Detected`;
+    }
 
     const item: UnifiedArtifact = {
       id,
@@ -980,7 +1010,13 @@ function extractAllArtifacts(events: TimelineEvent[], runSteps?: any[]): Unified
       }
     }
 
-    if (e.tool === "audit_website" || e.tool === "crawl_website" || e.metadata) {
+    if (
+      e.tool === "audit_website" ||
+      e.tool === "crawl_website" ||
+      e.tool === "detect_tech_stack" ||
+      e.tool === "get_domain_authority" ||
+      e.metadata
+    ) {
       const siteAudit = parseSiteAuditMetadata(e.metadata);
       if (siteAudit) {
         registerSiteAudit(siteAudit, e.tool || "audit_website", e.at);
@@ -998,7 +1034,13 @@ function extractAllArtifacts(events: TimelineEvent[], runSteps?: any[]): Unified
         }
       }
 
-      if (s.tool === "audit_website" || s.tool === "crawl_website" || s.tool_result) {
+      if (
+        s.tool === "audit_website" ||
+        s.tool === "crawl_website" ||
+        s.tool === "detect_tech_stack" ||
+        s.tool === "get_domain_authority" ||
+        s.tool_result
+      ) {
         const siteAudit = parseSiteAuditMetadata(s.tool_result) || parseSiteAuditMetadata((s as any).metadata_json);
         if (siteAudit) {
           registerSiteAudit(siteAudit, s.tool || "audit_website", s.created_at);
@@ -1048,8 +1090,24 @@ function parseSiteAuditMetadata(raw: any): SiteAuditArtifact | null {
     }
   }
   if (parsed && typeof parsed === "object") {
-    if (parsed.audit_id || parsed.crawl_id || parsed.scores || parsed.vitals || parsed.performance_score !== undefined) {
+    if (
+      parsed.audit_id ||
+      parsed.crawl_id ||
+      parsed.scores ||
+      parsed.vitals ||
+      parsed.performance_score !== undefined ||
+      parsed.tech_stack ||
+      parsed.domain_authority ||
+      parsed.detected_technologies ||
+      parsed.authority_score !== undefined
+    ) {
       const art: any = { ...parsed };
+      if (!art.tech_stack && parsed.detected_technologies) {
+        art.tech_stack = parsed;
+      }
+      if (!art.domain_authority && parsed.authority_score !== undefined && !parsed.scores) {
+        art.domain_authority = parsed;
+      }
       if (!art.scores && (art.performance_score !== undefined || art.seo_score !== undefined)) {
         art.scores = {
           performance: art.performance_score,

@@ -145,7 +145,13 @@ def test_site_audit_skill_metadata_and_tools():
     skill = SiteAuditSkill()
     assert skill.name == "site_audit"
     assert skill.display_name == "Site Audit & Performance"
-    assert len(skill.get_tools()) == 2
+    tools = skill.get_tools()
+    tool_names = [t.name for t in tools]
+    assert len(tools) == 4
+    assert "audit_website" in tool_names
+    assert "detect_tech_stack" in tool_names
+    assert "get_domain_authority" in tool_names
+    assert "crawl_website" in tool_names
     assert skill.required_permissions == ["site:audit:run", "site:crawl:run"]
 
 
@@ -418,3 +424,162 @@ async def test_run_agent_calls_site_audit_tool():
     assert "Audit complete" in last_message["content"]
     assert "Performance score is 94/100" in last_message["content"]
     assert audit_service.log_tool_call.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_detect_tech_stack_tool_execution():
+    from app.skills.site_audit import DetectTechStackTool
+
+    adapter = SiteAuditAdapter(mock_mode=True)
+    tool = DetectTechStackTool(adapter=adapter)
+
+    res = await tool.execute(domain_or_url="https://test-audit.local")
+    assert res["success"] is True
+    assert res["domain"] == "test-audit.local"
+    assert "tech_stack" in res
+    assert "detected_technologies" in res["tech_stack"]
+    tech_names = [t["name"] for t in res["tech_stack"]["detected_technologies"]]
+    assert "Next.js" in tech_names
+    assert "React" in tech_names
+    assert "Cloudflare" in tech_names
+
+    meta = tool.audit_metadata({"domain_or_url": "test-audit.local"}, res)
+    assert meta is not None
+    assert meta["technologies_count"] > 0
+    assert "cdn_hosting" in meta
+
+
+@pytest.mark.asyncio
+async def test_get_domain_authority_tool_execution():
+    from app.skills.site_audit import GetDomainAuthorityTool
+
+    adapter = SiteAuditAdapter(mock_mode=True)
+    tool = GetDomainAuthorityTool(adapter=adapter)
+
+    res = await tool.execute(domain_or_url="https://test-audit.local")
+    assert res["success"] is True
+    assert res["domain"] == "test-audit.local"
+    assert "domain_authority" in res
+    auth = res["domain_authority"]
+    assert auth["authority_score"] > 0
+    assert auth["organic_search_traffic"] > 0
+    assert auth["geo_visibility_score"] > 0
+    assert len(auth["top_organic_keywords"]) > 0
+
+    meta = tool.audit_metadata({"domain_or_url": "test-audit.local"}, res)
+    assert meta is not None
+    assert meta["authority_score"] == auth["authority_score"]
+    assert meta["geo_visibility_score"] == auth["geo_visibility_score"]
+
+
+@pytest.mark.asyncio
+async def test_builtwith_native_heuristic_detection():
+    from app.runtime.site_audit.builtwith_adapter import BuiltWithAdapter
+
+    adapter = BuiltWithAdapter()
+    sample_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Demo Store</title>
+        <meta name="generator" content="WordPress 6.4" />
+        <script src="https://www.googletagmanager.com/gtag/js?id=G-123456"></script>
+        <script src="https://js.stripe.com/v3/"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    </head>
+    <body>
+        <div id="__next">
+            <script src="/_next/static/chunks/main.js"></script>
+            <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+        </div>
+    </body>
+    </html>
+    """
+    sample_headers = {
+        "server": "cloudflare",
+        "cf-ray": "84729104820",
+        "x-powered-by": "Next.js",
+    }
+
+    profile = await adapter.detect_technologies(
+        url_or_domain="https://mystore.example.com",
+        html_content=sample_html,
+        response_headers=sample_headers,
+    )
+
+    detected_names = [t.name for t in profile.detected_technologies]
+    assert "WordPress" in detected_names
+    assert "Next.js" in detected_names
+    assert "Bootstrap" in detected_names
+    assert "Google Analytics 4 (GA4)" in detected_names
+    assert "Meta Pixel" in detected_names
+    assert "Cloudflare" in detected_names
+    assert "Stripe" in detected_names
+    assert profile.source == "native_heuristic"
+
+
+@pytest.mark.asyncio
+async def test_semrush_native_authority_calculation():
+    from app.runtime.site_audit.semrush_adapter import SemrushAdapter
+    from app.runtime.site_audit.models import SeoReport, SecurityReport
+
+    adapter = SemrushAdapter()
+    sample_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Enterprise Cloud Security & AI Governance Platform</title>
+        <meta name="description" content="Leading security and compliance platform for generative AI agents and LLMs.">
+        <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication"}</script>
+        <meta property="og:title" content="Enterprise Cloud Security">
+    </head>
+    <body>
+        <h1>Enterprise Cloud Security Platform</h1>
+        <h2>Automated Compliance Guardrails</h2>
+        <h2>Real-Time LLM Token Auditing</h2>
+        <p>Comprehensive security for enterprise workloads, continuous monitoring, and policy guardrails.</p>
+    </body>
+    </html>
+    """
+    seo = SeoReport(
+        title="Enterprise Cloud Security & AI Governance Platform",
+        h1_count=1,
+        h1_tags=["Enterprise Cloud Security Platform"],
+        h2_count=2,
+        score=95,
+    )
+    sec = SecurityReport(score=100, is_https=True, hsts_enabled=True)
+
+    report = await adapter.get_domain_authority(
+        url_or_domain="https://enterprise-ai.gov",
+        html_content=sample_html,
+        seo_report=seo,
+        security_report=sec,
+    )
+
+    assert report.domain == "enterprise-ai.gov"
+    # .gov base authority should be high
+    assert report.authority_score >= 80
+    assert report.geo_visibility_score >= 80  # schema + og + clear headings
+    assert len(report.top_organic_keywords) > 0
+    assert report.source == "native_heuristic"
+
+
+@pytest.mark.asyncio
+async def test_unified_audit_includes_tech_and_authority():
+    adapter = SiteAuditAdapter(mock_mode=True)
+    tool = AuditWebsiteTool(adapter=adapter)
+
+    res = await tool.execute(url="https://test-audit.local")
+    assert res["success"] is True
+    assert "tech_stack" in res and res["tech_stack"] is not None
+    assert "domain_authority" in res and res["domain_authority"] is not None
+    assert res["tech_stack"]["source"] == "mock"
+    assert res["domain_authority"]["source"] == "mock"
+
+    meta = tool.audit_metadata({"url": "https://test-audit.local"}, res)
+    assert meta is not None
+    assert "tech_stack" in meta
+    assert "domain_authority" in meta
+    assert meta["authority_score"] == res["domain_authority"]["authority_score"]
+    assert meta["technologies_count"] == len(res["tech_stack"]["detected_technologies"])

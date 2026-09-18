@@ -93,6 +93,63 @@ class AuditOpportunity(BaseModel):
     estimated_savings_ms: float | None = None
 
 
+class TechnologyItem(BaseModel):
+    """One web technology identified on the website (BuiltWith profile)."""
+
+    name: str
+    category: str  # CMS, Framework, Analytics, CDN, Payments, Advertising, JavaScript, Security
+    description: str = ""
+    version: str | None = None
+    confidence: str = "HIGH"  # HIGH, MEDIUM, LOW
+    tag: str | None = None
+
+
+class TechStackProfile(BaseModel):
+    """BuiltWith technology profiler report."""
+
+    profile_id: str = Field(default_factory=lambda: f"tech_{uuid.uuid4().hex[:8]}")
+    domain: str
+    detected_technologies: list[TechnologyItem] = Field(default_factory=list)
+    categories: dict[str, list[str]] = Field(default_factory=dict)
+    cms: list[str] = Field(default_factory=list)
+    analytics: list[str] = Field(default_factory=list)
+    cdn_hosting: list[str] = Field(default_factory=list)
+    javascript_frameworks: list[str] = Field(default_factory=list)
+    payment_processors: list[str] = Field(default_factory=list)
+    advertising: list[str] = Field(default_factory=list)
+    third_party_scripts_count: int = 0
+    estimated_monthly_spend_usd: float | None = None
+    source: str = "native_heuristic"  # builtwith_api, native_heuristic, mock
+
+
+class KeywordRanking(BaseModel):
+    """Keyword search position and volume estimate (Semrush by Adobe)."""
+
+    keyword: str
+    position: int = 1
+    search_volume: int = 0
+    traffic_percentage: float = 0.0
+    cpc_usd: float = 0.0
+
+
+class DomainAuthorityReport(BaseModel):
+    """Semrush by Adobe market intelligence and search authority report."""
+
+    report_id: str = Field(default_factory=lambda: f"semrush_{uuid.uuid4().hex[:8]}")
+    domain: str
+    authority_score: int = Field(ge=0, le=100, default=50)  # Semrush Authority Score 0-100
+    organic_search_traffic: int = 0  # Estimated monthly organic visits
+    organic_keywords_count: int = 0  # Number of ranking organic keywords
+    paid_search_traffic: int = 0
+    backlinks_count: int = 0
+    referring_domains_count: int = 0
+    toxic_backlink_percentage: float = 0.0
+    geo_visibility_score: int = Field(ge=0, le=100, default=65)  # Generative Engine Optimization (AI search visibility)
+    top_organic_keywords: list[KeywordRanking] = Field(default_factory=list)
+    competitors: list[str] = Field(default_factory=list)
+    source: str = "native_heuristic"  # semrush_api, native_heuristic, mock
+
+
 class AuditRequest(BaseModel):
     """Parameters for auditing a target URL."""
 
@@ -104,6 +161,8 @@ class AuditRequest(BaseModel):
     extract_seo: bool = True
     extract_security: bool = True
     include_page_speed: bool = True
+    include_tech_stack: bool = True
+    include_domain_authority: bool = True
 
 
 class AuditResult(BaseModel):
@@ -120,7 +179,39 @@ class AuditResult(BaseModel):
     security: SecurityReport
     seo: SeoReport
     opportunities: list[AuditOpportunity] = Field(default_factory=list)
+    tech_stack: TechStackProfile | None = None
+    domain_authority: DomainAuthorityReport | None = None
     source: str = "native"  # pagespeed_api, native, mock
+
+
+class TechStackRequest(BaseModel):
+    """Parameters for detecting technologies on a domain."""
+
+    domain_or_url: str
+
+
+class TechStackResult(BaseModel):
+    """Outcome of detecting a site's technology stack."""
+
+    success: bool
+    tech_stack: TechStackProfile | None = None
+    error: str | None = None
+    reason: str | None = None
+
+
+class DomainAuthorityRequest(BaseModel):
+    """Parameters for querying domain authority and organic visibility."""
+
+    domain_or_url: str
+
+
+class DomainAuthorityResult(BaseModel):
+    """Outcome of querying domain authority."""
+
+    success: bool
+    domain_authority: DomainAuthorityReport | None = None
+    error: str | None = None
+    reason: str | None = None
 
 
 class CrawledPage(BaseModel):
@@ -156,3 +247,4 @@ class CrawlResult(BaseModel):
     broken_links: list[dict[str, Any]] = Field(default_factory=list)
     average_load_time_ms: float = 0.0
     crawl_summary: str = ""
+
