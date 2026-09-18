@@ -10,6 +10,7 @@ from app.runtime.site_audit.adapter import (
 )
 from app.runtime.site_audit.models import AuditRequest, CrawlRequest
 from app.runtime.site_audit.validator import (
+    is_ssrf_safe_url,
     validate_audit_request,
     validate_crawl_request,
 )
@@ -51,6 +52,20 @@ class AuditWebsiteTool(BaseTool):
                     "(defaults to true)."
                 ),
             },
+            "include_tech_stack": {
+                "type": "boolean",
+                "description": (
+                    "Whether to detect the underlying technology stack using BuiltWith "
+                    "(defaults to true)."
+                ),
+            },
+            "include_domain_authority": {
+                "type": "boolean",
+                "description": (
+                    "Whether to query Semrush by Adobe domain authority and search footprint "
+                    "(defaults to true)."
+                ),
+            },
         },
         "required": ["url"],
     }
@@ -65,12 +80,16 @@ class AuditWebsiteTool(BaseTool):
             "categories", ["performance", "accessibility", "best-practices", "seo"]
         )
         include_page_speed = kwargs.get("include_page_speed", True)
+        include_tech_stack = kwargs.get("include_tech_stack", True)
+        include_domain_authority = kwargs.get("include_domain_authority", True)
 
         req = AuditRequest(
             url=url,
             strategy=strategy,
             categories=categories,
             include_page_speed=include_page_speed,
+            include_tech_stack=include_tech_stack,
+            include_domain_authority=include_domain_authority,
         )
 
         validation = validate_audit_request(req)
@@ -96,6 +115,10 @@ class AuditWebsiteTool(BaseTool):
                 "security": result.security.model_dump(),
                 "seo": result.seo.model_dump(),
                 "opportunities": [opp.model_dump() for opp in result.opportunities],
+                "tech_stack": result.tech_stack.model_dump() if result.tech_stack else None,
+                "domain_authority": (
+                    result.domain_authority.model_dump() if result.domain_authority else None
+                ),
                 "source": result.source,
             }
         except SiteAuditTimeoutError as exc:
@@ -115,7 +138,18 @@ class AuditWebsiteTool(BaseTool):
         return {
             "audit_id": result.get("audit_id"),
             "url": result.get("url") or arguments.get("url"),
+            "final_url": result.get("final_url"),
+            "timestamp": result.get("timestamp"),
             "strategy": result.get("strategy", "mobile"),
+            "scores": scores,
+            "vitals": vitals,
+            "network": result.get("network"),
+            "security": sec,
+            "seo": seo,
+            "opportunities": result.get("opportunities", []),
+            "tech_stack": result.get("tech_stack"),
+            "domain_authority": result.get("domain_authority"),
+            "source": result.get("source"),
             "performance_score": scores.get("performance"),
             "accessibility_score": scores.get("accessibility"),
             "best_practices_score": scores.get("best_practices"),
@@ -127,6 +161,124 @@ class AuditWebsiteTool(BaseTool):
             "seo_issues_count": len(seo.get("issues", [])),
             "security_issues_count": len(sec.get("issues", [])),
             "opportunities_count": len(result.get("opportunities", [])),
+            "technologies_count": len(result.get("tech_stack", {}).get("detected_technologies", [])) if result.get("tech_stack") else 0,
+            "authority_score": result.get("domain_authority", {}).get("authority_score") if result.get("domain_authority") else None,
+        }
+
+
+class DetectTechStackTool(BaseTool):
+    name = "detect_tech_stack"
+    description = (
+        "Inspect and identify the technology stack powering a website using BuiltWith. "
+        "Detects Content Management Systems (WordPress, Shopify, AEM), JavaScript frameworks "
+        "(React, Next.js, Vue), analytics trackers, cloud/CDN providers, and estimated tech spend."
+    )
+    required_permission = "site:audit:run"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "domain_or_url": {
+                "type": "string",
+                "description": "Target website domain or URL (e.g. 'https://example.com' or 'example.com').",
+            },
+        },
+        "required": ["domain_or_url"],
+    }
+
+    def __init__(self, adapter: SiteAuditAdapter) -> None:
+        self._adapter = adapter
+
+    async def execute(self, **kwargs: Any) -> dict[str, Any]:
+        target = kwargs.get("domain_or_url", "").strip()
+        if not target:
+            return {"success": False, "error": "validation_failed", "reason": "domain_or_url is required"}
+
+        check_url = target if target.startswith("http") else f"https://{target}"
+        safe, reason = is_ssrf_safe_url(check_url, allow_mock_hosts=True)
+        if not safe:
+            return {"success": False, "error": "validation_failed", "reason": reason}
+
+        try:
+            profile = await self._adapter.detect_tech_stack(target)
+            return {
+                "success": True,
+                "domain": profile.domain,
+                "profile_id": profile.profile_id,
+                "tech_stack": profile.model_dump(),
+                "source": profile.source,
+            }
+        except Exception as exc:
+            return {"success": False, "error": "detection_failed", "reason": str(exc)}
+
+    def audit_metadata(self, arguments: dict[str, Any], result: Any) -> dict[str, Any] | None:
+        if not isinstance(result, dict) or not result.get("success"):
+            return None
+        tech = result.get("tech_stack", {})
+        return {
+            "domain": result.get("domain"),
+            "technologies_count": len(tech.get("detected_technologies", [])),
+            "cms": tech.get("cms", []),
+            "analytics": tech.get("analytics", []),
+            "cdn_hosting": tech.get("cdn_hosting", []),
+            "source": result.get("source"),
+        }
+
+
+class GetDomainAuthorityTool(BaseTool):
+    name = "get_domain_authority"
+    description = (
+        "Query Semrush by Adobe market intelligence and search authority for a domain. "
+        "Retrieves Authority Score (0-100), estimated organic search traffic, keyword ranking positions, "
+        "backlink counts, referring domains, and Generative Engine Optimization (GEO / Adobe AI search) visibility."
+    )
+    required_permission = "site:audit:run"
+    parameters = {
+        "type": "object",
+        "properties": {
+            "domain_or_url": {
+                "type": "string",
+                "description": "Target website domain or URL (e.g. 'example.com' or 'https://example.com').",
+            },
+        },
+        "required": ["domain_or_url"],
+    }
+
+    def __init__(self, adapter: SiteAuditAdapter) -> None:
+        self._adapter = adapter
+
+    async def execute(self, **kwargs: Any) -> dict[str, Any]:
+        target = kwargs.get("domain_or_url", "").strip()
+        if not target:
+            return {"success": False, "error": "validation_failed", "reason": "domain_or_url is required"}
+
+        check_url = target if target.startswith("http") else f"https://{target}"
+        safe, reason = is_ssrf_safe_url(check_url, allow_mock_hosts=True)
+        if not safe:
+            return {"success": False, "error": "validation_failed", "reason": reason}
+
+        try:
+            report = await self._adapter.get_domain_authority(target)
+            return {
+                "success": True,
+                "domain": report.domain,
+                "report_id": report.report_id,
+                "domain_authority": report.model_dump(),
+                "source": report.source,
+            }
+        except Exception as exc:
+            return {"success": False, "error": "authority_query_failed", "reason": str(exc)}
+
+    def audit_metadata(self, arguments: dict[str, Any], result: Any) -> dict[str, Any] | None:
+        if not isinstance(result, dict) or not result.get("success"):
+            return None
+        auth = result.get("domain_authority", {})
+        return {
+            "domain": result.get("domain"),
+            "authority_score": auth.get("authority_score"),
+            "organic_search_traffic": auth.get("organic_search_traffic"),
+            "organic_keywords_count": auth.get("organic_keywords_count"),
+            "backlinks_count": auth.get("backlinks_count"),
+            "geo_visibility_score": auth.get("geo_visibility_score"),
             "source": result.get("source"),
         }
 
@@ -215,8 +367,12 @@ class CrawlWebsiteTool(BaseTool):
             "start_url": result.get("start_url") or arguments.get("start_url"),
             "domain": result.get("domain"),
             "total_pages_crawled": result.get("total_pages_crawled", 0),
+            "pages": result.get("pages", []),
+            "broken_links": result.get("broken_links", []),
             "broken_links_count": len(result.get("broken_links", [])),
             "average_load_time_ms": result.get("average_load_time_ms", 0.0),
+            "crawl_summary": result.get("crawl_summary", {}),
+            "source": result.get("source"),
         }
 
 
@@ -237,5 +393,7 @@ class SiteAuditSkill(BaseSkill):
     def get_tools(self) -> list[BaseTool]:
         return [
             AuditWebsiteTool(self._adapter),
+            DetectTechStackTool(self._adapter),
+            GetDomainAuthorityTool(self._adapter),
             CrawlWebsiteTool(self._adapter),
         ]

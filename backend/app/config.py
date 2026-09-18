@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     # --- Cost Tracking ---
     MODEL_PRICING_JSON: str = "{}"
 
+    # --- Site Audit & Intelligence (Lighthouse, BuiltWith, Semrush) ---
+    PAGESPEED_API_KEY: str = ""
+    BUILTWITH_API_KEY: str = ""
+    SEMRUSH_API_KEY: str = ""
+
     # --- Application ---
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False

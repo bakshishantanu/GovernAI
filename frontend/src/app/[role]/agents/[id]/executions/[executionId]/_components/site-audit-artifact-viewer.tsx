@@ -5,12 +5,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
+  Award,
+  BarChart3,
+  Boxes,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
   Copy,
+  Cpu,
+  DollarSign,
   ExternalLink,
   FileCode,
   Gauge,
@@ -21,6 +26,8 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Sparkles,
+  TrendingUp,
   XCircle,
   Zap,
 } from "lucide-react";
@@ -95,6 +102,49 @@ export interface SiteAuditArtifact {
     score?: number;
     issues?: string[];
   };
+  tech_stack?: {
+    profile_id?: string;
+    domain?: string;
+    detected_technologies?: Array<{
+      name: string;
+      category: string;
+      description?: string;
+      version?: string | null;
+      confidence?: string;
+      tag?: string | null;
+    }>;
+    categories?: Record<string, string[]>;
+    cms?: string[];
+    analytics?: string[];
+    cdn_hosting?: string[];
+    javascript_frameworks?: string[];
+    payment_processors?: string[];
+    advertising?: string[];
+    third_party_scripts_count?: number;
+    estimated_monthly_spend_usd?: number | null;
+    source?: string;
+  };
+  domain_authority?: {
+    report_id?: string;
+    domain?: string;
+    authority_score?: number;
+    organic_search_traffic?: number;
+    organic_keywords_count?: number;
+    paid_search_traffic?: number;
+    backlinks_count?: number;
+    referring_domains_count?: number;
+    toxic_backlink_percentage?: number;
+    geo_visibility_score?: number;
+    top_organic_keywords?: Array<{
+      keyword: string;
+      position?: number;
+      search_volume?: number;
+      traffic_percentage?: number;
+      cpc_usd?: number;
+    }>;
+    competitors?: string[];
+    source?: string;
+  };
   opportunities?: Array<{
     id: string;
     title: string;
@@ -156,12 +206,19 @@ function vitalRatingBadge(rating?: string): { bg: string; text: string; label: s
 }
 
 export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtifact }) {
-  const [activeTab, setActiveTab] = useState<"vitals" | "security" | "seo" | "opportunities" | "crawl">(
-    "vitals"
-  );
+  const techStack = artifact.tech_stack;
+  const domainAuthority = artifact.domain_authority;
+
+  const [activeTab, setActiveTab] = useState<
+    "vitals" | "security" | "seo" | "tech_stack" | "authority" | "opportunities" | "crawl"
+  >(() => {
+    if (artifact.tech_stack && !artifact.scores && !artifact.vitals) return "tech_stack";
+    if (artifact.domain_authority && !artifact.scores && !artifact.vitals) return "authority";
+    return "vitals";
+  });
   const [copied, setCopied] = useState(false);
 
-  const targetUrl = artifact.url || artifact.start_url || "https://example.com";
+  const targetUrl = artifact.url || artifact.start_url || techStack?.domain || domainAuthority?.domain || "https://example.com";
   const strategy = (artifact.strategy || "mobile").toLowerCase();
   const isMobile = strategy === "mobile";
 
@@ -206,6 +263,16 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
             {artifact.source === "pagespeed_api" && (
               <span className="rounded-full bg-[var(--l-teal)]/15 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--l-teal)]">
                 Lighthouse v5
+              </span>
+            )}
+            {techStack && (
+              <span className="rounded-full bg-purple-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-purple-700">
+                BuiltWith Profiler
+              </span>
+            )}
+            {domainAuthority && (
+              <span className="rounded-full bg-orange-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-orange-700">
+                Semrush Intelligence
               </span>
             )}
           </div>
@@ -289,9 +356,15 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
           { id: "vitals", label: "Core Web Vitals", icon: Activity },
           { id: "security", label: "Security & Headers", icon: Shield },
           { id: "seo", label: "SEO & Structure", icon: Search },
+          ...(techStack
+            ? [{ id: "tech_stack", label: `Tech Stack (${techStack.detected_technologies?.length ?? 0})`, icon: Layers }]
+            : []),
+          ...(domainAuthority
+            ? [{ id: "authority", label: `Domain Authority (${domainAuthority.authority_score ?? 0})`, icon: Sparkles }]
+            : []),
           { id: "opportunities", label: `Opportunities (${opportunities.length})`, icon: Zap },
           ...(pages.length > 0
-            ? [{ id: "crawl", label: `Crawled Pages (${pages.length})`, icon: Layers }]
+            ? [{ id: "crawl", label: `Crawled Pages (${pages.length})`, icon: Boxes }]
             : []),
         ].map((tab) => {
           const Icon = tab.icon;
@@ -583,6 +656,337 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                   ))}
                 </ul>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "tech_stack" && (
+          <div className="space-y-5">
+            {!techStack ? (
+              <div className="rounded-xl border border-dashed border-[var(--l-ink)]/20 p-8 text-center text-xs text-[var(--l-charcoal)]/60">
+                No technology stack profile was requested for this audit. Re-run with tech stack profiling enabled or use the Tech Stack Profiler tool.
+              </div>
+            ) : (
+              <>
+                {/* Tech Stack Metrics Strip */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <Layers className="h-3.5 w-3.5 text-[var(--l-ink)]" />
+                      <span>Technologies</span>
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-[var(--l-ink)]">
+                      {techStack.detected_technologies?.length ?? 0}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">
+                      Across {Object.keys(techStack.categories || {}).length} categories
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <DollarSign className="h-3.5 w-3.5 text-[var(--l-teal)]" />
+                      <span>Est. Tech Spend</span>
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-[var(--l-teal)]">
+                      {techStack.estimated_monthly_spend_usd !== null && techStack.estimated_monthly_spend_usd !== undefined
+                        ? `$${techStack.estimated_monthly_spend_usd.toLocaleString()}`
+                        : "Free / OSS"}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">Estimated monthly spend</div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <Cpu className="h-3.5 w-3.5 text-[var(--l-orange)]" />
+                      <span>3rd-Party Scripts</span>
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-extrabold text-[var(--l-ink)]">
+                      {techStack.third_party_scripts_count ?? 0}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">External tags & trackers</div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <ShieldCheck className="h-3.5 w-3.5 text-purple-600" />
+                      <span>Profiler Engine</span>
+                    </div>
+                    <div className="mt-1 font-mono text-sm font-extrabold capitalize text-purple-700 truncate">
+                      {techStack.source?.replace("_", " ") || "BuiltWith"}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">Fingerprint signature engine</div>
+                  </div>
+                </div>
+
+                {/* Third-Party Advisory Alert */}
+                {(techStack.third_party_scripts_count ?? 0) > 4 && (
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="text-xs">
+                      <span className="font-bold text-amber-800">Governance & Vitals Advisory: </span>
+                      <span className="text-amber-900/80">
+                        {techStack.third_party_scripts_count} third-party scripts were detected. Heavy external script execution may degrade Total Blocking Time (TBT) and Interaction to Next Paint (INP). Ensure cookie consent triggers strictly comply with GDPR/CCPA.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Categorized Tech Breakdown */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="landing-display text-xs font-bold uppercase tracking-wider text-[var(--l-ink)]">
+                      Detected Technologies & Frameworks
+                    </h4>
+                    <span className="font-mono text-[11px] text-[var(--l-charcoal)]/60">
+                      Domain: {techStack.domain}
+                    </span>
+                  </div>
+
+                  {techStack.detected_technologies && techStack.detected_technologies.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {techStack.detected_technologies.map((tech, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col justify-between rounded-xl border border-[var(--l-ink)]/15 bg-[var(--l-cream)] p-3.5 shadow-sm transition-all hover:border-[var(--l-ink)]/40 hover:shadow"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-sm font-bold text-[var(--l-ink)]">
+                                {tech.name}
+                              </div>
+                              {tech.version && (
+                                <span className="rounded-full bg-[var(--l-ink)]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--l-ink)]">
+                                  v{tech.version}
+                                </span>
+                              )}
+                            </div>
+                            <span className="mt-1 inline-block rounded-full bg-[var(--l-cream-deep)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--l-charcoal)]/80">
+                              {tech.category}
+                            </span>
+                            {tech.description && (
+                              <p className="mt-2 text-xs leading-relaxed text-[var(--l-charcoal)]/70 line-clamp-2">
+                                {tech.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between border-t border-[var(--l-ink)]/10 pt-2 text-[10px] text-[var(--l-charcoal)]/60">
+                            <span>Confidence</span>
+                            <span className="font-mono font-bold capitalize text-[var(--l-teal)]">
+                              {tech.confidence || "High"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-[var(--l-ink)]/20 p-6 text-center text-xs text-[var(--l-charcoal)]/60">
+                      No matching signatures detected in static analysis.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === "authority" && (
+          <div className="space-y-5">
+            {!domainAuthority ? (
+              <div className="rounded-xl border border-dashed border-[var(--l-ink)]/20 p-8 text-center text-xs text-[var(--l-charcoal)]/60">
+                No domain authority report was generated for this audit. Re-run with domain authority enabled or use the Domain Authority tool.
+              </div>
+            ) : (
+              <>
+                {/* Authority & GEO Dials Grid */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Semrush Authority Score */}
+                  <div className="flex flex-col justify-between rounded-xl border-2 border-orange-500/30 bg-orange-500/5 p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/20 text-orange-600">
+                          <Award className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--l-ink)]">Semrush Authority Score</div>
+                          <div className="text-[10px] text-[var(--l-charcoal)]/60">Overall domain trustworthiness & prestige</div>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-orange-500 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase text-white">
+                        {domainAuthority.authority_score && domainAuthority.authority_score >= 70
+                          ? "High Authority"
+                          : domainAuthority.authority_score && domainAuthority.authority_score >= 40
+                          ? "Moderate"
+                          : "Growing"}
+                      </span>
+                    </div>
+
+                    <div className="my-4 flex items-baseline gap-2">
+                      <span className="landing-display text-4xl font-extrabold text-orange-600">
+                        {domainAuthority.authority_score ?? "—"}
+                      </span>
+                      <span className="font-mono text-sm font-semibold text-[var(--l-charcoal)]/50">/ 100</span>
+                    </div>
+
+                    <div className="rounded-lg bg-white/70 p-3 text-xs leading-relaxed text-[var(--l-charcoal)]/80">
+                      Evaluates backlink quality, organic search volume, and domain age relative to industry benchmarks.
+                    </div>
+                  </div>
+
+                  {/* Adobe Generative Engine Optimization (GEO) Score */}
+                  <div className="flex flex-col justify-between rounded-xl border-2 border-purple-500/30 bg-purple-500/5 p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/20 text-purple-600">
+                          <Sparkles className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-[var(--l-ink)]">Adobe Generative Engine Optimization (GEO)</div>
+                          <div className="text-[10px] text-[var(--l-charcoal)]/60">AI Search visibility (Perplexity, ChatGPT, Gemini)</div>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-purple-600 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase text-white">
+                        {domainAuthority.geo_visibility_score && domainAuthority.geo_visibility_score >= 75
+                          ? "AI Preferred"
+                          : "Standard"}
+                      </span>
+                    </div>
+
+                    <div className="my-4 flex items-baseline gap-2">
+                      <span className="landing-display text-4xl font-extrabold text-purple-700">
+                        {domainAuthority.geo_visibility_score ?? "—"}
+                      </span>
+                      <span className="font-mono text-sm font-semibold text-[var(--l-charcoal)]/50">/ 100</span>
+                    </div>
+
+                    <div className="rounded-lg bg-white/70 p-3 text-xs leading-relaxed text-[var(--l-charcoal)]/80">
+                      Predicts citation likelihood and entity authority when modern generative AI engines synthesize responses.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Search & Backlink Stats Strip */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <TrendingUp className="h-3.5 w-3.5 text-[var(--l-teal)]" />
+                      <span>Organic Visits</span>
+                    </div>
+                    <div className="mt-1 font-mono text-xl font-extrabold text-[var(--l-ink)]">
+                      {(domainAuthority.organic_search_traffic ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">Est. monthly search visits</div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <Search className="h-3.5 w-3.5 text-[var(--l-ink)]" />
+                      <span>Ranked Keywords</span>
+                    </div>
+                    <div className="mt-1 font-mono text-xl font-extrabold text-[var(--l-ink)]">
+                      {(domainAuthority.organic_keywords_count ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">In top 100 organic search</div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <Globe className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Backlinks</span>
+                    </div>
+                    <div className="mt-1 font-mono text-xl font-extrabold text-[var(--l-ink)]">
+                      {(domainAuthority.backlinks_count ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">
+                      From {domainAuthority.referring_domains_count?.toLocaleString() || 0} domains
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--l-ink)]/10 bg-[var(--l-cream-deep)]/30 p-3.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--l-charcoal)]/60">
+                      <Shield className="h-3.5 w-3.5 text-[var(--l-orange)]" />
+                      <span>Toxic Backlinks</span>
+                    </div>
+                    <div className="mt-1 font-mono text-xl font-extrabold text-emerald-600">
+                      {domainAuthority.toxic_backlink_percentage !== undefined
+                        ? `${domainAuthority.toxic_backlink_percentage.toFixed(1)}%`
+                        : "0.0%"}
+                    </div>
+                    <div className="text-[10px] text-[var(--l-charcoal)]/50">Low toxicity profile</div>
+                  </div>
+                </div>
+
+                {/* Top Organic Search Keywords Table */}
+                {domainAuthority.top_organic_keywords && domainAuthority.top_organic_keywords.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="landing-display text-xs font-bold uppercase tracking-wider text-[var(--l-ink)]">
+                        Top Ranking Organic Keywords
+                      </h4>
+                      <span className="font-mono text-[10px] text-[var(--l-charcoal)]/60">
+                        Source: Semrush Intelligence
+                      </span>
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border border-[var(--l-ink)]/15">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[var(--l-cream-deep)]/60 font-semibold text-[var(--l-ink)]">
+                          <tr>
+                            <th className="px-3.5 py-2.5">Keyword</th>
+                            <th className="px-3.5 py-2.5">Position</th>
+                            <th className="px-3.5 py-2.5">Monthly Volume</th>
+                            <th className="px-3.5 py-2.5">Traffic %</th>
+                            <th className="px-3.5 py-2.5">Est. CPC</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--l-ink)]/10">
+                          {domainAuthority.top_organic_keywords.map((kw, idx) => (
+                            <tr key={idx} className="hover:bg-[var(--l-cream-deep)]/20">
+                              <td className="px-3.5 py-2 font-medium text-[var(--l-ink)]">
+                                {kw.keyword}
+                              </td>
+                              <td className="px-3.5 py-2">
+                                <span className="inline-flex items-center rounded-full bg-[var(--l-ink)]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--l-ink)]">
+                                  #{kw.position ?? "—"}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-2 font-mono text-[11px] text-[var(--l-charcoal)]">
+                                {(kw.search_volume ?? 0).toLocaleString()}
+                              </td>
+                              <td className="px-3.5 py-2 font-mono text-[11px] text-[var(--l-teal)] font-bold">
+                                {kw.traffic_percentage !== undefined ? `${kw.traffic_percentage.toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="px-3.5 py-2 font-mono text-[11px] text-[var(--l-charcoal)]">
+                                {kw.cpc_usd !== undefined ? `$${kw.cpc_usd.toFixed(2)}` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Market Competitors */}
+                {domainAuthority.competitors && domainAuthority.competitors.length > 0 && (
+                  <div className="rounded-xl border border-[var(--l-ink)]/15 bg-[var(--l-cream-deep)]/20 p-4">
+                    <h5 className="text-xs font-bold text-[var(--l-ink)]">
+                      Identified Market Competitors:
+                    </h5>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      {domainAuthority.competitors.map((comp, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 rounded-full border border-[var(--l-ink)]/20 bg-white px-3 py-1 font-mono text-xs font-medium text-[var(--l-ink)] shadow-xs"
+                        >
+                          <Globe className="h-3 w-3 opacity-60" />
+                          {comp}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
