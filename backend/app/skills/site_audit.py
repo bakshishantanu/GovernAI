@@ -115,7 +115,16 @@ class AuditWebsiteTool(BaseTool):
         return {
             "audit_id": result.get("audit_id"),
             "url": result.get("url") or arguments.get("url"),
+            "final_url": result.get("final_url"),
+            "timestamp": result.get("timestamp"),
             "strategy": result.get("strategy", "mobile"),
+            "scores": scores,
+            "vitals": vitals,
+            "network": result.get("network"),
+            "security": sec,
+            "seo": seo,
+            "opportunities": result.get("opportunities", []),
+            "source": result.get("source"),
             "performance_score": scores.get("performance"),
             "accessibility_score": scores.get("accessibility"),
             "best_practices_score": scores.get("best_practices"),
@@ -127,7 +136,6 @@ class AuditWebsiteTool(BaseTool):
             "seo_issues_count": len(seo.get("issues", [])),
             "security_issues_count": len(sec.get("issues", [])),
             "opportunities_count": len(result.get("opportunities", [])),
-            "source": result.get("source"),
         }
 
 
@@ -215,8 +223,12 @@ class CrawlWebsiteTool(BaseTool):
             "start_url": result.get("start_url") or arguments.get("start_url"),
             "domain": result.get("domain"),
             "total_pages_crawled": result.get("total_pages_crawled", 0),
+            "pages": result.get("pages", []),
+            "broken_links": result.get("broken_links", []),
             "broken_links_count": len(result.get("broken_links", [])),
             "average_load_time_ms": result.get("average_load_time_ms", 0.0),
+            "crawl_summary": result.get("crawl_summary", {}),
+            "source": result.get("source"),
         }
 
 

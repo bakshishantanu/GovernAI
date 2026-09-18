@@ -144,6 +144,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
   const [run, setRun] = useState<Execution | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [tab, setTab] = useState<Tab>("logs");
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
 
@@ -325,43 +326,8 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
 
   const stageIndex = pipelineStageIndex(status);
 
-  // Extract Figma wireframe artifact if present in events or execution steps
-  const figmaArtifact: FigmaWireframeArtifact | null = (() => {
-    for (const e of events) {
-      if (e.kind === "allowed" && (e.tool === "generate_wireframe" || e.metadata)) {
-        const art = parseArtifactMetadata(e.metadata);
-        if (art) return art;
-      }
-    }
-    if (run?.steps && Array.isArray(run.steps)) {
-      for (const s of run.steps) {
-        if (s.tool === "generate_wireframe" || s.tool_result) {
-          const art = parseArtifactMetadata(s.tool_result) || parseArtifactMetadata((s as any).metadata_json);
-          if (art) return art;
-        }
-      }
-    }
-    return null;
-  })();
-
-  // Extract Site Audit artifact if present in events or execution steps
-  const siteAuditArtifact: SiteAuditArtifact | null = (() => {
-    for (const e of events) {
-      if (e.kind === "allowed" && (e.tool === "audit_website" || e.tool === "crawl_website" || e.metadata)) {
-        const art = parseSiteAuditMetadata(e.metadata);
-        if (art) return art;
-      }
-    }
-    if (run?.steps && Array.isArray(run.steps)) {
-      for (const s of run.steps) {
-        if (s.tool === "audit_website" || s.tool === "crawl_website" || s.tool_result) {
-          const art = parseSiteAuditMetadata(s.tool_result) || parseSiteAuditMetadata((s as any).metadata_json);
-          if (art) return art;
-        }
-      }
-    }
-    return null;
-  })();
+  // Extract all generated artifacts (Figma wireframes, Site audit reports, etc.)
+  const allArtifacts = extractAllArtifacts(events, run?.steps);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -421,7 +387,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           {TABS.map((t) => {
             const TIcon = t.icon;
             const on = tab === t.id;
-            const hasArtifactBadge = t.id === "artifacts" && (Boolean(figmaArtifact) || Boolean(siteAuditArtifact));
+            const hasArtifactBadge = t.id === "artifacts" && allArtifacts.length > 0;
             return (
               <button
                 key={t.id}
@@ -442,7 +408,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
                       color: on ? "var(--l-ink)" : "var(--l-cream)",
                     }}
                   >
-                    1
+                    {allArtifacts.length}
                   </span>
                 )}
               </button>
@@ -469,14 +435,17 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
               result={result ?? run?.result ?? null}
               error={runError ?? run?.error ?? null}
               live={live}
-              artifact={figmaArtifact}
-              siteAuditArtifact={siteAuditArtifact}
-              onViewArtifact={() => setTab("artifacts")}
+              artifacts={allArtifacts}
+              onViewArtifact={(artId) => {
+                if (artId) setSelectedArtifactId(artId);
+                setTab("artifacts");
+              }}
             />
           ) : (
             <ArtifactsTab
-              artifact={figmaArtifact}
-              siteAuditArtifact={siteAuditArtifact}
+              artifacts={allArtifacts}
+              selectedArtifactId={selectedArtifactId}
+              onSelectArtifact={setSelectedArtifactId}
               live={live}
             />
           )}
@@ -923,6 +892,124 @@ function GovernanceTab({
   );
 }
 
+export type UnifiedArtifact =
+  | {
+      id: string;
+      kind: "figma";
+      title: string;
+      subtitle: string;
+      tool: string;
+      at?: string;
+      data: FigmaWireframeArtifact;
+    }
+  | {
+      id: string;
+      kind: "site_audit";
+      title: string;
+      subtitle: string;
+      tool: string;
+      at?: string;
+      data: SiteAuditArtifact;
+    };
+
+function extractAllArtifacts(events: TimelineEvent[], runSteps?: any[]): UnifiedArtifact[] {
+  const artifacts: UnifiedArtifact[] = [];
+  const byId = new Map<string, UnifiedArtifact>();
+
+  function registerFigma(figma: FigmaWireframeArtifact, tool: string, at?: string) {
+    const id = figma.wireframe_id || (figma.screen_name ? `figma_${figma.screen_name}` : `figma_${artifacts.length}`);
+    const existing = byId.get(id);
+    if (existing && existing.kind === "figma") {
+      if (figma.svg_content && !existing.data.svg_content) {
+        existing.data = { ...existing.data, ...figma };
+      }
+      return;
+    }
+    const item: UnifiedArtifact = {
+      id,
+      kind: "figma",
+      title: figma.screen_name || "Wireframe Design",
+      subtitle: figma.layout_type ? `${figma.layout_type.toUpperCase()} layout` : "Figma Design",
+      tool,
+      at,
+      data: figma,
+    };
+    byId.set(id, item);
+    artifacts.push(item);
+  }
+
+  function registerSiteAudit(siteAudit: SiteAuditArtifact, tool: string, at?: string) {
+    const id = siteAudit.audit_id || siteAudit.crawl_id || (siteAudit.url ? `site_${siteAudit.url}` : `site_${artifacts.length}`);
+    const existing = byId.get(id);
+    if (existing && existing.kind === "site_audit") {
+      if (siteAudit.scores && !existing.data.scores) {
+        existing.data = { ...existing.data, ...siteAudit };
+      }
+      return;
+    }
+    const isCrawl = Boolean(siteAudit.crawl_id || siteAudit.start_url);
+    const title = siteAudit.url || siteAudit.start_url || (isCrawl ? "Site Crawl" : "Site Audit");
+    const perfScore = siteAudit.scores?.performance;
+    const subtitle = isCrawl
+      ? `${siteAudit.total_pages_crawled ?? 0} pages crawled`
+      : perfScore !== undefined
+      ? `Performance: ${perfScore}/100`
+      : "Audit Report";
+
+    const item: UnifiedArtifact = {
+      id,
+      kind: "site_audit",
+      title,
+      subtitle,
+      tool,
+      at,
+      data: siteAudit,
+    };
+    byId.set(id, item);
+    artifacts.push(item);
+  }
+
+  // 1. Scan events in chronological order
+  for (const e of events) {
+    if (e.kind !== "allowed") continue;
+
+    if (e.tool === "generate_wireframe" || e.metadata) {
+      const figma = parseArtifactMetadata(e.metadata);
+      if (figma) {
+        registerFigma(figma, e.tool || "generate_wireframe", e.at);
+      }
+    }
+
+    if (e.tool === "audit_website" || e.tool === "crawl_website" || e.metadata) {
+      const siteAudit = parseSiteAuditMetadata(e.metadata);
+      if (siteAudit) {
+        registerSiteAudit(siteAudit, e.tool || "audit_website", e.at);
+      }
+    }
+  }
+
+  // 2. Scan run.steps if available
+  if (runSteps && Array.isArray(runSteps)) {
+    for (const s of runSteps) {
+      if (s.tool === "generate_wireframe" || s.tool_result) {
+        const figma = parseArtifactMetadata(s.tool_result) || parseArtifactMetadata((s as any).metadata_json);
+        if (figma) {
+          registerFigma(figma, s.tool || "generate_wireframe", s.created_at);
+        }
+      }
+
+      if (s.tool === "audit_website" || s.tool === "crawl_website" || s.tool_result) {
+        const siteAudit = parseSiteAuditMetadata(s.tool_result) || parseSiteAuditMetadata((s as any).metadata_json);
+        if (siteAudit) {
+          registerSiteAudit(siteAudit, s.tool || "audit_website", s.created_at);
+        }
+      }
+    }
+  }
+
+  return artifacts;
+}
+
 function parseArtifactMetadata(raw: any): FigmaWireframeArtifact | null {
   if (!raw) return null;
   let parsed = raw;
@@ -961,8 +1048,25 @@ function parseSiteAuditMetadata(raw: any): SiteAuditArtifact | null {
     }
   }
   if (parsed && typeof parsed === "object") {
-    if (parsed.audit_id || parsed.crawl_id || parsed.scores || parsed.vitals) {
-      return parsed as SiteAuditArtifact;
+    if (parsed.audit_id || parsed.crawl_id || parsed.scores || parsed.vitals || parsed.performance_score !== undefined) {
+      const art: any = { ...parsed };
+      if (!art.scores && (art.performance_score !== undefined || art.seo_score !== undefined)) {
+        art.scores = {
+          performance: art.performance_score,
+          accessibility: art.accessibility_score,
+          best_practices: art.best_practices_score,
+          seo: art.seo_score,
+        };
+      }
+      if (!art.vitals && (art.lcp_ms !== undefined || art.fcp_ms !== undefined)) {
+        art.vitals = {
+          lcp_ms: art.lcp_ms,
+          fcp_ms: art.fcp_ms,
+          cls: art.cls,
+          ttfb_ms: art.ttfb_ms,
+        };
+      }
+      return art as SiteAuditArtifact;
     }
     if (parsed.tool_result) {
       return parseSiteAuditMetadata(parsed.tool_result);
@@ -1079,17 +1183,15 @@ function OutputTab({
   result,
   error,
   live,
-  artifact,
-  siteAuditArtifact,
+  artifacts,
   onViewArtifact,
 }: {
   status: LiveStatus;
   result: string | null;
   error: string | null;
   live: boolean;
-  artifact?: FigmaWireframeArtifact | null;
-  siteAuditArtifact?: SiteAuditArtifact | null;
-  onViewArtifact?: () => void;
+  artifacts: UnifiedArtifact[];
+  onViewArtifact?: (artifactId?: string) => void;
 }) {
   if (live) {
     return <EmptyTab live waiting="The run is still going — output appears once it finishes." idle="" />;
@@ -1099,77 +1201,54 @@ function OutputTab({
 
   return (
     <div className="space-y-4">
-      {siteAuditArtifact && (
-        <div
-          className="flex items-center justify-between rounded-xl border-2 p-3.5"
-          style={{
-            borderColor: "var(--l-ink)",
-            background: "color-mix(in srgb, var(--l-ink) 4%, var(--l-cream))",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
-              style={{ background: "var(--l-ink)" }}
-            >
-              <Activity className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
-                Site Performance Audit Generated
-              </div>
-              <div className="text-sm font-bold text-[var(--l-ink)]">
-                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditArtifact.scores?.performance ?? "—"}/100 · SEO: {siteAuditArtifact.scores?.seo ?? "—"}/100
-              </div>
-            </div>
-          </div>
-          {onViewArtifact && (
-            <button
-              onClick={onViewArtifact}
-              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105"
-              style={{ background: "var(--l-ink)" }}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-              View in Artifacts
-            </button>
-          )}
-        </div>
-      )}
+      {artifacts.length > 0 && (
+        <div className="space-y-2.5">
+          {artifacts.map((art) => {
+            const isFigma = art.kind === "figma";
+            const Icon = isFigma ? LayoutTemplate : Activity;
+            const figmaData = isFigma ? (art.data as FigmaWireframeArtifact) : null;
+            const siteData = !isFigma ? (art.data as SiteAuditArtifact) : null;
 
-      {artifact && (
-        <div
-          className="flex items-center justify-between rounded-xl border-2 p-3.5"
-          style={{
-            borderColor: "var(--l-ink)",
-            background: "color-mix(in srgb, var(--l-ink) 4%, var(--l-cream))",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
-              style={{ background: "var(--l-ink)" }}
-            >
-              <LayoutTemplate className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
-                Figma Wireframe Generated
+            return (
+              <div
+                key={art.id}
+                className="flex items-center justify-between rounded-xl border-2 p-3.5"
+                style={{
+                  borderColor: "var(--l-ink)",
+                  background: "color-mix(in srgb, var(--l-ink) 4%, var(--l-cream))",
+                }}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white"
+                    style={{ background: isFigma ? "var(--l-orange-deep)" : "var(--l-ink)" }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--l-charcoal)]/60">
+                      {isFigma ? "Figma Wireframe Generated" : "Site Performance Audit Generated"}
+                    </div>
+                    <div className="truncate text-sm font-bold text-[var(--l-ink)]">
+                      {isFigma
+                        ? `${figmaData?.screen_name || "Wireframe"} · Layout: ${figmaData?.layout_type || "desktop"}`
+                        : `${siteData?.url || siteData?.start_url || "Website Audit"} · Perf: ${siteData?.scores?.performance ?? "—"}/100 · SEO: ${siteData?.scores?.seo ?? "—"}/100`}
+                    </div>
+                  </div>
+                </div>
+                {onViewArtifact && (
+                  <button
+                    onClick={() => onViewArtifact(art.id)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105"
+                    style={{ background: isFigma ? "var(--l-orange-deep)" : "var(--l-ink)" }}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    View in Artifacts
+                  </button>
+                )}
               </div>
-              <div className="text-sm font-bold text-[var(--l-ink)]">
-                {artifact.screen_name} ({artifact.layout_type || "UI"} Layout)
-              </div>
-            </div>
-          </div>
-          {onViewArtifact && (
-            <button
-              onClick={onViewArtifact}
-              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition-transform hover:scale-105"
-              style={{ background: "var(--l-ink)" }}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-              View in Artifacts
-            </button>
-          )}
+            );
+          })}
         </div>
       )}
 
@@ -1200,32 +1279,134 @@ function OutputTab({
 }
 
 function ArtifactsTab({
-  artifact,
-  siteAuditArtifact,
+  artifacts,
+  selectedArtifactId,
+  onSelectArtifact,
   live,
 }: {
-  artifact?: FigmaWireframeArtifact | null;
-  siteAuditArtifact?: SiteAuditArtifact | null;
+  artifacts: UnifiedArtifact[];
+  selectedArtifactId: string | null;
+  onSelectArtifact: (id: string) => void;
   live?: boolean;
 }) {
-  if (live) {
+  if (live && artifacts.length === 0) {
     return <EmptyTab live waiting="Watching for generated artifacts and reports…" idle="" />;
   }
 
-  if (siteAuditArtifact) {
-    return <SiteAuditArtifactViewer artifact={siteAuditArtifact} />;
+  if (artifacts.length === 0) {
+    return (
+      <div className="rounded-xl border-2 border-dashed border-[var(--l-line)] px-6 py-10 text-center">
+        <Paperclip className="mx-auto h-5 w-5 text-[var(--l-charcoal)]/30" />
+        <p className="mt-2 text-[12.5px] text-[var(--l-charcoal)]/50">
+          This run produced no files or artifacts.
+        </p>
+      </div>
+    );
   }
 
-  if (artifact) {
-    return <FigmaArtifactViewer artifact={artifact} />;
-  }
+  const current =
+    artifacts.find((a) => a.id === selectedArtifactId) ??
+    artifacts[artifacts.length - 1] ??
+    artifacts[0];
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-[var(--l-line)] px-6 py-10 text-center">
-      <Paperclip className="mx-auto h-5 w-5 text-[var(--l-charcoal)]/30" />
-      <p className="mt-2 text-[12.5px] text-[var(--l-charcoal)]/50">
-        This run produced no files or artifacts.
-      </p>
+    <div className="space-y-4">
+      {artifacts.length > 1 && (
+        <div className="rounded-2xl border-2 border-[var(--l-ink)]/15 bg-[var(--l-cream-deep)]/40 p-3 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-1">
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-3.5 w-3.5 text-[var(--l-ink)]" />
+              <span className="text-[11.5px] font-bold uppercase tracking-wider text-[var(--l-ink)]">
+                Generated Artifacts ({artifacts.length})
+              </span>
+            </div>
+            <span className="text-[10.5px] font-mono text-[var(--l-charcoal)]/50">
+              Click to inspect each deliverable
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {artifacts.map((art) => {
+              const isSelected = art.id === current.id;
+              const isFigma = art.kind === "figma";
+              const Icon = isFigma ? LayoutTemplate : Activity;
+              return (
+                <button
+                  key={art.id}
+                  type="button"
+                  onClick={() => onSelectArtifact(art.id)}
+                  className="group relative flex items-center gap-2.5 rounded-xl border-2 px-3 py-2 text-left transition-all duration-150"
+                  style={{
+                    borderColor: isSelected ? "var(--l-ink)" : "var(--l-line)",
+                    background: isSelected ? "var(--l-ink)" : "var(--l-cream)",
+                    color: isSelected ? "#ffffff" : "var(--l-ink)",
+                    boxShadow: isSelected ? "0 2px 0 0 rgba(22,19,14,0.18)" : "none",
+                  }}
+                >
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs"
+                    style={{
+                      background: isSelected
+                        ? "rgba(255,255,255,0.18)"
+                        : isFigma
+                        ? "color-mix(in srgb, var(--l-orange) 18%, transparent)"
+                        : "color-mix(in srgb, var(--l-teal) 18%, transparent)",
+                      color: isSelected
+                        ? "#ffffff"
+                        : isFigma
+                        ? "var(--l-orange-deep)"
+                        : "var(--l-teal)",
+                    }}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-xs font-bold leading-snug max-w-[200px]">
+                        {art.title}
+                      </span>
+                      <span
+                        className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider leading-none"
+                        style={{
+                          background: isSelected
+                            ? "rgba(255,255,255,0.22)"
+                            : isFigma
+                            ? "var(--l-orange-soft)"
+                            : "color-mix(in srgb, var(--l-teal) 15%, transparent)",
+                          color: isSelected
+                            ? "#ffffff"
+                            : isFigma
+                            ? "var(--l-orange-deep)"
+                            : "var(--l-teal)",
+                        }}
+                      >
+                        {isFigma ? "Wireframe" : "Site Audit"}
+                      </span>
+                    </div>
+                    {art.subtitle && (
+                      <p
+                        className="truncate text-[10.5px] leading-tight mt-0.5 max-w-[240px]"
+                        style={{
+                          color: isSelected ? "rgba(255,255,255,0.7)" : "var(--l-charcoal)/60",
+                        }}
+                      >
+                        {art.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {current.kind === "figma" ? (
+        <FigmaArtifactViewer artifact={current.data} />
+      ) : (
+        <SiteAuditArtifactViewer artifact={current.data} />
+      )}
     </div>
   );
 }
