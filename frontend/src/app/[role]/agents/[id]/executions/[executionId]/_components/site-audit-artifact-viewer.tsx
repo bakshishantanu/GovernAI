@@ -291,8 +291,12 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
           { label: "SEO", score: scores.seo, icon: Search },
         ].map((item) => {
           // `?? 0` here used to turn a missing score into a red "Poor 0",
-          // which is a verdict this run never reached.
-          const colors = item.score === undefined ? NO_DATA : scoreColor(item.score);
+          // which is a verdict this run never reached. Checked by type, not
+          // against undefined: the nested shape comes straight from
+          // `result.scores.model_dump()`, so an unmeasured category arrives
+          // as an explicit `null`, and `null >= 50` is false -- which would
+          // have printed a red "Poor" beside a blank value.
+          const colors = typeof item.score !== "number" ? NO_DATA : scoreColor(item.score);
           const Icon = item.icon;
           return (
             <div
@@ -491,7 +495,7 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                 <div>
                   <h4 className="text-sm font-bold text-[var(--l-ink)]">
                     Security Baseline Score:{" "}
-                    {security.score === undefined ? "not recorded" : `${security.score}/100`}
+                    {typeof security.score !== "number" ? "not recorded" : `${security.score}/100`}
                   </h4>
                   <p className="text-xs text-[var(--l-charcoal)]/60">
                     Audit of transport security, framing protections, and content policies.
