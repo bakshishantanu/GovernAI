@@ -11,9 +11,21 @@ export function AgentConnectionsPanel({ agentId }: { agentId: string }) {
   const [requirements, setRequirements] = useState<RequirementStatus[] | null>(null);
 
   function reload() {
-    fetchApi(`/agents/${agentId}/requirements`)
-      .then((data: RequirementStatus[]) => setRequirements(data ?? []))
-      .catch(() => setRequirements([]));
+    Promise.allSettled([
+      fetchApi(`/agents/${agentId}/requirements`) as Promise<RequirementStatus[]>,
+      // Org-wide, not agent-scoped -- carries the masked, non-secret preview
+      // values (e.g. Jira base URL/email, never the API token) a satisfied
+      // requirement needs to show "connected as ..." instead of just a
+      // status badge. /agents/{id}/requirements doesn't return these itself.
+      fetchApi(`/connections/`) as Promise<
+        { requirement_key: string; preview: Record<string, string> | null }[]
+      >,
+    ]).then(([reqsResult, connectionsResult]) => {
+      const reqs = reqsResult.status === "fulfilled" ? (reqsResult.value ?? []) : [];
+      const connections = connectionsResult.status === "fulfilled" ? connectionsResult.value : [];
+      const previewByKey = new Map(connections.map((c) => [c.requirement_key, c.preview]));
+      setRequirements(reqs.map((r) => ({ ...r, preview: previewByKey.get(r.key) })));
+    });
   }
 
   useEffect(reload, [agentId]);

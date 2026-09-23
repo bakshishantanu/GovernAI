@@ -19,7 +19,12 @@ export function SpendBreakdown({
 
   return (
     <div className="rounded-2xl border-2 border-[var(--l-ink)]/90 bg-[var(--l-cream)] p-5 shadow-[0_5px_0_0_rgba(22,19,14,0.14)]">
-      <h2 className="landing-display text-base text-[var(--l-ink)]">{title}</h2>
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="landing-display text-base text-[var(--l-ink)]">{title}</h2>
+        {!loading && rows.length > 0 && (
+          <span className="shrink-0 text-[11px] text-[var(--l-charcoal)]/45">relative to top spender</span>
+        )}
+      </div>
 
       <div className="mt-3 space-y-2.5">
         {loading ? (
