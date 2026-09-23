@@ -436,7 +436,11 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           {TABS.map((t) => {
             const TIcon = t.icon;
             const on = tab === t.id;
-            const hasArtifactBadge = t.id === "artifacts" && (Boolean(figmaArtifact) || Boolean(siteAuditArtifact));
+            // A hardcoded "1" under-reported a run that produced both a site
+            // audit and a wireframe.
+            const artifactCount =
+              (siteAuditArtifact ? 1 : 0) + (figmaArtifact ? 1 : 0);
+            const hasArtifactBadge = t.id === "artifacts" && artifactCount > 0;
             return (
               <button
                 key={t.id}
@@ -457,7 +461,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
                       color: on ? "var(--l-ink)" : "var(--l-cream)",
                     }}
                   >
-                    1
+                    {artifactCount}
                   </span>
                 )}
               </button>
@@ -1244,12 +1248,18 @@ function ArtifactsTab({
     return <EmptyTab live waiting="Watching for generated artifacts and reports…" idle="" />;
   }
 
-  if (siteAuditArtifact) {
-    return <SiteAuditArtifactViewer artifact={siteAuditArtifact} />;
-  }
-
-  if (artifact) {
-    return <FigmaArtifactViewer artifact={artifact} />;
+  // Both, when a run produced both. These used to be two early returns, so a
+  // run that audited a site *and* generated a wireframe showed only the
+  // audit -- the wireframe was unreachable from the console even though the
+  // Agent Output tab offered a "View in Artifacts" button for it, and the
+  // wireframe viewer is the only way to get its HTML/CSS handoff package.
+  if (siteAuditArtifact || artifact) {
+    return (
+      <div className="space-y-5">
+        {siteAuditArtifact && <SiteAuditArtifactViewer artifact={siteAuditArtifact} />}
+        {artifact && <FigmaArtifactViewer artifact={artifact} />}
+      </div>
+    );
   }
 
   return (
