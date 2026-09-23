@@ -436,7 +436,11 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           {TABS.map((t) => {
             const TIcon = t.icon;
             const on = tab === t.id;
-            const hasArtifactBadge = t.id === "artifacts" && (Boolean(figmaArtifact) || Boolean(siteAuditArtifact));
+            // A hardcoded "1" under-reported a run that produced both a site
+            // audit and a wireframe.
+            const artifactCount =
+              (siteAuditArtifact ? 1 : 0) + (figmaArtifact ? 1 : 0);
+            const hasArtifactBadge = t.id === "artifacts" && artifactCount > 0;
             return (
               <button
                 key={t.id}
@@ -457,7 +461,7 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
                       color: on ? "var(--l-ink)" : "var(--l-cream)",
                     }}
                   >
-                    1
+                    {artifactCount}
                   </span>
                 )}
               </button>
@@ -965,6 +969,23 @@ function parseArtifactMetadata(raw: any): FigmaWireframeArtifact | null {
   return null;
 }
 
+/** One audit score, from whichever shape this artifact happens to carry.
+ *
+ * The full tool result nests them under `scores`; the version that is
+ * actually persisted (SiteAuditTool.audit_metadata) flattens them into
+ * `performance_score` and friends. Reading only the nested one made this
+ * card read "Perf: —/100" for every real run. */
+function siteAuditScore(
+  artifact: SiteAuditArtifact,
+  nested: "performance" | "seo",
+  flatKey: "performance_score" | "seo_score",
+): string {
+  const value =
+    artifact.scores?.[nested] ??
+    (artifact as unknown as Record<string, unknown>)[flatKey];
+  return typeof value === "number" ? `${value}/100` : "not recorded";
+}
+
 function parseSiteAuditMetadata(raw: any): SiteAuditArtifact | null {
   if (!raw) return null;
   let parsed = raw;
@@ -1134,7 +1155,7 @@ function OutputTab({
                 Site Performance Audit Generated
               </div>
               <div className="text-sm font-bold text-[var(--l-ink)]">
-                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditArtifact.scores?.performance ?? "—"}/100 · SEO: {siteAuditArtifact.scores?.seo ?? "—"}/100
+                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditScore(siteAuditArtifact, "performance", "performance_score")} · SEO: {siteAuditScore(siteAuditArtifact, "seo", "seo_score")}
               </div>
             </div>
           </div>
@@ -1227,12 +1248,18 @@ function ArtifactsTab({
     return <EmptyTab live waiting="Watching for generated artifacts and reports…" idle="" />;
   }
 
-  if (siteAuditArtifact) {
-    return <SiteAuditArtifactViewer artifact={siteAuditArtifact} />;
-  }
-
-  if (artifact) {
-    return <FigmaArtifactViewer artifact={artifact} />;
+  // Both, when a run produced both. These used to be two early returns, so a
+  // run that audited a site *and* generated a wireframe showed only the
+  // audit -- the wireframe was unreachable from the console even though the
+  // Agent Output tab offered a "View in Artifacts" button for it, and the
+  // wireframe viewer is the only way to get its HTML/CSS handoff package.
+  if (siteAuditArtifact || artifact) {
+    return (
+      <div className="space-y-5">
+        {siteAuditArtifact && <SiteAuditArtifactViewer artifact={siteAuditArtifact} />}
+        {artifact && <FigmaArtifactViewer artifact={artifact} />}
+      </div>
+    );
   }
 
   return (
