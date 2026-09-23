@@ -965,6 +965,23 @@ function parseArtifactMetadata(raw: any): FigmaWireframeArtifact | null {
   return null;
 }
 
+/** One audit score, from whichever shape this artifact happens to carry.
+ *
+ * The full tool result nests them under `scores`; the version that is
+ * actually persisted (SiteAuditTool.audit_metadata) flattens them into
+ * `performance_score` and friends. Reading only the nested one made this
+ * card read "Perf: —/100" for every real run. */
+function siteAuditScore(
+  artifact: SiteAuditArtifact,
+  nested: "performance" | "seo",
+  flatKey: "performance_score" | "seo_score",
+): string {
+  const value =
+    artifact.scores?.[nested] ??
+    (artifact as unknown as Record<string, unknown>)[flatKey];
+  return typeof value === "number" ? `${value}/100` : "not recorded";
+}
+
 function parseSiteAuditMetadata(raw: any): SiteAuditArtifact | null {
   if (!raw) return null;
   let parsed = raw;
@@ -1134,7 +1151,7 @@ function OutputTab({
                 Site Performance Audit Generated
               </div>
               <div className="text-sm font-bold text-[var(--l-ink)]">
-                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditArtifact.scores?.performance ?? "—"}/100 · SEO: {siteAuditArtifact.scores?.seo ?? "—"}/100
+                {siteAuditArtifact.url || siteAuditArtifact.start_url || "Website Audit"} · Perf: {siteAuditScore(siteAuditArtifact, "performance", "performance_score")} · SEO: {siteAuditScore(siteAuditArtifact, "seo", "seo_score")}
               </div>
             </div>
           </div>

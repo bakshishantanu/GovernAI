@@ -144,8 +144,28 @@ function scoreColor(score: number): { bg: string; text: string; border: string; 
   };
 }
 
+/** One flattened key from `audit_metadata`, when it holds a real number. */
+function flat(artifact: SiteAuditArtifact, key: string): number | undefined {
+  const value = (artifact as unknown as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+//: How an absent measurement reads. Deliberately not a score colour: nothing
+//: was measured, so nothing should look like a verdict.
+const NO_DATA = {
+  bg: "rgba(22, 19, 14, 0.05)",
+  text: "rgba(22, 19, 14, 0.45)",
+  border: "rgba(22, 19, 14, 0.15)",
+  label: "No data",
+};
+
 function vitalRatingBadge(rating?: string): { bg: string; text: string; label: string } {
-  const norm = (rating || "NEEDS_IMPROVEMENT").toUpperCase();
+  // An unrated vital used to fall through to "Needs Improvement", which reads
+  // as a measurement that came back poor rather than one that never arrived.
+  if (!rating) {
+    return { bg: NO_DATA.bg, text: NO_DATA.text, label: NO_DATA.label };
+  }
+  const norm = rating.toUpperCase();
   if (norm === "GOOD") {
     return { bg: "rgba(12, 206, 107, 0.15)", text: "#0cce6b", label: "Good" };
   }
@@ -161,20 +181,40 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
   );
   const [copied, setCopied] = useState(false);
 
-  const targetUrl = artifact.url || artifact.start_url || "https://example.com";
+  const targetUrl = artifact.url || artifact.start_url || null;
   const strategy = (artifact.strategy || "mobile").toLowerCase();
   const isMobile = strategy === "mobile";
 
-  const scores = artifact.scores || {
-    performance: 88,
-    accessibility: 85,
-    best_practices: 92,
-    seo: 90,
+  // Two shapes reach this viewer and only one of them is nested. The full
+  // tool result has `scores`/`vitals`/`seo`/`security`; what actually gets
+  // persisted is SiteAuditTool.audit_metadata, which flattens them into
+  // `performance_score`, `lcp_ms` and so on. Reading only the nested shape
+  // meant `artifact.scores` was always undefined for a real run, and the
+  // fallback that used to stand here filled the gap with invented numbers
+  // (88/85/92/90) rendered identically to measured ones -- so a page that
+  // genuinely scored 40 for best practices displayed 92 "GOOD". In an audit
+  // product that is worse than showing nothing, so absent values now stay
+  // absent and are rendered as "no data".
+  const scores = artifact.scores ?? {
+    performance: flat(artifact, "performance_score"),
+    accessibility: flat(artifact, "accessibility_score"),
+    best_practices: flat(artifact, "best_practices_score"),
+    seo: flat(artifact, "seo_score"),
   };
 
-  const vitals = artifact.vitals || {};
-  const security = artifact.security || { is_https: true, score: 90, issues: [] };
-  const seo = artifact.seo || { score: 90, issues: [] };
+  const vitals =
+    artifact.vitals ??
+    ({
+      lcp_ms: flat(artifact, "lcp_ms"),
+      fcp_ms: flat(artifact, "fcp_ms"),
+      cls: flat(artifact, "cls"),
+      tbt_ms: flat(artifact, "tbt_ms"),
+      speed_index_ms: flat(artifact, "speed_index_ms"),
+      ttfb_ms: flat(artifact, "ttfb_ms"),
+    } as NonNullable<SiteAuditArtifact["vitals"]>);
+
+  const security = artifact.security ?? {};
+  const seo = artifact.seo ?? {};
   const opportunities = artifact.opportunities || [];
   const pages = artifact.pages || [];
 
@@ -210,7 +250,7 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
             )}
           </div>
           <h2 className="landing-display mt-2 text-xl font-bold text-[var(--l-ink)] break-all">
-            {targetUrl}
+            {targetUrl ?? <span className="text-[var(--l-charcoal)]/45">URL not recorded</span>}
           </h2>
           {artifact.final_url && artifact.final_url !== targetUrl && (
             <p className="mt-0.5 text-xs text-[var(--l-charcoal)]/55">
@@ -227,6 +267,7 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
             {copied ? <Check className="h-3.5 w-3.5 text-[var(--l-teal)]" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? "Copied" : "Copy JSON"}
           </button>
+          {targetUrl && (
           <a
             href={targetUrl}
             target="_blank"
@@ -237,18 +278,21 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
             <ExternalLink className="h-3.5 w-3.5" />
             Visit site
           </a>
+          )}
         </div>
       </div>
 
       {/* 4 Category Score Gauges */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Performance", score: scores.performance ?? 0, icon: Zap },
-          { label: "Accessibility", score: scores.accessibility ?? 0, icon: Globe },
-          { label: "Best Practices", score: scores.best_practices ?? 0, icon: ShieldCheck },
-          { label: "SEO", score: scores.seo ?? 0, icon: Search },
+          { label: "Performance", score: scores.performance, icon: Zap },
+          { label: "Accessibility", score: scores.accessibility, icon: Globe },
+          { label: "Best Practices", score: scores.best_practices, icon: ShieldCheck },
+          { label: "SEO", score: scores.seo, icon: Search },
         ].map((item) => {
-          const colors = scoreColor(item.score);
+          // `?? 0` here used to turn a missing score into a red "Poor 0",
+          // which is a verdict this run never reached.
+          const colors = item.score === undefined ? NO_DATA : scoreColor(item.score);
           const Icon = item.icon;
           return (
             <div
@@ -267,7 +311,7 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                 className="landing-display my-1 text-3xl font-extrabold"
                 style={{ color: colors.text }}
               >
-                {item.score}
+                {item.score ?? "—"}
               </div>
               <span
                 className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
@@ -365,7 +409,14 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                   rating: vitals.ttfb_rating,
                 },
               ].map((vital) => {
-                const badge = vitalRatingBadge(vital.rating);
+                // `audit_metadata` persists the measurements but not the
+                // per-vital ratings, so a real 0.60s LCP arrives with no
+                // rating. Labelling that "No data" next to a number that is
+                // plainly there reads as a broken card, and deriving a
+                // verdict from the thresholds printed below would be
+                // inventing one the audit never gave -- so the badge is
+                // simply omitted when there is nothing to report.
+                const badge = vital.rating ? vitalRatingBadge(vital.rating) : null;
                 return (
                   <div
                     key={vital.id}
@@ -376,12 +427,14 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                         <span className="font-mono text-xs font-bold text-[var(--l-ink)]">
                           {vital.id.toUpperCase()}
                         </span>
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                          style={{ background: badge.bg, color: badge.text }}
-                        >
-                          {badge.label}
-                        </span>
+                        {badge && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                            style={{ background: badge.bg, color: badge.text }}
+                          >
+                            {badge.label}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 text-xs font-semibold text-[var(--l-charcoal)]">
                         {vital.label}
@@ -437,7 +490,8 @@ export function SiteAuditArtifactViewer({ artifact }: { artifact: SiteAuditArtif
                 <ShieldCheck className="h-6 w-6 text-[var(--l-teal)]" />
                 <div>
                   <h4 className="text-sm font-bold text-[var(--l-ink)]">
-                    Security Baseline Score: {security.score ?? 100}/100
+                    Security Baseline Score:{" "}
+                    {security.score === undefined ? "not recorded" : `${security.score}/100`}
                   </h4>
                   <p className="text-xs text-[var(--l-charcoal)]/60">
                     Audit of transport security, framing protections, and content policies.
