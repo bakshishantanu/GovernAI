@@ -201,8 +201,23 @@ export function ExecutionStream({ agentId, executionId }: { agentId: string; exe
           ),
         ].sort((a, b) => +new Date(a.at) - +new Date(b.at));
 
+        // Merge, never replace. The live stream below opens on mount too,
+        // not after this resolves, so on a run started from the console
+        // this fetch was issued while the run had no history at all and
+        // lands a second or two later -- by which time SSE has already
+        // delivered the first tool call. Assigning `fromHistory` straight
+        // into state threw those away, and `seenIds` then stopped them ever
+        // coming back, so a run that really did call a governed tool
+        // reported "Tool calls 0 / Governance checks 0" the moment it
+        // finished. Keeping whatever is already in state and appending only
+        // the ids it doesn't have covers both orderings.
         for (const e of fromHistory) seenIds.current.add(e.id);
-        setEvents(fromHistory);
+        setEvents((prev) => {
+          const known = new Set(prev.map((e) => e.id));
+          return [...prev, ...fromHistory.filter((e) => !known.has(e.id))].sort(
+            (a, b) => +new Date(a.at) - +new Date(b.at),
+          );
+        });
       } catch {
         // A run that vanished, or a genuine network failure: the live
         // stream below still has its own independent failure handling, and

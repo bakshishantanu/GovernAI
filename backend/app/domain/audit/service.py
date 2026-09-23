@@ -366,6 +366,13 @@ class AuditService:
             Event.create(
                 topic,
                 {
+                    # The persisted row's id, deliberately overriding the bus
+                    # event's own uuid in the rendered frame. The console
+                    # merges this live event with the same event re-read from
+                    # GET /executions/{id}/timeline, and can only recognise
+                    # the two as one thing if they share an id space. The bus
+                    # uuid is generated per publish and matches nothing.
+                    "id": str(event.id),
                     "execution_id": str(execution_id),
                     "agent_id": str(agent_id),
                     "org_id": str(org_id),
