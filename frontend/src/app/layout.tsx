@@ -26,8 +26,8 @@ export default function RootLayout({
       <body className={`${kecal.variable} ${interLanding.variable} ${caveat.variable}`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <RouteTransition />
