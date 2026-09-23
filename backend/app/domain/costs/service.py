@@ -100,6 +100,11 @@ class CostService:
             Event.create(
                 "cost.llm.incurred",
                 {
+                    # See the matching note in AuditService.log_tool_call: the
+                    # persisted row's id, so the console can tell this live
+                    # event and the same row re-read from the timeline apart
+                    # from two genuinely different calls.
+                    "id": str(event.id),
                     "execution_id": str(execution_id),
                     "agent_id": str(agent_id),
                     "org_id": str(org_id),
