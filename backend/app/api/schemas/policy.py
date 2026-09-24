@@ -6,7 +6,20 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-RuleType = Literal["PERMISSION_CHECK", "DENY_LIST", "RATE_LIMIT", "CUSTOM", "sql_blocklist"]
+RuleType = Literal[
+    "PERMISSION_CHECK",
+    "DENY_LIST",
+    "RATE_LIMIT",
+    "CUSTOM",
+    "sql_blocklist",
+    # These two are enforced by PolicyEngine.evaluate (domain/policies/engine.py,
+    # matched case-insensitively) but were missing here, so the API refused to
+    # create the two rule types that actually govern Enterprise Search queries
+    # and Figma brand-color compliance. Drift recorded in DECISIONS/STATE;
+    # this closes the API half of it.
+    "solr_query_blocklist",
+    "brand_color_check",
+]
 
 
 class PolicyRuleCreate(BaseModel):
