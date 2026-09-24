@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { fetchApi } from "@/lib/api-client";
 import { RuleToggle } from "./rule-toggle";
-import { isEnforced, ruleSummary, type Policy, type PolicyRule } from "./policy-types";
+import { isEnforced, notEnforcedReason, ruleSummary, type Policy, type PolicyRule } from "./policy-types";
 
 /**
  * One policy as an open rulebook page: a title clause, a master switch, and
@@ -102,7 +102,7 @@ export function PolicyCard({
                     <span
                       className="flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-wide"
                       style={{ color: enforced ? "var(--l-teal)" : "var(--l-charcoal)" }}
-                      title={enforced ? "The engine enforces this rule type" : "Stored, but the engine doesn't branch on this rule type yet"}
+                      title={enforced ? "The engine enforces this rule type" : notEnforcedReason(rule.rule_type)}
                     >
                       <span
                         className="h-1.5 w-1.5 rounded-full"
