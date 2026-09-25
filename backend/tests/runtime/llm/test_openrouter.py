@@ -88,6 +88,8 @@ async def test_chat_parses_tool_calls():
 def test_default_openrouter_model_is_priced():
     # An unpriced model trips BudgetGuard's fail-closed "unpriced model"
     # suspension after a single call (D-075), so the default must be priced.
+    # Reads the declared default, not Settings(): a teammate's own .env may
+    # point at another model, which must not make this test fail.
     from app.config import Settings
 
-    assert Settings().LLM_OPENROUTER_MODEL in PRICING_TIERS
+    assert Settings.model_fields["LLM_OPENROUTER_MODEL"].default in PRICING_TIERS
