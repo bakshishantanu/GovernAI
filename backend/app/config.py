@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     ADMIN_EMAILS: str = "admin@governai.com"
 
     # --- LLM Providers ---
+    # Tried in this order: OpenRouter first (if configured) since it has far
+    # higher throughput than Groq's free tier (which was hitting 8,000 TPM
+    # rate limits mid-execution), then Groq, then Gemini as final fallback.
+    OPENROUTER_API_KEY: str = ""
+    LLM_OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
     GROQ_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     LLM_PRIMARY_MODEL: str = "openai/gpt-oss-20b"

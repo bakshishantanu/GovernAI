@@ -146,3 +146,26 @@ async def test_no_internal_paths_leak_in_output(skill):
         serialized = str(output)
         assert "solr_adapter" not in serialized.lower()
         assert "traceback" not in serialized.lower()
+
+
+# --- Collection argument is constrained to what the agent may search ---
+
+def test_search_tool_schema_limits_collection_to_permitted(adapter):
+    # Without an enum the model has to guess a collection name from the goal's
+    # wording, and a wrong guess is denied by the gate every time.
+    permitted = frozenset({"knowledge_base", "compliance_docs"})
+    tool = SearchSolrTool(adapter=adapter, permitted_collections=permitted)
+
+    assert tool.parameters["properties"]["collection"]["enum"] == sorted(permitted)
+
+
+def test_facet_tool_schema_limits_collection_to_permitted(adapter):
+    tool = FacetSolrTool(adapter=adapter, permitted_collections=frozenset({"knowledge_base"}))
+
+    assert tool.parameters["properties"]["collection"]["enum"] == ["knowledge_base"]
+
+
+def test_per_instance_enum_does_not_leak_into_class_schema(adapter):
+    SearchSolrTool(adapter=adapter, permitted_collections=frozenset({"knowledge_base"}))
+
+    assert "enum" not in SearchSolrTool.parameters["properties"]["collection"]

@@ -379,6 +379,21 @@ class SearchSolrTool(BaseTool):
         self.required_permission = ",".join(
             f"solr:search:{c}" for c in sorted(permitted_collections)
         )
+        # Instance override of the class-level schema: without an `enum` here,
+        # the model has to guess a collection name from nothing but the
+        # goal's wording — caught live with gpt-4o-mini inventing
+        # "product-requirements-docs" for a "find our PRD" goal instead of
+        # the real "knowledge_base", getting denied every time and giving up.
+        self.parameters = {
+            **self.__class__.parameters,
+            "properties": {
+                **self.__class__.parameters["properties"],
+                "collection": {
+                    **self.__class__.parameters["properties"]["collection"],
+                    "enum": sorted(permitted_collections),
+                },
+            },
+        }
 
     async def execute(self, **kwargs) -> dict:
         rows = min(kwargs.get("max_results", 10), 100)
@@ -490,6 +505,17 @@ class FacetSolrTool(BaseTool):
         self.required_permission = ",".join(
             f"solr:search:{c}" for c in sorted(permitted_collections)
         )
+        # See SearchSolrTool's __init__ for why this enum is added per-instance.
+        self.parameters = {
+            **self.__class__.parameters,
+            "properties": {
+                **self.__class__.parameters["properties"],
+                "collection": {
+                    **self.__class__.parameters["properties"]["collection"],
+                    "enum": sorted(permitted_collections),
+                },
+            },
+        }
 
     async def execute(self, **kwargs) -> dict:
         collection = kwargs.get("collection", "")
