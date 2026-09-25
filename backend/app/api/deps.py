@@ -32,6 +32,7 @@ from app.infrastructure.event_bus import event_bus
 from app.runtime.llm.base import LLMProvider, LLMResponse, TokenUsage
 from app.runtime.llm.gemini import GeminiProvider
 from app.runtime.llm.groq import GroqProvider
+from app.runtime.llm.openrouter import OpenRouterProvider
 from app.runtime.llm.service import LLMService
 from app.runtime.rag.embeddings import EmbeddingProvider, GeminiEmbeddingProvider
 from app.runtime.rag.ocr import build_ocr_provider_from_settings
@@ -62,6 +63,12 @@ class MockFallbackProvider(LLMProvider):
 
 def get_llm_service() -> LLMService:
     providers: list[LLMProvider] = []
+    if settings.OPENROUTER_API_KEY:
+        providers.append(
+            OpenRouterProvider(
+                api_key=settings.OPENROUTER_API_KEY, model=settings.LLM_OPENROUTER_MODEL
+            )
+        )
     if settings.GROQ_API_KEY:
         providers.append(
             GroqProvider(api_key=settings.GROQ_API_KEY, model=settings.LLM_PRIMARY_MODEL)

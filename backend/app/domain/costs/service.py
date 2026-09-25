@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 PRICING_TIERS = {
     "gpt-4o": {"prompt": 5.00 / 1_000_000, "completion": 15.00 / 1_000_000},
     "gpt-3.5-turbo": {"prompt": 0.50 / 1_000_000, "completion": 1.50 / 1_000_000},
+    # OpenRouter's LLM_OPENROUTER_MODEL, now the primary provider (added
+    # 2026-09-25 to get past Groq's 8,000 TPM free-tier ceiling). OpenRouter
+    # bills at the underlying model's own price with no markup; this is
+    # OpenAI's own published gpt-4o-mini rate, per openrouter.ai/models.
+    "openai/gpt-4o-mini": {"prompt": 0.15 / 1_000_000, "completion": 0.60 / 1_000_000},
     "openai/gpt-oss-20b": {"prompt": 0.075 / 1_000_000, "completion": 0.30 / 1_000_000},
     # Kept so historical cost events stay priced, even though nothing calls it
     # any more: this model now 404s with "no longer available to new users".
